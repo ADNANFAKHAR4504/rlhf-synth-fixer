@@ -1,11 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Production-ready app environment in AWS (us-east-1). Uses the specified existing VPC, creates a dedicated secondary CIDR and subnet (no IAM roles), launches an EC2 instance on the latest Amazon Linux 2 AMI (via SSM), allows only SSH/HTTPS inbound, and provisions an S3 bucket with server-side encryption. All resources tagged Environment: Production.\n",
-    "Metadata": {
-        "ProvidedData": {
-            "ExistingVpcIdLiteral": "vpc-771f647e30a422d4f"
-        }
-    },
+    "Description": "Production-ready app environment in AWS (us-east-1). Creates a VPC with subnet, launches an EC2 instance on the latest Amazon Linux 2 AMI (via SSM), allows only SSH/HTTPS inbound, and provisions an S3 bucket with server-side encryption. All resources tagged Environment: Production.\n",
     "Rules": {
         "MustBeUsEast1": {
             "Assertions": [
@@ -24,10 +19,17 @@
         }
     },
     "Parameters": {
-        "VpcId": {
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "Existing VPC ID in us-east-1.",
-            "Default": "vpc-771f647e30a422d4f"
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "^((25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1?\\d?\\d)\\/(3[0-2]|[12]?\\d)$",
+            "Description": "CIDR block for the VPC."
+        },
+        "SubnetCidr": {
+            "Type": "String",
+            "Default": "10.0.1.0/24",
+            "AllowedPattern": "^((25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1?\\d?\\d)\\/(3[0-2]|[12]?\\d)$",
+            "Description": "CIDR block for the subnet."
         },
         "InstanceType": {
             "Type": "String",
@@ -56,29 +58,106 @@
             "Type": "String",
             "Default": "dev",
             "Description": "Optional pipeline suffix (not used by resources)."
-        },
-        "SecondaryVpcCidr": {
-            "Type": "String",
-            "Default": "172.31.0.0/16",
-            "AllowedPattern": "^((25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1?\\d?\\d)\\/(3[0-2]|[12]?\\d)$",
-            "Description": "Secondary IPv4 CIDR to associate to the VPC for this stack."
-        },
-        "AppSubnetCidr": {
-            "Type": "String",
-            "Default": "172.31.96.0/20",
-            "AllowedPattern": "^((25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1?\\d?\\d)\\/(3[0-2]|[12]?\\d)$",
-            "Description": "Subnet CIDR carved from SecondaryVpcCidr."
         }
     },
     "Resources": {
-        "AppVpcCidrAssociation": {
-            "Type": "AWS::EC2::VPCCidrBlock",
+        "AppVpc": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "AppVpc-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppSubnet": {
+            "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "AppVpc"
                 },
                 "CidrBlock": {
-                    "Ref": "SecondaryVpcCidr"
+                    "Ref": "SubnetCidr"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "VpcGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "AppVpc"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "RouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "AppVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "VpcGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "RouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "SubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "AppSubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "RouteTable"
                 }
             }
         },
@@ -87,7 +166,7 @@
             "Properties": {
                 "GroupDescription": "Allow SSH (22) and HTTPS (443) only",
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "AppVpc"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -113,25 +192,6 @@
                         "CidrIp": "0.0.0.0/0"
                     }
                 ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "AppSubnet": {
-            "Type": "AWS::EC2::Subnet",
-            "DependsOn": "AppVpcCidrAssociation",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VpcId"
-                },
-                "CidrBlock": {
-                    "Ref": "AppSubnetCidr"
-                },
-                "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -168,6 +228,7 @@
         },
         "AppInstance": {
             "Type": "AWS::EC2::Instance",
+            "DependsOn": "VpcGatewayAttachment",
             "Properties": {
                 "ImageId": {
                     "Ref": "LatestAmiId"
@@ -193,6 +254,12 @@
         }
     },
     "Outputs": {
+        "VpcId": {
+            "Description": "ID of the created VPC.",
+            "Value": {
+                "Ref": "AppVpc"
+            }
+        },
         "SecurityGroupId": {
             "Description": "ID of the security group allowing SSH/HTTPS.",
             "Value": {

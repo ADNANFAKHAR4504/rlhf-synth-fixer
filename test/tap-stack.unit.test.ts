@@ -37,7 +37,7 @@ const templatePath = path.resolve(process.cwd(), "lib", "TapStack.yml");
 const raw = fs.readFileSync(templatePath, "utf-8");
 const doc: any = yaml.load(raw, { schema: CFN_SCHEMA });
 
-describe("TapStack Template — Unit Tests", () => {
+describe("TapStack Template - Unit Tests", () => {
   it("has required top-level sections", () => {
     expect(doc.AWSTemplateFormatVersion).toBe("2010-09-09");
     expect(typeof doc.Description).toBe("string");
@@ -56,8 +56,14 @@ describe("TapStack Template — Unit Tests", () => {
 
   it("defines required Parameters with correct types/defaults", () => {
     const p = doc.Parameters || {};
-    expect(p.VpcId?.Type).toBe("AWS::EC2::VPC::Id");
-    expect(typeof p.VpcId?.Default).toBe("string");
+
+    // VPC CIDR parameter
+    expect(p.VpcCidr?.Type).toBe("String");
+    expect(p.VpcCidr?.Default).toBe("10.0.0.0/16");
+
+    // Subnet CIDR parameter
+    expect(p.SubnetCidr?.Type).toBe("String");
+    expect(p.SubnetCidr?.Default).toBe("10.0.1.0/24");
 
     expect(p.LatestAmiId?.Type).toBe(
       "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
@@ -78,6 +84,18 @@ describe("TapStack Template — Unit Tests", () => {
       (r) => typeof r?.Type === "string" && r.Type.startsWith("AWS::IAM::")
     );
     expect(iamish.length).toBe(0);
+  });
+
+  it("creates a VPC resource", () => {
+    const vpc = doc.Resources?.AppVpc;
+    expect(vpc).toBeTruthy();
+    expect(vpc.Type).toBe("AWS::EC2::VPC");
+    expect(vpc.Properties?.CidrBlock).toBeTruthy();
+    expect(vpc.Properties?.EnableDnsHostnames).toBe(true);
+    expect(vpc.Properties?.EnableDnsSupport).toBe(true);
+
+    const envTag = (vpc.Properties?.Tags || []).find((t: any) => t.Key === "Environment");
+    expect(envTag?.Value).toBe("Production");
   });
 
   it("creates SG with only SSH/HTTPS inbound and allow-all egress", () => {
@@ -131,17 +149,43 @@ describe("TapStack Template — Unit Tests", () => {
     expect(envTag?.Value).toBe("Production");
   });
 
-  it("Subnet is created from Secondary/AppSubnet CIDRs and tagged", () => {
+  it("Subnet references the created VPC and is tagged", () => {
     const sub = doc.Resources?.AppSubnet?.Properties;
     expect(sub?.VpcId).toBeTruthy();
+    const vpcRef = JSON.stringify(sub?.VpcId);
+    expect(vpcRef).toContain("AppVpc");
     expect(sub?.CidrBlock).toBeTruthy();
     const envTag = (sub?.Tags || []).find((t: any) => t.Key === "Environment");
     expect(envTag?.Value).toBe("Production");
   });
 
-  it("Outputs include SecurityGroupId, InstanceId, InstancePublicIp, BucketName, EnvironmentSuffixEcho", () => {
+  it("creates Internet Gateway and Route Table for public connectivity", () => {
+    // Internet Gateway
+    const igw = doc.Resources?.InternetGateway;
+    expect(igw).toBeTruthy();
+    expect(igw.Type).toBe("AWS::EC2::InternetGateway");
+
+    // VPC Gateway Attachment
+    const attach = doc.Resources?.VpcGatewayAttachment;
+    expect(attach).toBeTruthy();
+    expect(attach.Type).toBe("AWS::EC2::VPCGatewayAttachment");
+
+    // Route Table
+    const rt = doc.Resources?.RouteTable;
+    expect(rt).toBeTruthy();
+    expect(rt.Type).toBe("AWS::EC2::RouteTable");
+
+    // Public Route
+    const route = doc.Resources?.PublicRoute;
+    expect(route).toBeTruthy();
+    expect(route.Type).toBe("AWS::EC2::Route");
+    expect(route.Properties?.DestinationCidrBlock).toBe("0.0.0.0/0");
+  });
+
+  it("Outputs include VpcId, SecurityGroupId, InstanceId, InstancePublicIp, BucketName, EnvironmentSuffixEcho", () => {
     const o = doc.Outputs || {};
     [
+      "VpcId",
       "SecurityGroupId",
       "InstanceId",
       "InstancePublicIp",
