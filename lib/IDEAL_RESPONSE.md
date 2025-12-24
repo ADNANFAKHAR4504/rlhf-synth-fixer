@@ -113,6 +113,7 @@ Parameters:
     MinValue: 50
     MaxValue: 100
     ConstraintDescription: Must be between 50 and 100
+AmiId:    Description: Amazon Machine Image ID for EC2 instances    Type: String    Default: ami-12345678
   
 
 # ==========================================
@@ -492,7 +493,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: 'ami-0abcdef1234567890'
+      ImageId: !Ref AmiId
       InstanceType: !Ref InstanceType
       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
       IamInstanceProfile: !Ref EC2InstanceProfile
