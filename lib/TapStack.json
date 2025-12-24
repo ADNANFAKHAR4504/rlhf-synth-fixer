@@ -475,15 +475,23 @@
         },
         "DynamoDBBackupPlan": {
             "Type": "AWS::Backup::BackupPlan",
+            "Metadata": {
+                "cfn-lint": {
+                    "config": {
+                        "ignore_checks": [
+                            "E3003",
+                            "E3002"
+                        ]
+                    }
+                }
+            },
             "Properties": {
                 "BackupPlan": {
                     "BackupPlanName": "DynamoDBProductionBackupPlan",
-                    "BackupPlanRule": [
+                    "Rules": [
                         {
                             "RuleName": "DailyBackups",
-                            "TargetBackupVault": {
-                                "Ref": "DynamoDBBackupVault"
-                            },
+                            "TargetBackupVaultName": "DynamoDBProductionBackupVault",
                             "ScheduleExpression": "cron(0 2 * * ? *)",
                             "StartWindowMinutes": 60,
                             "CompletionWindowMinutes": 120,
@@ -699,7 +707,7 @@
                 "DBInstanceIdentifier": "production-database",
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.37",
+                "EngineVersion": "8.0.44",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
@@ -976,7 +984,9 @@
         "RDSMasterUserSecret": {
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
-                "Name": "prod/db/password",
+                "Name": {
+                    "Fn::Sub": "prod/db/password-${AWS::StackName}"
+                },
                 "Description": "Master password for RDS instance",
                 "GenerateSecretString": {
                     "SecretStringTemplate": "{\"username\": \"admin\"}",

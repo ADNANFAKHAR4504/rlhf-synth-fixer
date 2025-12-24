@@ -112,7 +112,11 @@ describe('CloudFormation Template', () => {
     it('should create a backup plan with 7-day retention for DynamoDB', () => {
       const backupPlan = resources().DynamoDBBackupPlan;
       expect(backupPlan).toBeDefined();
-      const rule = backupPlan.Properties.BackupPlan.BackupPlanRule[0];
+      const rules = backupPlan.Properties.BackupPlan.Rules;
+      expect(rules).toBeDefined();
+      expect(Array.isArray(rules)).toBe(true);
+      expect(rules.length).toBeGreaterThan(0);
+      const rule = rules[0];
       expect(rule.Lifecycle.DeleteAfterDays).toBeGreaterThanOrEqual(7);
     });
     it('should create AWS Config resources and a rule for root access key check', () => {
