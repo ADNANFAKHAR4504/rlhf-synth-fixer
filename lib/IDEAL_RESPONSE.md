@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS Infrastructure Template with Best Practices - us-east-1'
 
@@ -984,4 +985,4 @@ Outputs:
     Description: 'CloudTrail trail name'
     Value: !Ref CloudTrail
     Export:
-      Name: !Sub '${ProjectName}-cloudtrail-name-${Environment}'
+      Name: !Sub '${ProjectName}-cloudtrail-name-${Environment}'```
