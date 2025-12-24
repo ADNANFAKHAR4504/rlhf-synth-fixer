@@ -22,6 +22,14 @@ class TestTapStackDeployedResources(unittest.TestCase):
 
         os.environ["AWS_REGION"] = cls.region
 
+        # Configure Pulumi to use local file backend when running with LocalStack
+        # Check if we're running against LocalStack
+        aws_endpoint = os.getenv("AWS_ENDPOINT_URL", "")
+        if "localhost" in aws_endpoint or "4566" in aws_endpoint or os.getenv("LOCALSTACK", "").lower() == "true":
+            # Use local file backend for LocalStack to avoid S3 backend credential issues
+            os.environ["PULUMI_BACKEND_URL"] = f"file://{os.getcwd()}/.pulumi-state"
+            print(f"Using local file backend: {os.environ['PULUMI_BACKEND_URL']}")
+
         # Use Automation API to select the stack
         ws = auto.LocalWorkspace(work_dir=os.getcwd())
         cls.stack = auto.select_stack(stack_name=cls.stack_name, work_dir=os.getcwd())
@@ -36,9 +44,17 @@ class TestTapStackDeployedResources(unittest.TestCase):
         cls.kms_alias = outputs.get("kms_alias").value if outputs.get("kms_alias") else None
 
 
-        cls.ec2 = boto3.client("ec2", region_name=cls.region)
-        cls.iam = boto3.client("iam", region_name=cls.region)
-        cls.kms = boto3.client("kms", region_name=cls.region)
+        # Configure boto3 clients with LocalStack endpoint if available
+        aws_endpoint = os.getenv("AWS_ENDPOINT_URL", "")
+        client_config = {"region_name": cls.region}
+
+        if aws_endpoint:
+            client_config["endpoint_url"] = aws_endpoint
+            print(f"Using AWS endpoint: {aws_endpoint}")
+
+        cls.ec2 = boto3.client("ec2", **client_config)
+        cls.iam = boto3.client("iam", **client_config)
+        cls.kms = boto3.client("kms", **client_config)
 
 
 
