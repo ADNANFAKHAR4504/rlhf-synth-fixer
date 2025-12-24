@@ -753,7 +753,7 @@ Resources:
       AutoScalingGroupName: !Sub 'asg-${EnvironmentSuffix}'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: !Ref MinInstances
       MaxSize: !Ref MaxInstances
       DesiredCapacity: !Ref DesiredInstances
