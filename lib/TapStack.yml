@@ -596,3 +596,39 @@ Outputs:
     Value: !Ref PrivateSubnet2
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnet2'
+
+  LoadBalancerSecurityGroupId:
+    Description: 'Load Balancer Security Group ID'
+    Value: !Ref LoadBalancerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LoadBalancerSecurityGroup'
+
+  WebServerSecurityGroupId:
+    Description: 'Web Server Security Group ID'
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-WebServerSecurityGroup'
+
+  DatabaseSecurityGroupId:
+    Description: 'Database Security Group ID'
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseSecurityGroup'
+
+  LambdaSecurityGroupId:
+    Description: 'Lambda Security Group ID'
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaSecurityGroup'
+
+  SecurityGroupId:
+    Description: 'Primary Security Group ID (Web Server)'
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroup'
+
+  InternetGatewayId:
+    Description: 'Internet Gateway ID'
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGateway'
