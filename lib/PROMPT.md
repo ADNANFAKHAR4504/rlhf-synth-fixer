@@ -9,18 +9,18 @@ You are an experienced AWS Cloud Architect tasked with developing a **CloudForma
 1. **Region**: All resources must be deployed in `us-east-1`.
 2. **Compute**:
 
-   * Use **EC2 instances** behind an **Application Load Balancer (ALB)** to handle incoming web traffic.
+   * Use **EC2 instances** behind an **Application Load Balancer** to handle incoming web traffic.
    * Instances must be launched in an **Auto Scaling Group** with:
 
      * **Minimum** capacity: `2`
      * **Maximum** capacity: `5`
-     * A **launch template** or configuration using a **predefined AMI ID** (suitable for your web app).
+     * A **launch template** or configuration using a **predefined AMI ID** suitable for your web app.
 3. **Load Balancer**:
 
    * Set up an **Application Load Balancer** that distributes traffic across at least **two EC2 instances**.
 4. **Storage**:
 
-   * Provision an **S3 bucket** to serve the application's **static content** (e.g., HTML, CSS, JS).
+   * Provision an **S3 bucket** to serve the application's **static content** like HTML, CSS, and JS files.
    * Enable **public read access** to allow users to access static assets via the web.
 5. **Monitoring**:
 
@@ -50,5 +50,3 @@ You are an experienced AWS Cloud Architect tasked with developing a **CloudForma
 * The template should follow **AWS best practices** for **scalability, fault tolerance, and security**.
 
 ---
-
-Would you like a template generated for this now? Or should I help break this into modular stacks (VPC, EC2, ALB, S3, CloudWatch) for better maintainability?
