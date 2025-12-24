@@ -474,6 +474,9 @@ Resources:
     Properties:
       GroupDescription: Security group for EMR master node
       VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: !Ref VpcCidr
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -488,6 +491,9 @@ Resources:
     Properties:
       GroupDescription: Security group for EMR slave nodes
       VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: !Ref VpcCidr
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -502,6 +508,9 @@ Resources:
     Properties:
       GroupDescription: Security group for EMR service access
       VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: !Ref VpcCidr
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -511,61 +520,6 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # Security group ingress rules for EMR communication
-  EMRMasterIngressFromSlave:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EMRMasterSecurityGroup
-      IpProtocol: -1
-      SourceSecurityGroupId: !Ref EMRSlaveSecurityGroup
-
-  EMRMasterIngressFromMaster:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EMRMasterSecurityGroup
-      IpProtocol: -1
-      SourceSecurityGroupId: !Ref EMRMasterSecurityGroup
-
-  EMRMasterIngressFromService:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EMRMasterSecurityGroup
-      IpProtocol: tcp
-      FromPort: 8443
-      ToPort: 8443
-      SourceSecurityGroupId: !Ref EMRServiceAccessSecurityGroup
-
-  EMRSlaveIngressFromMaster:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EMRSlaveSecurityGroup
-      IpProtocol: -1
-      SourceSecurityGroupId: !Ref EMRMasterSecurityGroup
-
-  EMRSlaveIngressFromSlave:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EMRSlaveSecurityGroup
-      IpProtocol: -1
-      SourceSecurityGroupId: !Ref EMRSlaveSecurityGroup
-
-  EMRSlaveIngressFromService:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EMRSlaveSecurityGroup
-      IpProtocol: tcp
-      FromPort: 8443
-      ToPort: 8443
-      SourceSecurityGroupId: !Ref EMRServiceAccessSecurityGroup
-
-  EMRServiceIngressFromMaster:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EMRServiceAccessSecurityGroup
-      IpProtocol: tcp
-      FromPort: 9443
-      ToPort: 9443
-      SourceSecurityGroupId: !Ref EMRMasterSecurityGroup
 
   # ==================== KMS ENCRYPTION KEY ====================
   KMSKey:
