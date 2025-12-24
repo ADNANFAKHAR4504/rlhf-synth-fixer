@@ -131,16 +131,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.InternetGatewayAttachment).toBeDefined();
     });
 
-    test('should have NAT Gateway with EIP', () => {
+    // NAT Gateway removed for LocalStack Community compatibility
+    test.skip('should have NAT Gateway with EIP', () => {
       expect(template.Resources.NATGateway).toBeDefined();
       expect(template.Resources.NATGatewayEIP).toBeDefined();
     });
 
     test('should have route tables', () => {
       expect(template.Resources.PublicRouteTable).toBeDefined();
-      expect(template.Resources.PrivateRouteTable).toBeDefined();
+      // PrivateRouteTable removed due to NAT Gateway removal for LocalStack
       expect(template.Resources.DefaultPublicRoute).toBeDefined();
-      expect(template.Resources.DefaultPrivateRoute).toBeDefined();
     });
   });
 
