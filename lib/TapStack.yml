@@ -1678,7 +1678,6 @@ Resources:
           Input: !Sub |
             {
               "ProcessingType": "scheduled",
-              "StartTime": "${!datetime}",
               "InputPath": "s3://${RawDataBucket}/daily/",
               "DataVolume": 5497558138880,
               "Environment": "${Environment}"
