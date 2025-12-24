@@ -16,12 +16,19 @@
     "DynamoDB",
     "IAM",
     "Lambda",
-    "GuardDuty"
+    "GuardDuty",
+    "EC2",
+    "CloudTrail",
+    "VPC",
+    "RDS",
+    "ALB",
+    "CloudWatch"
   ],
   "provider": "localstack",
   "wave": "P0",
   "migrated_from": {
     "po_id": "barun-turing",
     "pr": "Pr2037"
-  }
+  },
+  "training_quality": 9
 }
