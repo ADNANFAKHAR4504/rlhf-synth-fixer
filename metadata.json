@@ -11,6 +11,12 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": [],
-  "wave": "P0"
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "wave": "P0",
+  "training_quality": 9
 }
