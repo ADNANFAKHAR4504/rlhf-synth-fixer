@@ -6,7 +6,7 @@
   "po_id": "LS-291616",
   "team": "synth-2",
   "startedAt": "2025-08-20T12:43:55.411Z",
-  "subtask": "infrastructure_security",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
     "General Infrastructure Tooling QA"
