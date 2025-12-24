@@ -9,8 +9,10 @@
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup",
-    "Web Application Deployment"
+    "VPC and Networking",
+    "Storage Solutions",
+    "Security and Compliance",
+    "Compute Resources"
   ],
   "aws_services": [
     "EC2",
