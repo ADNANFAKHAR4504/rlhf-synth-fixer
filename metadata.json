@@ -3,27 +3,26 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291493",
+  "po_id": "LS-291493",
   "team": "synth-2",
-  "startedAt": "2025-08-18T15:31:38.419Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "sreeni-ops",
-  "dockerS3Location": "",
+  "startedAt": "2025-12-24T03:40:00.000Z",
   "provider": "localstack",
   "aws_services": [
     "AutoScaling",
     "EC2",
     "ElasticLoadBalancingV2",
-    "S3"
+    "S3",
+    "VPC"
   ],
   "wave": "P1",
-  "subtask": "Multi-Tier-Architecture",
+  "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
-    "High-Availability",
-    "Auto-Scaling",
-    "Load-Balancing"
-  ]
+    "Web Application Deployment",
+    "Failure Recovery Automation",
+    "Cloud Environment Setup"
+  ],
+  "migrated_from": {
+    "po_id": "291493",
+    "pr": "Pr1582"
+  }
 }
