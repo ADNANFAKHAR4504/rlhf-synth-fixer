@@ -25,11 +25,12 @@ data "aws_availability_zones" "available" {
 }
 
 # Public Subnets for NAT Gateway
+# Using /24 subnets in high range (count.index + 252) to avoid conflicts with /20 private subnets
 resource "aws_subnet" "public" {
   count = 3
 
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index + 252)
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
 
