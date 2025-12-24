@@ -109,11 +109,27 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('ap-south-1');
       expect(param.Description).toContain('AWS region for the infrastructure deployment');
-      
+
       const expectedRegions = ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1', 'ap-south-1'];
       expectedRegions.forEach(region => {
         expect(param.AllowedValues).toContain(region);
       });
+    });
+
+    test('should have DBUsername parameter for RDS master username', () => {
+      expect(template.Parameters.DBUsername).toBeDefined();
+      const param = template.Parameters.DBUsername;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('dbadmin');
+      expect(param.Description).toContain('Master username');
+    });
+
+    test('should have DBPassword parameter with NoEcho for security', () => {
+      expect(template.Parameters.DBPassword).toBeDefined();
+      const param = template.Parameters.DBPassword;
+      expect(param.Type).toBe('String');
+      expect(param.NoEcho).toBe(true);
+      expect(param.Description).toContain('Master password');
     });
   });
 
@@ -323,10 +339,10 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(db.Properties.KmsKeyId.Ref).toBe('RDSKMSKey');
     });
 
-    test('RDS instance should use Secrets Manager for credentials and have region-specific identifier', () => {
+    test('RDS instance should use parameter references for credentials and have region-specific identifier', () => {
       const db = template.Resources.DatabaseInstance;
-      expect(db.Properties.MasterUsername['Fn::Sub']).toContain('resolve:secretsmanager');
-      expect(db.Properties.MasterUserPassword['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(db.Properties.MasterUsername.Ref).toBe('DBUsername');
+      expect(db.Properties.MasterUserPassword.Ref).toBe('DBPassword');
       expect(db.Properties.DBInstanceIdentifier['Fn::Sub']).toContain('${AWSRegion}');
     });
 

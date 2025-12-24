@@ -7,7 +7,7 @@ Parameters:
     Default: '10.0.0.0/8'
     Description: 'CIDR block allowed for SSH access'
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
-  
+
   AWSRegion:
     Type: String
     Default: 'ap-south-1'
@@ -18,6 +18,22 @@ Parameters:
       - 'eu-west-1'
       - 'ap-southeast-1'
       - 'ap-south-1'
+
+  DBUsername:
+    Type: String
+    Default: 'dbadmin'
+    Description: 'Master username for the RDS database'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  DBPassword:
+    Type: String
+    Default: 'SecurePassword123!'
+    Description: 'Master password for the RDS database'
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
 
 Mappings:
   RegionMap:
@@ -658,6 +674,11 @@ Resources:
   # RDS Database Instance
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1011  # Using parameters instead of dynamic references for LocalStack compatibility
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -669,8 +690,8 @@ Resources:
       StorageType: gp2
       StorageEncrypted: true
       KmsKeyId: !Ref RDSKMSKey
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup

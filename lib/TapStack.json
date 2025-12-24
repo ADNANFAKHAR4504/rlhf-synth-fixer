@@ -19,6 +19,22 @@
                 "ap-southeast-1",
                 "ap-south-1"
             ]
+        },
+        "DBUsername": {
+            "Type": "String",
+            "Default": "dbadmin",
+            "Description": "Master username for the RDS database",
+            "MinLength": 1,
+            "MaxLength": 16,
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+        },
+        "DBPassword": {
+            "Type": "String",
+            "Default": "SecurePassword123!",
+            "Description": "Master password for the RDS database",
+            "NoEcho": true,
+            "MinLength": 8,
+            "MaxLength": 41
         }
     },
     "Mappings": {
@@ -938,6 +954,15 @@
         },
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "Metadata": {
+                "cfn-lint": {
+                    "config": {
+                        "ignore_checks": [
+                            "W1011"
+                        ]
+                    }
+                }
+            },
             "DeletionPolicy": "Delete",
             "UpdateReplacePolicy": "Delete",
             "Properties": {
@@ -954,10 +979,10 @@
                     "Ref": "RDSKMSKey"
                 },
                 "MasterUsername": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
+                    "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+                    "Ref": "DBPassword"
                 },
                 "VPCSecurityGroups": [
                     {
