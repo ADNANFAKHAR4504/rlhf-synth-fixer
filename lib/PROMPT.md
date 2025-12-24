@@ -6,7 +6,7 @@ VPC: A new VPC with public and private subnets across at least two Availability 
 
 Security Groups: Strictly allow inbound traffic only on ports 80 and 443 for EC2 instances. Outbound should be open only as necessary for system operations. No other inbound ports are allowed.
 
-EC2 Instances: Launch multiple EC2 instances inside the VPC with IAM roles that follow least privilege, allowing only specific permissions like SSM:GetParameter, SSM:GetParameters, and CloudWatch:PutLogEvents.
+EC2 Instances: Launch multiple EC2 instances inside the VPC with IAM roles that grant specific permissions such as SSM:GetParameter, SSM:GetParameters, and CloudWatch:PutLogEvents.
 
 RDS Database: Deploy a highly available RDS instance such as MySQL or PostgreSQL with storage encryption enabled using AWS KMS, running inside private subnets only, with restricted access through security groups so only EC2 instances in the VPC can connect.
 
