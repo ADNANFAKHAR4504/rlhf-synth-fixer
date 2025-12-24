@@ -18,5 +18,11 @@
     "IAM",
     "CloudWatch"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "siddhantr-sudo",
+  "dockerS3Location": ""
 }
