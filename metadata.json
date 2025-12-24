@@ -1,9 +1,13 @@
 {
-  "po_id": "trainr960",
   "platform": "cfn",
   "language": "yaml",
   "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr960",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T10:00:00Z",
   "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
   "subject_labels": [
     "Security Configuration as Code"
   ],
@@ -19,8 +23,5 @@
     "Config",
     "ElasticLoadBalancingV2"
   ],
-  "turn_type": "single",
-  "team": "synth-2",
-  "startedAt": "2025-08-22T10:00:00Z",
-  "provider": "localstack"
+  "wave": "P0"
 }
