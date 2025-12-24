@@ -64,6 +64,11 @@ Parameters:
     Description: EC2 instance type for both primary and standby instances
     ConstraintDescription: Must be a valid EC2 instance type
 
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: Latest Amazon Linux 2 AMI ID from SSM Parameter Store (LocalStack compatible)
+
   HostedZoneId:
     Type: String
     Default: Z0909377OVFW706BZN9J
@@ -259,7 +264,7 @@ Resources:
     Type: AWS::EC2::Instance
     DeletionPolicy: Delete
     Properties:
-      ImageId: !Sub ami-ff0000a1
+      ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnetAZ1
@@ -351,7 +356,7 @@ Resources:
     Type: AWS::EC2::Instance
     DeletionPolicy: Delete
     Properties:
-      ImageId: !Sub ami-ff0000a1
+      ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnetAZ2
