@@ -6,9 +6,9 @@ Each function needs its own IAM role with least privilege permissions. The dataP
 
 Security requirements:
 - Encrypt all CloudWatch log groups using a KMS customer-managed key. Set up the key policy to allow CloudWatch Logs service to use it for encryption.
-- Add dead-letter queues (SQS) for both Lambda functions to capture failed invocations. Configure 14-day message retention and encrypt the queues.
+- Add SQS dead-letter queues for both Lambda functions to capture failed invocations. Configure 14-day message retention and encrypt the queues.
 - Set up CloudWatch alarms to monitor Lambda errors. Each function needs an alarm that triggers when errors occur.
-- Add CloudWatch alarms for the dead-letter queues to alert when messages appear (indicating failures).
+- Add CloudWatch alarms for the dead-letter queues to alert when messages appear, which indicates failures.
 
 Both CloudWatch log groups should have 30-day retention so we can track issues across the pipeline.
 
