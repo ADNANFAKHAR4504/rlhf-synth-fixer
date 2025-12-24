@@ -10,13 +10,13 @@
 >
 > 4. **Security groups with tight rules** - Web tier SG that only allows HTTPS/HTTP from specific IP ranges 203.0.113.0/24 and 198.51.100.0/24. Database SG that only accepts connections from the web tier SG on port 5432.
 >
-> 5. **IAM roles with least privilege** - EC2 instances need a role that can read/write to the app and backup S3 buckets. No wildcards - specific bucket ARNs only. Also needs SSM access for session management.
+> 5. **IAM roles with least privilege** - EC2 instances need a role that can read/write to the app and backup S3 buckets. Use specific bucket ARNs only, no wildcards allowed. Also needs SSM access for session management.
 >
 > 6. **CloudTrail logs everything** - CloudTrail that captures all management events and sends them to the CloudTrail S3 bucket. Also send logs to CloudWatch Logs for monitoring.
 >
 > 7. **KMS key for encryption** - Single KMS key that encrypts S3 buckets, RDS storage, and CloudWatch logs. CloudTrail service needs permission to use this key.
 >
-> 8. **Resource tagging** - Tag everything with Environment, Project, Owner, and CostCenter for tracking.
+> 8. **Tags for tracking** - Tag everything with Environment, Project, Owner, and CostCenter for cost allocation and compliance.
 >
 > **Stack should be:**
 > * Python CDK project with proper structure
