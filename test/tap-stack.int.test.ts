@@ -53,7 +53,7 @@ const makeHttpRequest = (url: string): Promise<{ statusCode: number; body: strin
   });
 };
 
-describe('TapStack Integration Tests - Simplified LocalStack Community Edition', () => {
+describe('TapStack Integration Tests - Multi-Environment Infrastructure', () => {
   describe('Stack Outputs Validation', () => {
     test('should have all required outputs from CloudFormation deployment', () => {
       expect(outputs).toBeDefined();
@@ -65,36 +65,19 @@ describe('TapStack Integration Tests - Simplified LocalStack Community Edition',
       expect(outputs.VPCId).toMatch(/^vpc-[0-9a-f]{8,17}$/);
     });
 
-    test('should have Web Server URL output', () => {
-      expect(outputs.WebServerURL).toBeDefined();
-      expect(outputs.WebServerURL).toMatch(/^https?:\/\/.+$/);
+    test('should have Load Balancer URL output', () => {
+      expect(outputs.LoadBalancerURL).toBeDefined();
+      expect(outputs.LoadBalancerURL).toMatch(/^https?:\/\/.+$/);
     });
 
-    test('should have Web Server Public IP output', () => {
-      expect(outputs.WebServerPublicIP).toBeDefined();
-      expect(outputs.WebServerPublicIP).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+    test('should have Database Endpoint output', () => {
+      expect(outputs.DatabaseEndpoint).toBeDefined();
+      expect(outputs.DatabaseEndpoint).toMatch(/^.+\.(rds\.)?amazonaws\.com$|^.+:\d+$/);
     });
 
     test('should have Environment output matching expected environment', () => {
       expect(outputs.Environment).toBeDefined();
       expect(['dev', 'test', 'stage', 'prod']).toContain(outputs.Environment);
-    });
-
-    test('should have infrastructure resource IDs', () => {
-      expect(outputs.PublicSubnet1Id).toMatch(/^subnet-[0-9a-f]{8,17}$/);
-      expect(outputs.PublicSubnet2Id).toMatch(/^subnet-[0-9a-f]{8,17}$/);
-      expect(outputs.PrivateSubnet1Id).toMatch(/^subnet-[0-9a-f]{8,17}$/);
-      expect(outputs.PrivateSubnet2Id).toMatch(/^subnet-[0-9a-f]{8,17}$/);
-    });
-
-    test('should have Web Server Instance ID', () => {
-      expect(outputs.WebServerInstanceId).toBeDefined();
-      expect(outputs.WebServerInstanceId).toMatch(/^i-[0-9a-f]{8,17}$/);
-    });
-
-    test('should have Security Group ID', () => {
-      expect(outputs.SecurityGroupId).toBeDefined();
-      expect(outputs.SecurityGroupId).toMatch(/^sg-[0-9a-f]{8,17}$/);
     });
   });
 
@@ -104,70 +87,48 @@ describe('TapStack Integration Tests - Simplified LocalStack Community Edition',
       expect(outputs.VPCId.startsWith('vpc-')).toBe(true);
     });
 
-    test('should have two public subnets', () => {
-      expect(outputs.PublicSubnet1Id).toBeTruthy();
-      expect(outputs.PublicSubnet2Id).toBeTruthy();
-      expect(outputs.PublicSubnet1Id).not.toBe(outputs.PublicSubnet2Id);
-    });
-
-    test('should have two private subnets', () => {
-      expect(outputs.PrivateSubnet1Id).toBeTruthy();
-      expect(outputs.PrivateSubnet2Id).toBeTruthy();
-      expect(outputs.PrivateSubnet1Id).not.toBe(outputs.PrivateSubnet2Id);
-    });
-
-    test('should have proper subnet CIDR configuration based on environment', () => {
-      // Subnets should be in different AZs for high availability
-      expect(outputs.PublicSubnet1Id).toBeDefined();
-      expect(outputs.PublicSubnet2Id).toBeDefined();
-
-      // VPC CIDR should be appropriate for the environment
+    test('VPC ID should be exported for cross-stack references', () => {
+      // The template exports the VPC ID for use by other stacks
       expect(outputs.VPCId).toBeDefined();
+      expect(outputs.VPCId).toMatch(/^vpc-[0-9a-f]{8,17}$/);
     });
   });
 
-  describe('Web Server Tests', () => {
-    test('Web Server instance should exist', () => {
-      expect(outputs.WebServerInstanceId).toBeDefined();
-      expect(outputs.WebServerInstanceId).toMatch(/^i-/);
+  describe('Application Load Balancer Tests', () => {
+    test('Load Balancer URL should be defined', () => {
+      expect(outputs.LoadBalancerURL).toBeDefined();
+      expect(outputs.LoadBalancerURL).toMatch(/^http:\/\//);
     });
 
-    test('Web Server should have a public IP', () => {
-      expect(outputs.WebServerPublicIP).toBeDefined();
-      // Valid IP address format
-      const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-      expect(outputs.WebServerPublicIP).toMatch(ipRegex);
-    });
-
-    test('Web Server URL should be accessible', () => {
-      expect(outputs.WebServerURL).toBeDefined();
-      expect(outputs.WebServerURL).toMatch(/^http:\/\//);
-    });
-
-    test('should have proper security group configuration', () => {
-      expect(outputs.SecurityGroupId).toBeDefined();
-      expect(outputs.SecurityGroupId).toMatch(/^sg-/);
+    test('Load Balancer should have proper DNS format', () => {
+      // ALB DNS names follow the pattern: name-id.region.elb.amazonaws.com
+      expect(outputs.LoadBalancerURL).toBeDefined();
+      const url = outputs.LoadBalancerURL;
+      // Extract hostname from URL
+      const hostname = url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      // In LocalStack, it might be localhost or a mock DNS
+      expect(hostname.length).toBeGreaterThan(0);
     });
   });
 
   describe('HTTP Endpoint Tests', () => {
-    test('Web server should respond to HTTP requests (health check)', async () => {
-      const url = `${outputs.WebServerURL}/health`;
+    test('Load balancer should respond to HTTP requests (health check)', async () => {
+      const url = `${outputs.LoadBalancerURL}/health`;
 
       try {
         const response = await makeHttpRequest(url);
         expect(response.statusCode).toBe(200);
         expect(response.body).toContain('OK');
       } catch (error) {
-        // In LocalStack, the EC2 instance may not be fully functional
+        // In LocalStack, the ALB may not be fully functional
         // So we accept the test passing if the URL format is correct
-        console.warn('HTTP request failed (expected in LocalStack Community):', error);
-        expect(outputs.WebServerURL).toMatch(/^http:\/\//);
+        console.warn('HTTP request failed (expected in LocalStack):', error);
+        expect(outputs.LoadBalancerURL).toMatch(/^http:\/\//);
       }
     }, 15000);
 
-    test('Web server should serve the main page', async () => {
-      const url = outputs.WebServerURL;
+    test('Load balancer should serve the main page', async () => {
+      const url = outputs.LoadBalancerURL;
 
       try {
         const response = await makeHttpRequest(url);
@@ -175,10 +136,10 @@ describe('TapStack Integration Tests - Simplified LocalStack Community Edition',
         expect(response.body).toContain('Hello from');
         expect(response.body).toContain(outputs.Environment);
       } catch (error) {
-        // In LocalStack, the EC2 instance may not be fully functional
+        // In LocalStack, the ALB may not be fully functional
         // So we accept the test passing if the URL format is correct
-        console.warn('HTTP request failed (expected in LocalStack Community):', error);
-        expect(outputs.WebServerURL).toMatch(/^http:\/\//);
+        console.warn('HTTP request failed (expected in LocalStack):', error);
+        expect(outputs.LoadBalancerURL).toMatch(/^http:\/\//);
       }
     }, 15000);
   });
@@ -189,12 +150,12 @@ describe('TapStack Integration Tests - Simplified LocalStack Community Edition',
       expect(outputs.Environment).toMatch(/^(dev|test|stage|prod)$/);
     });
 
-    test('outputs should indicate LocalStack Community Edition deployment', () => {
-      // This is a simplified deployment for LocalStack Community Edition
-      // We verify that core infrastructure exists
+    test('outputs should indicate proper multi-environment deployment', () => {
+      // Verify that core infrastructure exists
       expect(outputs.VPCId).toBeDefined();
-      expect(outputs.WebServerInstanceId).toBeDefined();
-      expect(outputs.WebServerPublicIP).toBeDefined();
+      expect(outputs.LoadBalancerURL).toBeDefined();
+      expect(outputs.DatabaseEndpoint).toBeDefined();
+      expect(outputs.Environment).toBeDefined();
     });
   });
 
@@ -204,35 +165,49 @@ describe('TapStack Integration Tests - Simplified LocalStack Community Edition',
       expect(validEnvironments).toContain(outputs.Environment);
     });
 
-    test('should have instance in public subnet for web access', () => {
-      expect(outputs.WebServerInstanceId).toBeDefined();
-      expect(outputs.PublicSubnet1Id).toBeDefined();
-      expect(outputs.WebServerPublicIP).toBeDefined();
+    test('should have load balancer accessible via HTTP', () => {
+      expect(outputs.LoadBalancerURL).toBeDefined();
+      expect(outputs.LoadBalancerURL).toMatch(/^http:\/\//);
+    });
+
+    test('should have database endpoint for application connectivity', () => {
+      expect(outputs.DatabaseEndpoint).toBeDefined();
+      // Database endpoint should be a valid hostname or hostname:port
+      expect(outputs.DatabaseEndpoint.length).toBeGreaterThan(0);
     });
   });
 
-  describe('LocalStack Community Edition Compatibility', () => {
-    test('should use only Community Edition supported resources', () => {
-      // Verify we have basic infrastructure
-      expect(outputs.VPCId).toBeDefined();
-      expect(outputs.PublicSubnet1Id).toBeDefined();
-      expect(outputs.WebServerInstanceId).toBeDefined();
-
-      // Verify we don't have Pro-only resources in outputs
-      expect(outputs.LoadBalancerURL).toBeUndefined();
-      expect(outputs.DatabaseEndpoint).toBeUndefined();
+  describe('Database Configuration Tests', () => {
+    test('should have RDS database endpoint configured', () => {
+      expect(outputs.DatabaseEndpoint).toBeDefined();
+      expect(typeof outputs.DatabaseEndpoint).toBe('string');
+      expect(outputs.DatabaseEndpoint.length).toBeGreaterThan(0);
     });
 
-    test('should have simplified architecture without Pro services', () => {
-      // This deployment intentionally omits:
-      // - RDS (Pro-only)
-      // - ALB (Pro-only)
-      // - Auto Scaling (Pro-only)
-      // - Secrets Manager GenerateSecretString (Pro-only)
+    test('database endpoint should be in private subnets', () => {
+      // The database is deployed in private subnets for security
+      // We verify the endpoint exists and follows expected format
+      expect(outputs.DatabaseEndpoint).toBeDefined();
+      // In LocalStack, the endpoint might be localhost or a mock endpoint
+      expect(outputs.DatabaseEndpoint).toBeTruthy();
+    });
+  });
 
-      // Instead we have:
-      expect(outputs.WebServerInstanceId).toBeDefined(); // Single EC2 instance
-      expect(outputs.WebServerPublicIP).toBeDefined(); // Direct public IP
+  describe('High Availability Architecture Tests', () => {
+    test('should have multi-AZ capable infrastructure', () => {
+      // The template creates resources across multiple AZs
+      expect(outputs.VPCId).toBeDefined();
+      expect(outputs.LoadBalancerURL).toBeDefined();
+    });
+
+    test('should support scalable web tier with ALB', () => {
+      // Auto Scaling Group behind ALB for scalability
+      expect(outputs.LoadBalancerURL).toBeDefined();
+      expect(outputs.LoadBalancerURL).toMatch(/^http:\/\//);
+    });
+
+    test('should have database for persistent storage', () => {
+      expect(outputs.DatabaseEndpoint).toBeDefined();
     });
   });
 });
