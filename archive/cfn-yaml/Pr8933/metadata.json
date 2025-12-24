@@ -22,5 +22,12 @@
   "migrated_from": {
     "po_id": "ls-291429",
     "pr": "Pr874"
-  }
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
 }
