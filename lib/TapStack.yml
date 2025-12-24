@@ -202,8 +202,8 @@ Resources:
   # S3 Bucket for Access Logs
   MyAppS3AccessLogsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub >-
         myapp-access-logs-${Environment}-${AWS::AccountId}
@@ -318,8 +318,8 @@ Resources:
   # Primary S3 Bucket with Access Logging
   MyAppS3Bucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub >-
         myapp-primary-${Environment}-${AWS::AccountId}
@@ -389,8 +389,8 @@ Resources:
   # RDS PostgreSQL Instance
   MyAppRDSInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       cfn-lint:
         config:
@@ -407,7 +407,8 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      MultiAZ: false
+      MultiAZ: true
+      EnableIAMDatabaseAuthentication: true
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
