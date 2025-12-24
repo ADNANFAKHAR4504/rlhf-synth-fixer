@@ -132,7 +132,7 @@ describe('TapStack CloudFormation Template - Multi-Region Disaster Recovery', ()
     test('should have TransactionDynamoDBTable resource', () => {
       expect(template.Resources.TransactionDynamoDBTable).toBeDefined();
       expect(template.Resources.TransactionDynamoDBTable.Type).toBe(
-        'AWS::DynamoDB::GlobalTable'
+        'AWS::DynamoDB::Table'
       );
     });
 
@@ -185,18 +185,20 @@ describe('TapStack CloudFormation Template - Multi-Region Disaster Recovery', ()
       );
     });
 
-    test('TransactionDynamoDBTable should have replicas in two regions', () => {
+    test('TransactionDynamoDBTable should have point-in-time recovery enabled', () => {
       const table = template.Resources.TransactionDynamoDBTable;
-      expect(table.Properties.Replicas).toHaveLength(2);
+      expect(table.Properties.PointInTimeRecoverySpecification).toBeDefined();
+      expect(
+        table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled
+      ).toBe(true);
     });
 
-    test('TransactionDynamoDBTable replicas should have point-in-time recovery enabled', () => {
+    test('TransactionDynamoDBTable should have global replication tag', () => {
       const table = template.Resources.TransactionDynamoDBTable;
-      table.Properties.Replicas.forEach((replica: any) => {
-        expect(
-          replica.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled
-        ).toBe(true);
-      });
+      const tags = table.Properties.Tags;
+      const replicationTag = tags.find((tag: any) => tag.Key === 'ReplicationType');
+      expect(replicationTag).toBeDefined();
+      expect(replicationTag.Value).toBe('Global');
     });
 
     test('TransactionDynamoDBTable should include environment suffix in name', () => {
