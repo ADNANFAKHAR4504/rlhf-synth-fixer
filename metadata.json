@@ -1,0 +1,19 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291272",
+  "team": "synth-2",
+  "startedAt": "2025-08-14T16:18:58.483Z",
+  "subtask": "General Infrastructure Provisioning",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "Infrastructure Analysis/Monitoring",
+    "Web Application Deployment"
+  ],
+  "aws_services": [],
+  "wave": "P1"
+}
