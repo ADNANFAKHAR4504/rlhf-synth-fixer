@@ -582,7 +582,6 @@ Resources:
 
   DBInstance:
     Type: AWS::RDS::DBInstance
-    DependsOn: SecretDB
     Properties:
       Engine: mysql
       EngineVersion: '8.0.41'

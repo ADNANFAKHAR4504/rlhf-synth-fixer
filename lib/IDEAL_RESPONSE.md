@@ -582,7 +582,6 @@ Resources:
       Tags: [{Key: Name, Value: secret-rds-master}]
 
   DBInstance:
-    DependsOn: SecretDB
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: mysql
