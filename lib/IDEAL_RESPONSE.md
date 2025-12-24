@@ -154,6 +154,14 @@ Parameters:
     MinValue: 1
     MaxValue: 10
 
+  EnableBackup:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable AWS Backup resources (set to false for LocalStack compatibility)
+
 # ==================== MAPPINGS ====================
 Mappings:
   SubnetConfig:
@@ -191,6 +199,7 @@ Conditions:
   HasBackupAccount: !Not [!Equals [!Ref BackupAccountId, '123456789012']]
   HasLambdaLayer: !Not [!Equals [!Ref LambdaLayerS3Bucket, '']]
   ShouldDeployECS: !Equals [!Ref DeployECSService, 'true']
+  ShouldCreateBackup: !Equals [!Ref EnableBackup, 'true']
 
 # ==================== RESOURCES ====================
 Resources:
@@ -1330,6 +1339,7 @@ Resources:
   # ==================== BACKUP AND DR ====================
   BackupReplicationRole:
     Type: AWS::IAM::Role
+    Condition: ShouldCreateBackup
     Properties:
       RoleName: !Sub '${EnvironmentName}-backup-replication-role'
       AssumeRolePolicyDocument:
@@ -1377,6 +1387,7 @@ Resources:
 
   BackupPlan:
     Type: AWS::Backup::BackupPlan
+    Condition: ShouldCreateBackup
     Properties:
       BackupPlan:
         BackupPlanName: !Sub '${EnvironmentName}-meridian-backup-plan'
@@ -1414,6 +1425,7 @@ Resources:
 
   BackupVault:
     Type: AWS::Backup::BackupVault
+    Condition: ShouldCreateBackup
     Properties:
       BackupVaultName: !Sub '${EnvironmentName}-meridian-backup-vault'
       EncryptionKeyArn: !GetAtt BackupKMSKey.Arn
@@ -1424,6 +1436,7 @@ Resources:
 
   BackupKMSKey:
     Type: AWS::KMS::Key
+    Condition: ShouldCreateBackup
     Properties:
       Description: KMS key for AWS Backup encryption
       KeyPolicy:
@@ -1463,6 +1476,7 @@ Resources:
 
   BackupSelection:
     Type: AWS::Backup::BackupSelection
+    Condition: ShouldCreateBackup
     Properties:
       BackupPlanId: !Ref BackupPlan
       BackupSelection:
@@ -1477,6 +1491,7 @@ Resources:
 
   BackupRole:
     Type: AWS::IAM::Role
+    Condition: ShouldCreateBackup
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -2336,24 +2351,28 @@ Outputs:
 
   # Backup and DR Outputs
   BackupVaultArn:
+    Condition: ShouldCreateBackup
     Description: Backup Vault ARN
     Value: !GetAtt BackupVault.BackupVaultArn
     Export:
       Name: !Sub '${EnvironmentName}-backup-vault-arn'
 
   BackupPlanId:
+    Condition: ShouldCreateBackup
     Description: Backup Plan ID
     Value: !Ref BackupPlan
     Export:
       Name: !Sub '${EnvironmentName}-backup-plan-id'
 
   BackupVaultName:
+    Condition: ShouldCreateBackup
     Description: Backup Vault Name
     Value: !Sub '${EnvironmentName}-meridian-backup-vault'
     Export:
       Name: !Sub '${EnvironmentName}-backup-vault-name'
 
   BackupRoleArn:
+    Condition: ShouldCreateBackup
     Description: Backup Role ARN
     Value: !GetAtt BackupRole.Arn
     Export:

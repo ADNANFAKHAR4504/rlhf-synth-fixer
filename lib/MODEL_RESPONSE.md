@@ -102,6 +102,14 @@ Parameters:
     Description: Master username for Aurora PostgreSQL
     NoEcho: true
 
+  EnableBackup:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable AWS Backup resources (set to false for LocalStack compatibility)
+
 # ==================== MAPPINGS ====================
 Mappings:
   SubnetConfig:
@@ -123,6 +131,7 @@ Mappings:
 # ==================== CONDITIONS ====================
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentName, 'production']
+  ShouldCreateBackup: !Equals [!Ref EnableBackup, 'true']
 
 # ==================== RESOURCES ====================
 Resources:
@@ -689,6 +698,7 @@ Resources:
   # ==================== BACKUP REPLICATION ====================
   BackupReplicationRole:
     Type: AWS::IAM::Role
+    Condition: ShouldCreateBackup
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -719,6 +729,7 @@ Resources:
 
   BackupPlan:
     Type: AWS::Backup::BackupPlan
+    Condition: ShouldCreateBackup
     Properties:
       BackupPlan:
         BackupPlanName: !Sub '${EnvironmentName}-meridian-backup-plan'
@@ -744,6 +755,7 @@ Resources:
 
   BackupVault:
     Type: AWS::Backup::BackupVault
+    Condition: ShouldCreateBackup
     Properties:
       BackupVaultName: !Sub '${EnvironmentName}-meridian-backup-vault'
       EncryptionKeyArn: !GetAtt BackupKMSKey.Arn
@@ -753,6 +765,7 @@ Resources:
 
   BackupKMSKey:
     Type: AWS::KMS::Key
+    Condition: ShouldCreateBackup
     Properties:
       Description: KMS key for AWS Backup encryption
       KeyPolicy:
@@ -778,6 +791,7 @@ Resources:
 
   BackupSelection:
     Type: AWS::Backup::BackupSelection
+    Condition: ShouldCreateBackup
     Properties:
       BackupPlanId: !Ref BackupPlan
       BackupSelection:
@@ -788,6 +802,7 @@ Resources:
 
   BackupRole:
     Type: AWS::IAM::Role
+    Condition: ShouldCreateBackup
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'

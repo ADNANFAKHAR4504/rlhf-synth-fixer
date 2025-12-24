@@ -181,6 +181,15 @@
             "Description": "Number of years to retain logs for compliance",
             "MinValue": 1,
             "MaxValue": 10
+        },
+        "EnableBackup": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable AWS Backup resources (set to false for LocalStack compatibility)"
         }
     },
     "Mappings": {
@@ -306,6 +315,14 @@
             "Fn::Equals": [
                 {
                     "Ref": "DeployECSService"
+                },
+                "true"
+            ]
+        },
+        "ShouldCreateBackup": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableBackup"
                 },
                 "true"
             ]
@@ -2328,6 +2345,7 @@
         },
         "BackupReplicationRole": {
             "Type": "AWS::IAM::Role",
+            "Condition": "ShouldCreateBackup",
             "Properties": {
                 "RoleName": {
                     "Fn::Sub": "${EnvironmentName}-backup-replication-role"
@@ -2420,6 +2438,7 @@
         },
         "BackupPlan": {
             "Type": "AWS::Backup::BackupPlan",
+            "Condition": "ShouldCreateBackup",
             "Properties": {
                 "BackupPlan": {
                     "BackupPlanName": {
@@ -2513,6 +2532,7 @@
         },
         "BackupVault": {
             "Type": "AWS::Backup::BackupVault",
+            "Condition": "ShouldCreateBackup",
             "Properties": {
                 "BackupVaultName": {
                     "Fn::Sub": "${EnvironmentName}-meridian-backup-vault"
@@ -2536,6 +2556,7 @@
         },
         "BackupKMSKey": {
             "Type": "AWS::KMS::Key",
+            "Condition": "ShouldCreateBackup",
             "Properties": {
                 "Description": "KMS key for AWS Backup encryption",
                 "KeyPolicy": {
@@ -2601,6 +2622,7 @@
         },
         "BackupSelection": {
             "Type": "AWS::Backup::BackupSelection",
+            "Condition": "ShouldCreateBackup",
             "Properties": {
                 "BackupPlanId": {
                     "Ref": "BackupPlan"
@@ -2634,6 +2656,7 @@
         },
         "BackupRole": {
             "Type": "AWS::IAM::Role",
+            "Condition": "ShouldCreateBackup",
             "Properties": {
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -4237,6 +4260,7 @@
             }
         },
         "BackupVaultArn": {
+            "Condition": "ShouldCreateBackup",
             "Description": "Backup Vault ARN",
             "Value": {
                 "Fn::GetAtt": [
@@ -4251,6 +4275,7 @@
             }
         },
         "BackupPlanId": {
+            "Condition": "ShouldCreateBackup",
             "Description": "Backup Plan ID",
             "Value": {
                 "Ref": "BackupPlan"
@@ -4262,6 +4287,7 @@
             }
         },
         "BackupVaultName": {
+            "Condition": "ShouldCreateBackup",
             "Description": "Backup Vault Name",
             "Value": {
                 "Fn::Sub": "${EnvironmentName}-meridian-backup-vault"
@@ -4273,6 +4299,7 @@
             }
         },
         "BackupRoleArn": {
+            "Condition": "ShouldCreateBackup",
             "Description": "Backup Role ARN",
             "Value": {
                 "Fn::GetAtt": [
