@@ -27,7 +27,7 @@
 
 ## Deliverable:
 
-* A single, production-ready **`CloudEnvStack.yml`** that:
+* A single, production-ready **`TapStack.yml`** that:
 
   * Declares all **Parameters** with sensible **Defaults** (e.g., `EnvironmentSuffix=prod-us`, `AlarmEmail` placeholder), strict **regex constraints**, and no hardcoded environment enumerations.
   * Builds **every required module** (VPC, subnets, security groups, DB subnet group, KMS key & alias, Secrets, rotation, parameter groups, Aurora cluster & instances, endpoints, alarms, SNS).

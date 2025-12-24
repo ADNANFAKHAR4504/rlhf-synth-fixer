@@ -1,6 +1,6 @@
 # Functional scope
 
-Produce a single CloudFormation YAML template named CloudEnvStack.yml that provisions a brand-new, production-grade Amazon Aurora MySQL cluster and all supporting resources from scratch. No references to pre-existing subnets, security groups, parameter groups, or topics - declare and create everything required inside this one template with parameters, resources, and outputs. The template must be directly deployable with AWS CLI 2.x.
+Produce a single CloudFormation YAML template named TapStack.yml that provisions a brand-new, production-grade Amazon Aurora MySQL cluster and all supporting resources from scratch. No references to pre-existing subnets, security groups, parameter groups, or topics - declare and create everything required inside this one template with parameters, resources, and outputs. The template must be directly deployable with AWS CLI 2.x.
 
 # Technical requirements
 
@@ -34,7 +34,7 @@ The file format is pure YAML with no JSON. Use CloudFormation YAML intrinsic fun
 
 # Deliverable
 
-Return only the complete CloudEnvStack.yml contents, starting at the first line of YAML. Do not include explanations outside YAML. The template must include:
+Return only the complete TapStack.yml contents, starting at the first line of YAML. Do not include explanations outside YAML. The template must include:
 
 Metadata section with cfn-lint regional config.
 
@@ -78,4 +78,4 @@ Provide Outputs for ClusterArn, ClusterIdentifier, WriterEndpoint, ReaderEndpoin
 
 Use human-authored tone with no conversational opening. Clear YAML comments explaining any unavoidable engine or version nuances. Consistent indentation with 2 spaces, kebab-case for names, and !Sub for string interpolation with EnvironmentSuffix.
 
-Return only the CloudEnvStack.yml CloudFormation YAML, nothing else.
+Return only the TapStack.yml CloudFormation YAML, nothing else.
