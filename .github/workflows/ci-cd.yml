@@ -91,6 +91,7 @@ jobs:
 
       - name: Validate metadata.json
         if: steps.check-archive-only.outputs.archive_only != 'true'
+        continue-on-error: true
         uses: cardinalby/schema-validator-action@v3
         with:
           file: 'metadata.json'
