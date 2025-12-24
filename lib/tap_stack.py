@@ -25,15 +25,15 @@ IS_LOCALSTACK = "localhost" in os.environ.get("AWS_ENDPOINT_URL", "") or \
 
 
 class TapStackArgs:
-  """
-  TapStackArgs defines the input arguments for the TapStack component.
+    """
+    TapStackArgs defines the input arguments for the TapStack component.
 
-  Args:
+    Args:
     environment_suffix (Optional[str]): An optional suffix for deployment.
     tags (Optional[dict]): Optional default tags to apply to resources.
-  """
+    """
 
-  def __init__(self, region: Optional[str] = None, environment_suffix: Optional[str] = None,
+    def __init__(self, region: Optional[str] = None, environment_suffix: Optional[str] = None,
            tags: Optional[dict] = None):
     self.environment_suffix = environment_suffix or 'dev'
     self.region = region or 'us-east-1'  # Default region, can be overridden used in or for safety
@@ -41,23 +41,23 @@ class TapStackArgs:
 
 
 class TapStack(pulumi.ComponentResource):
-  """
-  Represents the main Pulumi component resource for the TAP project.
+    """
+    Represents the main Pulumi component resource for the TAP project.
 
-  This component orchestrates the instantiation of other resource-specific components
-  and manages the environment suffix used for naming and configuration.
+    This component orchestrates the instantiation of other resource-specific components
+    and manages the environment suffix used for naming and configuration.
 
-  Note:
-      - DO NOT create resources directly here unless they are truly global.
-      - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
+    Note:
+            - DO NOT create resources directly here unless they are truly global.
+            - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
 
-  Args:
-      name (str): The logical name of this Pulumi component.
-      args (TapStackArgs): Configuration arguments including environment suffix and tags.
-      opts (ResourceOptions): Pulumi options.
-  """
+    Args:
+            name (str): The logical name of this Pulumi component.
+            args (TapStackArgs): Configuration arguments including environment suffix and tags.
+            opts (ResourceOptions): Pulumi options.
+    """
 
-  def __init__(self, name: str, args: TapStackArgs,
+    def __init__(self, name: str, args: TapStackArgs,
            opts: Optional[ResourceOptions] = None):
     super().__init__('tap:stack:TapStack', name, None, opts)
     self.environment_suffix = args.environment_suffix
@@ -79,10 +79,10 @@ class TapStack(pulumi.ComponentResource):
 
     # Tags for all resources
     common_tags = {
-      "Project": project_name,
-      "Stack": stack_name,
-      "Environment": self.environment_suffix,
-      "ManagedBy": "Pulumi"
+            "Project": project_name,
+            "Stack": stack_name,
+            "Environment": self.environment_suffix,
+            "ManagedBy": "Pulumi"
     }
 
     # =====================================
@@ -91,21 +91,21 @@ class TapStack(pulumi.ComponentResource):
 
     # Create a secret for storing sensitive configuration
     app_secret = aws.secretsmanager.Secret(
-      "app-secret",
-      name=f"{project_name}-{stack_name}-app-secret",
-      description="Application secrets for Lambda functions",
-      kms_key_id="alias/aws/secretsmanager",  # Use AWS managed KMS key
-      tags=common_tags
+            "app-secret",
+            name=f"{project_name}-{stack_name}-app-secret",
+            description="Application secrets for Lambda functions",
+            kms_key_id="alias/aws/secretsmanager",  # Use AWS managed KMS key
+            tags=common_tags
     )
 
     # Store initial secret values (these should be updated after deployment)
     aws.secretsmanager.SecretVersion(
-      "app-secret-version",
-      secret_id=app_secret.id,
-      secret_string=json.dumps({
+            "app-secret-version",
+            secret_id=app_secret.id,
+            secret_string=json.dumps({
     "api_key": "placeholder-api-key",
     "db_password": "placeholder-db-password"
-      })
+            })
     )
 
     # =====================================
@@ -114,74 +114,74 @@ class TapStack(pulumi.ComponentResource):
 
     # Create S3 bucket for file uploads with security best practices
     s3_bucket = aws.s3.Bucket(
-      "file-upload-bucket",
-      bucket=f"{project_name}-{stack_name}-uploads-{self.region}".lower(),
-      tags=common_tags
+            "file-upload-bucket",
+            bucket=f"{project_name}-{stack_name}-uploads-{self.region}".lower(),
+            tags=common_tags
     )
 
     # Enable versioning for compliance
     aws.s3.BucketVersioning(
-      "bucket-versioning",
-      bucket=s3_bucket.id,
-      versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+            "bucket-versioning",
+            bucket=s3_bucket.id,
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
     status="Enabled"
-      )
+            )
     )
 
     # Server-side encryption with SSE-S3
     aws.s3.BucketServerSideEncryptionConfiguration(
-      "bucket-encryption",
-      bucket=s3_bucket.id,
-      rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+            "bucket-encryption",
+            bucket=s3_bucket.id,
+            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
     apply_server_side_encryption_by_default=(
-      aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+            aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
         sse_algorithm="AES256"
-      )
+            )
     ),
     bucket_key_enabled=True
-      )]
+            )]
     )
 
     # Block public access
     aws.s3.BucketPublicAccessBlock(
-      "bucket-public-access-block",
-      bucket=s3_bucket.id,
-      block_public_acls=True,
-      block_public_policy=True,
-      ignore_public_acls=True,
-      restrict_public_buckets=True
+            "bucket-public-access-block",
+            bucket=s3_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True
     )
 
     # Bucket policy to deny public access and enforce HTTPS
     aws.s3.BucketPolicy(
-      "bucket-policy",
-      bucket=s3_bucket.id,
-      policy=s3_bucket.arn.apply(
+            "bucket-policy",
+            bucket=s3_bucket.id,
+            policy=s3_bucket.arn.apply(
     lambda arn: json.dumps({
-      "Version": "2012-10-17",
-      "Statement": [
+            "Version": "2012-10-17",
+            "Statement": [
         {
-          "Sid": "DenyInsecureConnections",
-          "Effect": "Deny",
-          "Principal": "*",
-          "Action": [
+                    "Sid": "DenyInsecureConnections",
+                    "Effect": "Deny",
+                    "Principal": "*",
+                    "Action": [
             "s3:GetObject",
             "s3:PutObject",
             "s3:DeleteObject",
             "s3:GetObjectVersion",
             "s3:PutObjectAcl",
             "s3:GetObjectAcl"
-          ],
-          "Resource": [arn, f"{arn}/*"],
-          "Condition": {
+                    ],
+                    "Resource": [arn, f"{arn}/*"],
+                    "Condition": {
             "Bool": {
-              "aws:SecureTransport": "false"
+                            "aws:SecureTransport": "false"
             }
-          }
+                    }
         }
-      ]
+            ]
     })
-      )
+            )
     )
 
     # =====================================
@@ -190,69 +190,69 @@ class TapStack(pulumi.ComponentResource):
 
     # Lambda execution role with least privilege
     lambda_role = aws.iam.Role(
-      "lambda-execution-role",
-      name=f"{project_name}-{stack_name}-lambda-role",
-      assume_role_policy=json.dumps({
+            "lambda-execution-role",
+            name=f"{project_name}-{stack_name}-lambda-role",
+            assume_role_policy=json.dumps({
     "Version": "2012-10-17",
     "Statement": [
-      {
+            {
         "Action": "sts:AssumeRole",
         "Effect": "Allow",
         "Principal": {
-          "Service": "lambda.amazonaws.com"
+                    "Service": "lambda.amazonaws.com"
         }
-      }
+            }
     ]
-      }),
-      tags=common_tags
+            }),
+            tags=common_tags
     )
 
     # Attach basic Lambda execution policy
     aws.iam.RolePolicyAttachment(
-      "lambda-basic-execution-policy",
-      role=lambda_role.name,
-      policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+            "lambda-basic-execution-policy",
+            role=lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
     )
 
     # Custom policy for S3 and Secrets Manager access
     aws.iam.RolePolicy(
-      "lambda-custom-policy",
-      role=lambda_role.id,
-      policy=Output.all(s3_bucket.arn, app_secret.arn).apply(
+            "lambda-custom-policy",
+            role=lambda_role.id,
+            policy=Output.all(s3_bucket.arn, app_secret.arn).apply(
     lambda args: json.dumps({
-      "Version": "2012-10-17",
-      "Statement": [
+            "Version": "2012-10-17",
+            "Statement": [
         {
-          "Effect": "Allow",
-          "Action": [
+                    "Effect": "Allow",
+                    "Action": [
             "s3:GetObject",
             "s3:PutObject",
             "s3:DeleteObject"
-          ],
-          "Resource": f"{args[0]}/*"
+                    ],
+                    "Resource": f"{args[0]}/*"
         },
         {
-          "Effect": "Allow",
-          "Action": [
+                    "Effect": "Allow",
+                    "Action": [
             "secretsmanager:GetSecretValue"
-          ],
-          "Resource": args[1]
+                    ],
+                    "Resource": args[1]
         },
         {
-          "Effect": "Allow",
-          "Action": [
+                    "Effect": "Allow",
+                    "Action": [
             "logs:CreateLogGroup",
             "logs:CreateLogStream",
             "logs:PutLogEvents"
-          ],
-          "Resource": [
+                    ],
+                    "Resource": [
             f"arn:aws:logs:{self.region}:*:log-group:/aws/lambda/{project_name}-{stack_name}-*",
             f"arn:aws:logs:{self.region}:*:log-group:/aws/lambda/{project_name}-{stack_name}-*:*"
-          ]
+                    ]
         }
-      ]
+            ]
     })
-      )
+            )
     )
 
     # =====================================
@@ -425,42 +425,42 @@ class TapStack(pulumi.ComponentResource):
 
     # S3 Event Processor Lambda Function
     s3_processor_lambda = aws.lambda_.Function(
-      "s3-event-processor",
-      name=f"{project_name}-{stack_name}-s3-processor",
-      runtime="python3.9",
-      code=pulumi.AssetArchive({
+            "s3-event-processor",
+            name=f"{project_name}-{stack_name}-s3-processor",
+            runtime="python3.9",
+            code=pulumi.AssetArchive({
     "lambda_function.py": pulumi.StringAsset(s3_processor_code)
-      }),
-      handler="lambda_function.lambda_handler",
-      role=lambda_role.arn,
-      timeout=5,  # 5 seconds max
-      memory_size=128,  # 128MB memory
-      environment=aws.lambda_.FunctionEnvironmentArgs(
+            }),
+            handler="lambda_function.lambda_handler",
+            role=lambda_role.arn,
+            timeout=5,  # 5 seconds max
+            memory_size=128,  # 128MB memory
+            environment=aws.lambda_.FunctionEnvironmentArgs(
     variables={
-      "SECRET_ARN": app_secret.arn
+            "SECRET_ARN": app_secret.arn
     }
-      ),
-      tags=common_tags
+            ),
+            tags=common_tags
     )
 
     # API Gateway Handler Lambda Function
     api_handler_lambda = aws.lambda_.Function(
-      "api-gateway-handler",
-      name=f"{project_name}-{stack_name}-api-handler",
-      runtime="python3.9",
-      code=pulumi.AssetArchive({
+            "api-gateway-handler",
+            name=f"{project_name}-{stack_name}-api-handler",
+            runtime="python3.9",
+            code=pulumi.AssetArchive({
     "lambda_function.py": pulumi.StringAsset(api_handler_code)
-      }),
-      handler="lambda_function.lambda_handler",
-      role=lambda_role.arn,
-      timeout=5,  # 5 seconds max
-      memory_size=128,  # 128MB memory
-      environment=aws.lambda_.FunctionEnvironmentArgs(
+            }),
+            handler="lambda_function.lambda_handler",
+            role=lambda_role.arn,
+            timeout=5,  # 5 seconds max
+            memory_size=128,  # 128MB memory
+            environment=aws.lambda_.FunctionEnvironmentArgs(
     variables={
-      "SECRET_ARN": app_secret.arn
+            "SECRET_ARN": app_secret.arn
     }
-      ),
-      tags=common_tags
+            ),
+            tags=common_tags
     )
 
     # =====================================
@@ -603,7 +603,7 @@ class TapStack(pulumi.ComponentResource):
         tags=common_tags
     )
 
-    _ = aws.apigateway.Stage(
+    api_stage = aws.apigateway.Stage(
         "api-stage",
         deployment=api_deployment.id,
         rest_api=api_gateway.id,
@@ -715,9 +715,9 @@ class TapStack(pulumi.ComponentResource):
     # Export important resource information
     pulumi.export("s3_bucket_name", s3_bucket.bucket)
     pulumi.export("s3_bucket_arn", s3_bucket.arn)
-    pulumi.export("api_gateway_url", api_deployment.invoke_url)
+    pulumi.export("api_gateway_url", api_stage.invoke_url)
     pulumi.export("api_gateway_stage_url", Output.concat(
-    "https://", api_gateway.id, f".execute-api.{self.region}.amazonaws.com/", f"{stage_name}" 
+    "https://", api_gateway.id, f".execute-api.{self.region}.amazonaws.com/", f"{stage_name}"
     ))
     pulumi.export("s3_processor_lambda_arn", s3_processor_lambda.arn)
     pulumi.export("api_handler_lambda_arn", api_handler_lambda.arn)
