@@ -626,6 +626,22 @@
                     "Fn::Sub": "${AWS::StackName}-TableDetails"
                 }
             }
+        },
+        "VPC": {
+            "Description": "VPC ID (not applicable - no VPC resources)",
+            "Value": ""
+        },
+        "SecurityGroup": {
+            "Description": "Security Group ID (not applicable - no VPC resources)",
+            "Value": ""
+        },
+        "InternetGateway": {
+            "Description": "Internet Gateway ID (not applicable - no VPC resources)",
+            "Value": ""
+        },
+        "NATGateway": {
+            "Description": "NAT Gateway ID (not applicable - no VPC resources)",
+            "Value": ""
         }
     },
     "Metadata": {
