@@ -180,6 +180,39 @@ while [ $attempt -lt $max_attempts ]; do
         curl -s http://localhost:4566/_localstack/health 2>/dev/null | jq . 2>/dev/null || curl -s http://localhost:4566/_localstack/health
         echo ""
 
+        # Verify critical services are operational
+        echo -e "${BLUE}🔍 Verifying critical services...${NC}"
+        HEALTH_JSON=$(curl -s http://localhost:4566/_localstack/health 2>/dev/null)
+        
+        # Check RDS service (critical for RDS instance creation)
+        if echo "$HEALTH_JSON" | grep -q '"rds"' && echo "$HEALTH_JSON" | grep -q '"rds":.*"running\|available"'; then
+            echo -e "${GREEN}  ✅ RDS service operational${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  RDS service status unknown (may cause deployment issues)${NC}"
+        fi
+        
+        # Check CloudFormation service
+        if echo "$HEALTH_JSON" | grep -q '"cloudformation"' && echo "$HEALTH_JSON" | grep -q '"cloudformation":.*"running\|available"'; then
+            echo -e "${GREEN}  ✅ CloudFormation service operational${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  CloudFormation service status unknown${NC}"
+        fi
+        
+        # Check EC2 service (critical for VPC/subnet creation)
+        if echo "$HEALTH_JSON" | grep -q '"ec2"' && echo "$HEALTH_JSON" | grep -q '"ec2":.*"running\|available"'; then
+            echo -e "${GREEN}  ✅ EC2 service operational${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  EC2 service status unknown${NC}"
+        fi
+        
+        # Check CloudTrail service
+        if echo "$HEALTH_JSON" | grep -q '"cloudtrail"' && echo "$HEALTH_JSON" | grep -q '"cloudtrail":.*"running\|available"'; then
+            echo -e "${GREEN}  ✅ CloudTrail service operational${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  CloudTrail service status unknown${NC}"
+        fi
+        echo ""
+
         # Show container info
         echo -e "${BLUE}🐳 Container Information:${NC}"
         docker ps | grep localstack
