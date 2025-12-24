@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291815",
+  "team": "synth-2",
+  "startedAt": "2025-12-24T02:28:43.000Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "EC2",
+    "IAM",
+    "VPC"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291815",
+    "pr": "Pr398"
+  }
+}

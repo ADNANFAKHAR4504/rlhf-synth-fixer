@@ -1,0 +1,639 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-ready EC2 failover infrastructure with Route 53 health checks for automated traffic redirection'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "EC2 Configuration"
+        Parameters:
+          - KeyPairName
+          - InstanceType
+      - Label:
+          default: "DNS Configuration"
+        Parameters:
+          - HostedZoneId
+          - DomainName
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - AllowedSSHCIDR
+    ParameterLabels:
+      KeyPairName:
+        default: "EC2 Key Pair Name"
+      InstanceType:
+        default: "EC2 Instance Type"
+      HostedZoneId:
+        default: "Route 53 Hosted Zone ID"
+      DomainName:
+        default: "Domain Name for Failover"
+      AllowedSSHCIDR:
+        default: "Allowed SSH CIDR Block"
+
+Parameters:
+  EnableRoute53:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable Route53 health checks and DNS records (requires LocalStack Pro or AWS)
+
+  EnableCloudWatch:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable CloudWatch alarms (requires LocalStack Pro or AWS)
+
+  KeyPairName:
+    Type: String
+    Default: failover-demo-key
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+    Description: EC2 instance type for both primary and standby instances
+    ConstraintDescription: Must be a valid EC2 instance type
+
+  HostedZoneId:
+    Type: String
+    Default: Z0909377OVFW706BZN9J
+    Description: Route 53 Hosted Zone ID where DNS records will be created (only used if EnableRoute53 is true)
+    ConstraintDescription: Must be a valid Route 53 Hosted Zone ID
+
+  DomainName:
+    Type: String
+    Default: failoverdemo.com
+    Description: Domain name for the failover setup (only used if EnableRoute53 is true)
+    AllowedPattern: ^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$
+    ConstraintDescription: Must be a valid domain name
+
+  AllowedSSHCIDR:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR block allowed for SSH access
+    AllowedPattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$
+    ConstraintDescription: Must be a valid CIDR block (e.g., 0.0.0.0/0)
+
+Conditions:
+  UseRoute53: !Equals [!Ref EnableRoute53, 'true']
+  UseCloudWatch: !Equals [!Ref EnableCloudWatch, 'true']
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0bb84b8ffd87024d8  # Amazon Linux 2023 AMI
+    us-east-2:
+      AMI: ami-05692c5020146f5c8  # Amazon Linux 2023 AMI
+    us-west-1:
+      AMI: ami-02ea247e531eb3ce6  # Amazon Linux 2023 AMI
+    us-west-2:
+      AMI: ami-05134c8ef96964280  # Amazon Linux 2023 AMI
+    eu-central-1:
+      AMI: ami-0ab1a82de7ca5889c  # Amazon Linux 2023 AMI
+    eu-west-1:
+      AMI: ami-0c9c942bd7bf113a2  # Amazon Linux 2023 AMI
+    eu-west-2:
+      AMI: ami-0b2ed2c3df3b2d8b6  # Amazon Linux 2023 AMI
+    eu-west-3:
+      AMI: ami-0ec28fc9814fce254  # Amazon Linux 2023 AMI
+    ap-northeast-1:
+      AMI: ami-0e0820ad173f20fbb  # Amazon Linux 2023 AMI
+    ap-northeast-2:
+      AMI: ami-0f8dbbf156e3a5cc6  # Amazon Linux 2023 AMI
+    ap-southeast-1:
+      AMI: ami-0d07675d294f17973  # Amazon Linux 2023 AMI
+    ap-southeast-2:
+      AMI: ami-0146fc9ad419e2cfd  # Amazon Linux 2023 AMI
+    ap-south-1:
+      AMI: ami-0fd05997b4dff7aac  # Amazon Linux 2023 AMI
+    ca-central-1:
+      AMI: ami-0083d3f8b2a6c7a81  # Amazon Linux 2023 AMI
+    sa-east-1:
+      AMI: ami-0c2b8ca3dad447f8a  # Amazon Linux 2023 AMI
+
+Resources:
+  # VPC and Networking Resources
+  VPC:
+    Type: AWS::EC2::VPC
+    DeletionPolicy: Delete
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPC'
+        - Key: Project
+          Value: Route53FailoverDemo
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DeletionPolicy: Delete
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-IGW'
+        - Key: Project
+          Value: Route53FailoverDemo
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    DeletionPolicy: Delete
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnets in different AZs
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Public-Subnet-AZ1'
+        - Key: Project
+          Value: Route53FailoverDemo
+
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Public-Subnet-AZ2'
+        - Key: Project
+          Value: Route53FailoverDemo
+
+  # Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    DeletionPolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Public-RT'
+        - Key: Project
+          Value: Route53FailoverDemo
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DeletionPolicy: Delete
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DeletionPolicy: Delete
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetAZ1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DeletionPolicy: Delete
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetAZ2
+
+  # Security Groups
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-WebServer-SG'
+      GroupDescription: Security group for web servers allowing HTTP and SSH access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTP traffic from anywhere
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS traffic from anywhere
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSSHCIDR
+          Description: Allow SSH access
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-WebServer-SG'
+        - Key: Project
+          Value: Route53FailoverDemo
+
+  # IAM Role for EC2 instances
+  EC2Role:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: Route53HealthCheckPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - route53:GetHealthCheck
+                  - route53:ListHealthChecks
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: Route53FailoverDemo
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    DeletionPolicy: Delete
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  # Primary EC2 Instance
+  PrimaryEC2Instance:
+    Type: AWS::EC2::Instance
+    DeletionPolicy: Delete
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref PublicSubnetAZ1
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          
+          # Create a simple health check page
+          cat > /var/www/html/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Primary Web Server</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; background-color: #e8f5e8; }
+                  .container { max-width: 600px; margin: 0 auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                  .status { color: #28a745; font-weight: bold; }
+                  .server-info { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🟢 Primary Web Server</h1>
+                  <p class="status">Status: ACTIVE (Primary)</p>
+                  <div class="server-info">
+                      <h3>Server Information:</h3>
+                      <p><strong>Instance ID:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+                      <p><strong>Availability Zone:</strong> $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+                      <p><strong>Instance Type:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-type)</p>
+                      <p><strong>Last Updated:</strong> $(date)</p>
+                  </div>
+                  <p>This is the primary web server in the failover configuration. Traffic is being served from this instance.</p>
+              </div>
+          </body>
+          </html>
+          EOF
+          
+          # Create health check endpoint
+          cat > /var/www/html/health << 'EOF'
+          OK
+          EOF
+          
+          # Install CloudWatch agent
+          wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+          rpm -U ./amazon-cloudwatch-agent.rpm
+          
+          # Configure CloudWatch agent
+          cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
+          {
+              "metrics": {
+                  "namespace": "Route53FailoverDemo",
+                  "metrics_collected": {
+                      "cpu": {
+                          "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
+                          "metrics_collection_interval": 60
+                      },
+                      "disk": {
+                          "measurement": ["used_percent"],
+                          "metrics_collection_interval": 60,
+                          "resources": ["*"]
+                      },
+                      "mem": {
+                          "measurement": ["mem_used_percent"],
+                          "metrics_collection_interval": 60
+                      }
+                  }
+              }
+          }
+          EOF
+          
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Primary-WebServer'
+        - Key: Project
+          Value: Route53FailoverDemo
+        - Key: Role
+          Value: Primary
+
+  # Standby EC2 Instance
+  StandbyEC2Instance:
+    Type: AWS::EC2::Instance
+    DeletionPolicy: Delete
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref PublicSubnetAZ2
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          
+          # Create a simple health check page
+          cat > /var/www/html/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Standby Web Server</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; background-color: #fff3cd; }
+                  .container { max-width: 600px; margin: 0 auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                  .status { color: #856404; font-weight: bold; }
+                  .server-info { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🟡 Standby Web Server</h1>
+                  <p class="status">Status: STANDBY (Secondary)</p>
+                  <div class="server-info">
+                      <h3>Server Information:</h3>
+                      <p><strong>Instance ID:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+                      <p><strong>Availability Zone:</strong> $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+                      <p><strong>Instance Type:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-type)</p>
+                      <p><strong>Last Updated:</strong> $(date)</p>
+                  </div>
+                  <p>This is the standby web server in the failover configuration. You are seeing this page because the primary server is currently unavailable.</p>
+              </div>
+          </body>
+          </html>
+          EOF
+          
+          # Create health check endpoint
+          cat > /var/www/html/health << 'EOF'
+          OK
+          EOF
+          
+          # Install CloudWatch agent
+          wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+          rpm -U ./amazon-cloudwatch-agent.rpm
+          
+          # Configure CloudWatch agent
+          cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
+          {
+              "metrics": {
+                  "namespace": "Route53FailoverDemo",
+                  "metrics_collected": {
+                      "cpu": {
+                          "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
+                          "metrics_collection_interval": 60
+                      },
+                      "disk": {
+                          "measurement": ["used_percent"],
+                          "metrics_collection_interval": 60,
+                          "resources": ["*"]
+                      },
+                      "mem": {
+                          "measurement": ["mem_used_percent"],
+                          "metrics_collection_interval": 60
+                      }
+                  }
+              }
+          }
+          EOF
+          
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Standby-WebServer'
+        - Key: Project
+          Value: Route53FailoverDemo
+        - Key: Role
+          Value: Standby
+
+
+
+
+
+  # CloudWatch Alarms for monitoring (conditionally created)
+  PrimaryInstanceStatusAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: UseCloudWatch
+    DeletionPolicy: Delete
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-Primary-Instance-Status'
+      AlarmDescription: 'Monitor primary instance status'
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref PrimaryEC2Instance
+      TreatMissingData: breaching
+
+  StandbyInstanceStatusAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: UseCloudWatch
+    DeletionPolicy: Delete
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-Standby-Instance-Status'
+      AlarmDescription: 'Monitor standby instance status'
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref StandbyEC2Instance
+      TreatMissingData: breaching
+
+  # Route53 Health Check for Primary Instance (conditionally created)
+  PrimaryHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Condition: UseRoute53
+    DeletionPolicy: Delete
+    Properties:
+      HealthCheckConfig:
+        Type: HTTP
+        ResourcePath: /health
+        FullyQualifiedDomainName: !GetAtt PrimaryEC2Instance.PublicDnsName
+        Port: 80
+        RequestInterval: 30
+        FailureThreshold: 3
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Primary-HealthCheck'
+        - Key: Project
+          Value: Route53FailoverDemo
+
+  # Route53 DNS Records for Failover (conditionally created)
+  PrimaryDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: UseRoute53
+    DeletionPolicy: Delete
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      SetIdentifier: Primary
+      Failover: PRIMARY
+      TTL: 60
+      ResourceRecords:
+        - !GetAtt PrimaryEC2Instance.PublicIp
+      HealthCheckId: !Ref PrimaryHealthCheck
+
+  StandbyDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: UseRoute53
+    DeletionPolicy: Delete
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      SetIdentifier: Standby
+      Failover: SECONDARY
+      TTL: 60
+      ResourceRecords:
+        - !GetAtt StandbyEC2Instance.PublicIp
+
+Outputs:
+  PrimaryInstanceId:
+    Description: Instance ID of the primary web server
+    Value: !Ref PrimaryEC2Instance
+    Export:
+      Name: !Sub '${AWS::StackName}-Primary-InstanceId'
+
+  StandbyInstanceId:
+    Description: Instance ID of the standby web server
+    Value: !Ref StandbyEC2Instance
+    Export:
+      Name: !Sub '${AWS::StackName}-Standby-InstanceId'
+
+  PrimaryPublicIP:
+    Description: Public IP address of the primary web server
+    Value: !GetAtt PrimaryEC2Instance.PublicIp
+    Export:
+      Name: !Sub '${AWS::StackName}-Primary-PublicIP'
+
+  StandbyPublicIP:
+    Description: Public IP address of the standby web server
+    Value: !GetAtt StandbyEC2Instance.PublicIp
+    Export:
+      Name: !Sub '${AWS::StackName}-Standby-PublicIP'
+
+  PrimaryPublicDNS:
+    Description: Public DNS name of the primary web server
+    Value: !GetAtt PrimaryEC2Instance.PublicDnsName
+    Export:
+      Name: !Sub '${AWS::StackName}-Primary-PublicDNS'
+
+  StandbyPublicDNS:
+    Description: Public DNS name of the standby web server
+    Value: !GetAtt StandbyEC2Instance.PublicDnsName
+    Export:
+      Name: !Sub '${AWS::StackName}-Standby-PublicDNS'
+
+  VPCId:
+    Description: VPC ID created for the infrastructure
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-Id'
+
+  WebServerSecurityGroupId:
+    Description: Security Group ID for web servers
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-WebServer-SG-Id'
+
+  PrimaryAvailabilityZone:
+    Description: Availability Zone of the primary instance
+    Value: !GetAtt PrimaryEC2Instance.AvailabilityZone
+    Export:
+      Name: !Sub '${AWS::StackName}-Primary-AZ'
+
+  StandbyAvailabilityZone:
+    Description: Availability Zone of the standby instance
+    Value: !GetAtt StandbyEC2Instance.AvailabilityZone
+    Export:
+      Name: !Sub '${AWS::StackName}-Standby-AZ'
+
+  PrimaryHealthCheckId:
+    Condition: UseRoute53
+    Description: Route53 Health Check ID for the primary instance (only available if Route53 is enabled)
+    Value: !Ref PrimaryHealthCheck
+    Export:
+      Name: !Sub '${AWS::StackName}-Primary-HealthCheck-Id'
+
+  DomainName:
+    Condition: UseRoute53
+    Description: Domain name used for the failover setup (only available if Route53 is enabled)
+    Value: !Ref DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-Domain-Name'
