@@ -62,7 +62,8 @@ Resources:
               - kms:CancelKeyDeletion
               - kms:Encrypt
               - kms:Decrypt
-              - kms:ReEncrypt
+              - kms:ReEncryptFrom
+              - kms:ReEncryptTo
               - kms:GenerateDataKey
               - kms:GenerateDataKeyWithoutPlaintext
             Resource: '*'
@@ -70,7 +71,14 @@ Resources:
             Effect: Allow
             Principal:
               Service: s3.amazonaws.com
-            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncryptFrom
+              - kms:ReEncryptTo
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlaintext
+              - kms:DescribeKey
             Resource: '*'
       Tags:
         - { Key: Environment, Value: !Ref Environment }
