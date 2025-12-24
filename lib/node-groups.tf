@@ -218,7 +218,10 @@ resource "aws_eks_node_group" "spot" {
   }
 
   instance_types = ["m5.large"]
-  capacity_type  = "SPOT"
+  # Changed from SPOT to ON_DEMAND due to LocalStack limitation
+  # LocalStack does not properly emulate SPOT capacity type for EKS node groups
+  # For production AWS deployments, change back to "SPOT" for cost optimization
+  capacity_type  = "ON_DEMAND"
 
   launch_template {
     id      = aws_launch_template.spot.id

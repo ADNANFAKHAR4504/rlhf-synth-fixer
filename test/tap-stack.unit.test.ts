@@ -306,8 +306,9 @@ describe('TAP Stack - EKS Cluster Infrastructure Unit Tests', () => {
       expect(nodeGroupsContent).toMatch(/taint\s*\{/);
     });
 
-    test('spot node group should use SPOT capacity', () => {
-      expect(nodeGroupsContent).toMatch(/capacity_type\s*=\s*"SPOT"/);
+    test('spot node group should use ON_DEMAND due to LocalStack limitation', () => {
+      expect(nodeGroupsContent).toMatch(/capacity_type\s*=\s*"ON_DEMAND"/);
+      expect(nodeGroupsContent).toMatch(/LocalStack does not properly emulate SPOT capacity type/);
     });
   });
 
