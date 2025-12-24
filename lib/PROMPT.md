@@ -1,19 +1,17 @@
-Need a CloudFormation template for us-west-2. Basic setup - S3, EC2, DynamoDB.
+Need a CloudFormation template for us-west-2. Setting up a small environment where EC2 talks to S3, with DynamoDB for metadata storage.
 
-Here's what I'm looking for:
+Here's the setup:
 
-S3 bucket with versioning. Bucket name needs to be a param.
+S3 bucket with versioning. Bucket name as param. The EC2 instance will need to list contents of this bucket.
 
-EC2 instance. Needs VPC ID and subnet ID as params, also instance type. We'll provide those when we deploy.
+EC2 instance deployed in a VPC/subnet - both should be params. Instance type also parameterized. This instance uses an IAM role to access the S3 bucket - ONLY s3:ListBucket permission, nothing more. Last time someone gave it s3:* and we got flagged in the security audit.
 
-IAM role for EC2 - ONLY s3:ListBucket permission. Last time someone gave it s3:* and we got flagged in the security audit.
+Security group protecting the EC2 instance - SSH access restricted to just our office IP. Use 203.0.113.0/32 as placeholder, make it param. Not opening to 0.0.0.0/0.
 
-Security group for SSH - just our office IP (203.0.113.0/32 placeholder, make it a param though). Not opening SSH to 0.0.0.0/0.
+CloudWatch alarm monitoring the EC2 instance - trigger when CPU exceeds 70%. Our instances keep spiking and nobody notices until things break. Alarm should watch the EC2's CPU metrics.
 
-CloudWatch alarm for CPU > 70%. Instances keep spiking and nobody notices until things break.
+DynamoDB table for storing config metadata. Table name as param, primary key name as param, read capacity 5. The EC2 will write config data here.
 
-DynamoDB table. Table name as param, primary key name as param, set read capacity to 5.
+Tag everything Project: CloudSetup. Finance wants to track what this environment costs.
 
-Tag everything Project: CloudSetup. Finance wants to track what this costs.
-
-Call it TapStack.yml. Don't need docs, just the template.  
+Call it TapStack.yml. Just need the template, no docs.  
