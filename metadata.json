@@ -8,19 +8,7 @@
   "startedAt": "2025-12-01T00:00:00.000Z",
   "subtask": "IaC Program Optimization",
   "subject_labels": [
-    "IaC Optimization",
-    "Template Optimization",
-    "Extract Hardcoded Parameters",
-    "Mappings Section",
-    "Dependency Resolution",
-    "Security Group Consolidation",
-    "Intrinsic Function Modernization",
-    "Add Conditional Logic",
-    "Deletion and Update Policies",
-    "Pseudo Parameters",
-    "IMDSv2 Configuration",
-    "CloudFormation Designer Metadata",
-    "Validation"
+    "IaC Optimization"
   ],
   "aws_services": [
     "VPC",
