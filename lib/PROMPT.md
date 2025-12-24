@@ -6,7 +6,7 @@ I need a CloudFormation template in JSON format that sets up a secure production
 
 Build a VPC with 10.0.0.0/16 CIDR that has public subnet 10.0.1.0/24 and private subnet 10.0.2.0/24. The VPC needs an Internet Gateway attached to it so public resources can reach the internet.
 
-Set up security groups that only allow what's necessary - HTTPS/HTTP from anywhere but restrict SSH to specific IPs only. The web security group should allow inbound 443, 80, and SSH from a specific CIDR. Database security group should only accept MySQL traffic from the web security group.
+Set up security groups that only allow what's necessary - HTTPS/HTTP from 0.0.0.0/0 but restrict SSH to specific IPs only. The web security group should allow inbound 443, 80, and SSH from a specific CIDR. Database security group should only accept MySQL traffic from the web security group.
 
 Deploy an RDS MySQL database in the private subnet that's only accessible from the web security group. The database needs encryption at rest and should NOT be publicly accessible. Set up automated backups with 7-day retention.
 
@@ -40,4 +40,4 @@ For WAF, only create it in real AWS regions - add a condition that checks if reg
 
 ## Final Output
 
-Give me a complete CloudFormation JSON template that provisions all these resources with proper dependencies. Include outputs for VPC ID, subnet IDs, security group IDs, database endpoint, and WAF ARN. Make sure all the integrations work - Config writing to its bucket, CloudTrail writing to its bucket, EC2 roles able to send logs to CloudWatch, database only accessible through security groups, etc.
+Give me a complete CloudFormation JSON template that provisions all these resources with proper dependencies. Include outputs for VPC ID, subnet IDs, security group IDs, database endpoint, and WAF ARN. Make sure all the integrations work - Config writing to its bucket, CloudTrail writing to its bucket, EC2 roles able to send logs to CloudWatch, database only accessible through security groups.
