@@ -27,11 +27,11 @@ The following are expected limitations of LocalStack Community Edition and do no
 
 ## Deployment Status
 
-- ✅ LocalStack deployment: **SUCCESSFUL**
-- ✅ Unit tests: **73/73 PASSING**
-- ✅ Integration tests: **25/25 PASSING**
-- ✅ CloudFormation templates: **VALIDATED**
-- ✅ Code quality: **PASSING**
+- LocalStack deployment: **SUCCESSFUL**
+- Unit tests: **73/73 PASSING**
+- Integration tests: **25/25 PASSING**
+- CloudFormation templates: **VALIDATED**
+- Code quality: **PASSING**
 
 ## Conclusion
 
