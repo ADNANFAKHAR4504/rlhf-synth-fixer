@@ -1,0 +1,580 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure Lambda infrastructure with S3 log export'
+
+Parameters:
+  VpcId:
+    Type: String
+    Default: 'vpc-002dd1e7eb944d35a'
+    Description: 'Pre-existing VPC ID'
+    AllowedPattern: '^vpc-[0-9a-f]{8,17}$'
+    
+  S3BucketName:
+    Type: String
+    Default: 'lambda-deployments-718240086340'
+    Description: 'S3 bucket for log storage'
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+    MinLength: 3
+    MaxLength: 63
+    
+  LambdaFunctionName:
+    Type: String
+    Default: 'SecureLambdaFunction'
+    Description: 'Lambda function name'
+    AllowedPattern: '^[a-zA-Z0-9-_]+$'
+    MinLength: 1
+    MaxLength: 64
+
+  SubnetIds:
+    Type: CommaDelimitedList
+    Description: 'Private subnet IDs for Lambda'
+    Default: ''
+    
+  Environment:
+    Type: String
+    Default: 'Development'
+    AllowedValues: ['Development', 'Staging', 'Production']
+
+Conditions:
+  HasSubnetIds: !Not [!Equals [!Join ['', !Ref SubnetIds], '']]
+  BucketExists: !Not [!Equals [!Ref S3BucketName, '']]
+
+Resources:
+  # KMS Key for encryption
+  EncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS key for Lambda logs and S3 bucket encryption'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'Enable IAM User Permissions'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: 'Allow CloudWatch Logs'
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+          - Sid: 'Allow S3 Service'
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+
+  EncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${LambdaFunctionName}-encryption-key'
+      TargetKeyId: !Ref EncryptionKey
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${LambdaFunctionName}'
+      RetentionInDays: 14
+      KmsKeyId: !GetAtt EncryptionKey.Arn
+
+  VPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${VpcId}'
+      RetentionInDays: 14
+      KmsKeyId: !GetAtt EncryptionKey.Arn
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                'aws:RequestedRegion': 'us-east-1'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: 'LambdaLoggingPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub '${LambdaLogGroup.Arn}:*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub 'arn:aws:s3:::${S3BucketName}/lambda-logs/${LambdaFunctionName}/*'
+              - Effect: Allow
+                Action: s3:GetBucketLocation
+                Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt EncryptionKey.Arn
+
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: 'FlowLogDeliveryPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: !Sub '${VPCFlowLogGroup.Arn}:*'
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Lambda function'
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTPS for AWS API calls'
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: 'DNS TCP'
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: 'DNS UDP'
+      Tags:
+        - Key: Name
+          Value: !Sub '${LambdaFunctionName}-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaLogGroup
+    Properties:
+      FunctionName: !Ref LambdaFunctionName
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Code:
+        ZipFile: |
+          import json
+          import logging
+          from datetime import datetime
+          
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          
+          def lambda_handler(event, context):
+              logger.info({
+                  'event_type': 'lambda_invocation',
+                  'request_id': context.aws_request_id,
+                  'function_name': context.function_name,
+                  'timestamp': datetime.utcnow().isoformat()
+              })
+              
+              try:
+                  sanitized_event = {k: v for k, v in event.items() if k not in ['password', 'token', 'secret']}
+                  logger.info(f"Processing event: {json.dumps(sanitized_event)}")
+                  
+                  result = {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Function executed successfully',
+                          'request_id': context.aws_request_id,
+                          'timestamp': datetime.utcnow().isoformat()
+                      })
+                  }
+                  
+                  logger.info({
+                      'event_type': 'lambda_success',
+                      'request_id': context.aws_request_id,
+                      'status_code': result['statusCode']
+                  })
+                  
+                  return result
+                  
+              except Exception as e:
+                  logger.error({
+                      'event_type': 'lambda_error',
+                      'request_id': context.aws_request_id,
+                      'error_type': type(e).__name__,
+                      'error_message': str(e),
+                      'timestamp': datetime.utcnow().isoformat()
+                  })
+                  
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'error': 'Internal server error',
+                          'request_id': context.aws_request_id
+                      })
+                  }
+      VpcConfig:
+        !If
+          - HasSubnetIds
+          - SecurityGroupIds:
+              - !Ref LambdaSecurityGroup
+            SubnetIds: !Ref SubnetIds
+          - !Ref 'AWS::NoValue'
+      Environment:
+        Variables:
+          LOG_LEVEL: 'INFO'
+          S3_BUCKET: !Ref S3BucketName
+          ENVIRONMENT: !Ref Environment
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: SecurityCompliance
+          Value: 'Required'
+
+  LogExportLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${LambdaFunctionName}-log-exporter'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LogExportLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import logging
+          from datetime import datetime, timedelta
+          import time
+          
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          
+          def lambda_handler(event, context):
+              logs_client = boto3.client('logs')
+              
+              try:
+                  log_group_name = event.get('log_group_name', f"/aws/lambda/{context.function_name.replace('-log-exporter', '')}")
+                  s3_bucket = event.get('s3_bucket', 'lambda-deployments-718240086340')
+                  
+                  logger.info(f"Starting log export for log group: {log_group_name}")
+                  
+                  end_time = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                  start_time = end_time - timedelta(days=1)
+                  
+                  start_time_ms = int(start_time.timestamp() * 1000)
+                  end_time_ms = int(end_time.timestamp() * 1000)
+                  
+                  s3_prefix = f"lambda-logs/{context.function_name.replace('-log-exporter', '')}/{start_time.strftime('%Y/%m/%d')}"
+                  
+                  response = logs_client.create_export_task(
+                      logGroupName=log_group_name,
+                      fromTime=start_time_ms,
+                      to=end_time_ms,
+                      destination=s3_bucket,
+                      destinationPrefix=s3_prefix,
+                      taskName=f"export-{context.function_name}-{int(time.time())}"
+                  )
+                  
+                  task_id = response['taskId']
+                  logger.info(f"Created export task: {task_id}")
+                  
+                  max_wait_time = 240
+                  wait_interval = 10
+                  elapsed_time = 0
+                  
+                  while elapsed_time < max_wait_time:
+                      task_status = logs_client.describe_export_tasks(taskId=task_id)
+                      status = task_status['exportTasks'][0]['status']['code']
+                      
+                      logger.info(f"Export task status: {status}")
+                      
+                      if status == 'COMPLETED':
+                          logger.info(f"Export completed successfully to s3://{s3_bucket}/{s3_prefix}")
+                          return {
+                              'statusCode': 200,
+                              'body': json.dumps({
+                                  'message': 'Log export completed successfully',
+                                  'taskId': task_id,
+                                  's3Location': f"s3://{s3_bucket}/{s3_prefix}"
+                              })
+                          }
+                      elif status in ['CANCELLED', 'FAILED']:
+                          error_msg = task_status['exportTasks'][0]['status'].get('message', 'Export failed')
+                          logger.error(f"Export task failed: {error_msg}")
+                          raise Exception(f"Export task failed: {error_msg}")
+                      
+                      time.sleep(wait_interval)
+                      elapsed_time += wait_interval
+                  
+                  logger.warning(f"Export task {task_id} still running after {max_wait_time} seconds")
+                  return {
+                      'statusCode': 202,
+                      'body': json.dumps({
+                          'message': 'Export task initiated, still in progress',
+                          'taskId': task_id
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error during log export: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'error': str(e),
+                          'request_id': context.aws_request_id
+                      })
+                  }
+      Environment:
+        Variables:
+          LOG_LEVEL: 'INFO'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'LogExport'
+
+  LogExportLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                'aws:RequestedRegion': 'us-east-1'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: 'LogExportPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateExportTask
+                  - logs:DescribeExportTasks
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource:
+                  - !Sub '${LambdaLogGroup.Arn}'
+                  - !Sub '${LambdaLogGroup.Arn}:*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${S3BucketName}'
+                  - !Sub 'arn:aws:s3:::${S3BucketName}/lambda-logs/*'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource: !GetAtt EncryptionKey.Arn
+
+  LogExportScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: 'Daily schedule to export Lambda logs to S3'
+      ScheduleExpression: 'cron(0 1 * * ? *)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt LogExportLambda.Arn
+          Id: 'LogExportTarget'
+          Input: !Sub |
+            {
+              "log_group_name": "/aws/lambda/${LambdaFunctionName}",
+              "s3_bucket": "${S3BucketName}"
+            }
+
+  VPCFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: 'VPC'
+      ResourceId: !Ref VpcId
+      TrafficType: 'ALL'
+      LogDestinationType: 'cloud-watch-logs'
+      LogDestination: !GetAtt VPCFlowLogGroup.Arn
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${LambdaFunctionName}-vpc-flow-logs'
+
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 'Alert on Lambda function errors'
+      MetricName: 'Errors'
+      Namespace: 'AWS/Lambda'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunction
+
+  LogExportLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LogExportLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LogExportScheduleRule.Arn
+
+  LogExportLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${LambdaFunctionName}-log-exporter'
+      RetentionInDays: 7
+      KmsKeyId: !GetAtt EncryptionKey.Arn
+
+  # S3 Bucket for Lambda logs (create if not exists)
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Condition: BucketExists
+    Properties:
+      BucketName: !Ref S3BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !GetAtt EncryptionKey.Arn
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: BucketExists
+    DependsOn: LogsBucket
+    Properties:
+      Bucket: !Ref S3BucketName
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'AllowCloudWatchLogsExport'
+            Effect: Allow
+            Principal:
+              Service: logs.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${S3BucketName}/lambda-logs/*'
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
+          - Sid: 'AllowCloudWatchLogsGetBucketAcl'
+            Effect: Allow
+            Principal:
+              Service: logs.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
+          - Sid: 'AllowLogExportLambda'
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt LogExportLambdaRole.Arn
+            Action:
+              - s3:PutObject
+              - s3:GetBucketLocation
+              - s3:ListBucket
+            Resource:
+              - !Sub 'arn:aws:s3:::${S3BucketName}'
+              - !Sub 'arn:aws:s3:::${S3BucketName}/lambda-logs/*'
+
+Outputs:
+  LambdaFunctionArn:
+    Description: 'ARN of the created Lambda function'
+    Value: !GetAtt LambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-lambda-function-arn'
+      
+  LambdaFunctionName:
+    Description: 'Name of the created Lambda function'
+    Value: !Ref LambdaFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-lambda-function-name'
+      
+  LogGroupName:
+    Description: 'CloudWatch Log Group name for the Lambda function'
+    Value: !Ref LambdaLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-log-group-name'
+      
+  SecurityGroupId:
+    Description: 'Security Group ID for the Lambda function'
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-security-group-id'
+
+  LogExportLambdaArn:
+    Description: 'ARN of the log export Lambda function'
+    Value: !GetAtt LogExportLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-log-export-lambda-arn'
+
+  IAMRoleArn:
+    Description: 'IAM Role ARN for the Lambda execution'
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-execution-role-arn'
+
+  EncryptionKeyArn:
+    Description: 'ARN of the KMS encryption key'
+    Value: !GetAtt EncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-encryption-key-arn'
+
+  EncryptionKeyId:
+    Description: 'ID of the KMS encryption key'
+    Value: !Ref EncryptionKey
+    Export:
+      Name: !Sub '${AWS::StackName}-encryption-key-id'

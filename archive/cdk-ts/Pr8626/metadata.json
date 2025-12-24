@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292041",
+  "team": "synth-2",
+  "startedAt": "2025-08-18T17:52:07.730Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "EC2",
+    "VPC",
+    "RDS",
+    "IAM",
+    "CloudWatch",
+    "Logs"
+  ],
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

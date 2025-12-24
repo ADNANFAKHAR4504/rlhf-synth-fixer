@@ -1,0 +1,256 @@
+Starting SNS/SQS audit in region us-east-1...
+Found 15 queues and 4 topics
+
+JSON report saved to sns_sqs_analysis.json
+
+================================================================================
+SNS/SQS AUDIT SUMMARY
+================================================================================
+
+--------------------------------------------------------------------------------
+SEVERITY SUMMARY
+--------------------------------------------------------------------------------
++------------+----------------------+
+| Severity   |   Resources Affected |
++============+======================+
+| CRITICAL   |                    2 |
++------------+----------------------+
+| HIGH       |                   13 |
++------------+----------------------+
+| MEDIUM     |                    4 |
++------------+----------------------+
+| LOW        |                   19 |
++------------+----------------------+
+
+--------------------------------------------------------------------------------
+FINDINGS BY CATEGORY
+--------------------------------------------------------------------------------
++------------+-------------------------------+------------+---------------------------+
+| Severity   | Check                         |   Affected | Category                  |
++============+===============================+============+===========================+
+| LOW        | Short Polling Enabled         |         15 | Cost & Efficiency         |
++------------+-------------------------------+------------+---------------------------+
+| HIGH       | Missing Dead Letter Queues    |         10 | Message Loss & Resilience |
++------------+-------------------------------+------------+---------------------------+
+| HIGH       | DLQ Message Accumulation      |          1 | Message Loss & Resilience |
++------------+-------------------------------+------------+---------------------------+
+| MEDIUM     | Excessive Retry Configuration |          1 | Message Loss & Resilience |
++------------+-------------------------------+------------+---------------------------+
+| MEDIUM     | Visibility Timeout Too Short  |          1 | Message Loss & Resilience |
++------------+-------------------------------+------------+---------------------------+
+| MEDIUM     | Visibility Timeout Too Long   |          1 | Message Loss & Resilience |
++------------+-------------------------------+------------+---------------------------+
+| HIGH       | DLQ Retention Gap             |          2 | Message Loss & Resilience |
++------------+-------------------------------+------------+---------------------------+
+| MEDIUM     | FIFO Deduplication Disabled   |          1 | Message Loss & Resilience |
++------------+-------------------------------+------------+---------------------------+
+| LOW        | Missing Subscription Filters  |          4 | SNS Configuration         |
++------------+-------------------------------+------------+---------------------------+
+| CRITICAL   | Unencrypted Sensitive Queues  |          1 | Security                  |
++------------+-------------------------------+------------+---------------------------+
+| CRITICAL   | Unencrypted Sensitive Topics  |          1 | Security                  |
++------------+-------------------------------+------------+---------------------------+
+
+--------------------------------------------------------------------------------
+DETAILED FINDINGS
+--------------------------------------------------------------------------------
+
+[CRITICAL] Unencrypted Sensitive Queues
+Category: Security
+Details: Queues tagged as Confidential lack KMS encryption
+
+Affected Resources (1):
++--------+--------------------------------+------------------------------+
+| Type   | Name                           | Details                      |
++========+================================+==============================+
+| Queue  | confidential-queue-unencrypted | classification: Confidential |
++--------+--------------------------------+------------------------------+
+
+[CRITICAL] Unencrypted Sensitive Topics
+Category: Security
+Details: Topics tagged as Confidential lack KMS encryption
+
+Affected Resources (1):
++--------+--------------------------------+------------------------------+
+| Type   | Name                           | Details                      |
++========+================================+==============================+
+| Topic  | confidential-topic-unencrypted | classification: Confidential |
++--------+--------------------------------+------------------------------+
+
+[HIGH] Missing Dead Letter Queues
+Category: Message Loss & Resilience
+Details: Queues without DLQ configuration risk permanent message loss after retry failures
+
+Affected Resources (10):
++--------+--------------------------------+---------------+
+| Type   | Name                           | Details       |
++========+================================+===============+
+| Queue  | queue-short-timeout            | retention: 4d |
++--------+--------------------------------+---------------+
+| Queue  | queue-long-timeout             | retention: 4d |
++--------+--------------------------------+---------------+
+| Queue  | queue-short-polling            | retention: 4d |
++--------+--------------------------------+---------------+
+| Queue  | confidential-queue-unencrypted | retention: 4d |
++--------+--------------------------------+---------------+
+| Queue  | orders-queue.fifo              | retention: 4d |
++--------+--------------------------------+---------------+
+| Queue  | sns-subscriber-queue           | retention: 4d |
++--------+--------------------------------+---------------+
+| Queue  | notification-subscriber-0      | retention: 4d |
++--------+--------------------------------+---------------+
+| Queue  | notification-subscriber-1      | retention: 4d |
++--------+--------------------------------+---------------+
+| Queue  | notification-subscriber-2      | retention: 4d |
++--------+--------------------------------+---------------+
+| Queue  | filtered-subscriber-queue      | retention: 4d |
++--------+--------------------------------+---------------+
+
+[HIGH] DLQ Message Accumulation
+Category: Message Loss & Resilience
+Details: Total 15 unprocessed messages in DLQs indicate processing failures
+
+Affected Resources (1):
++--------+------------+-------------+
+| Type   | Name       | Details     |
++========+============+=============+
+| Queue  | orders-dlq | 15 messages |
++--------+------------+-------------+
+
+[HIGH] DLQ Retention Gap
+Category: Message Loss & Resilience
+Details: DLQ retention period should exceed source queue retention for investigation time
+
+Affected Resources (2):
++--------+-----------------------+---------------------+
+| Type   | Name                  | Details             |
++========+=======================+=====================+
+| Queue  | queue-excessive-retry | source: 4d, DLQ: 4d |
++--------+-----------------------+---------------------+
+| Queue  | queue-retention-gap   | source: 4d, DLQ: 3d |
++--------+-----------------------+---------------------+
+
+[MEDIUM] Excessive Retry Configuration
+Category: Message Loss & Resilience
+Details: Queues with maxReceiveCount > 10 may delay DLQ delivery unnecessarily
+
+Affected Resources (1):
++--------+-----------------------+-----------------+
+| Type   | Name                  | Details         |
++========+=======================+=================+
+| Queue  | queue-excessive-retry | retry count: 15 |
++--------+-----------------------+-----------------+
+
+[MEDIUM] Visibility Timeout Too Short
+Category: Message Loss & Resilience
+Details: Visibility timeout < 30 seconds may cause duplicate processing
+
+Affected Resources (1):
++--------+---------------------+--------------+
+| Type   | Name                | Details      |
++========+=====================+==============+
+| Queue  | queue-short-timeout | timeout: 10s |
++--------+---------------------+--------------+
+
+[MEDIUM] Visibility Timeout Too Long
+Category: Message Loss & Resilience
+Details: Visibility timeout > 12 hours delays failure recovery
+
+Affected Resources (1):
++--------+--------------------+-----------------+
+| Type   | Name               | Details         |
++========+====================+=================+
+| Queue  | queue-long-timeout | timeout: 50000s |
++--------+--------------------+-----------------+
+
+[MEDIUM] FIFO Deduplication Disabled
+Category: Message Loss & Resilience
+Details: FIFO queues without ContentBasedDeduplication risk duplicate messages
+
+Affected Resources (1):
++--------+-------------------+-----------------+
+| Type   | Name              | Details         |
++========+===================+=================+
+| Queue  | orders-queue.fifo | dedup: disabled |
++--------+-------------------+-----------------+
+
+[LOW] Short Polling Enabled
+Category: Cost & Efficiency
+Details: Queues using short polling (WaitTimeSeconds=0) increase API costs
+
+Affected Resources (15):
++--------+--------------------------------+---------------------------+
+| Type   | Name                           | Details                   |
++========+================================+===========================+
+| Queue  | queue-no-dlq                   | wait: 0s, timeout: 30s    |
++--------+--------------------------------+---------------------------+
+| Queue  | orders-dlq                     | wait: 0s, timeout: 30s    |
++--------+--------------------------------+---------------------------+
+| Queue  | queue-excessive-retry          | wait: 0s, timeout: 30s    |
++--------+--------------------------------+---------------------------+
+| Queue  | queue-short-timeout            | wait: 0s, timeout: 10s    |
++--------+--------------------------------+---------------------------+
+| Queue  | queue-long-timeout             | wait: 0s, timeout: 50000s |
++--------+--------------------------------+---------------------------+
+| Queue  | queue-short-polling            | wait: 0s, timeout: 30s    |
++--------+--------------------------------+---------------------------+
+| Queue  | confidential-queue-unencrypted | wait: 0s, timeout: 30s    |
++--------+--------------------------------+---------------------------+
+| Queue  | orders-queue.fifo              | wait: 0s, timeout: 30s    |
++--------+--------------------------------+---------------------------+
+| Queue  | gap-dlq                        | wait: 0s, timeout: 30s    |
++--------+--------------------------------+---------------------------+
+| Queue  | queue-retention-gap            | wait: 0s, timeout: 30s    |
++--------+--------------------------------+---------------------------+
+  ... and 5 more
+
+[LOW] Missing Subscription Filters
+Category: SNS Configuration
+Details: SNS subscriptions without filter policies receive all messages
+
+Affected Resources (4):
++--------+---------------------+----------------------------------------+
+| Type   | Name                | Details                                |
++========+=====================+========================================+
+| Topic  | orders-topic        | sqs: arn:aws:sqs:us-east-1:12345678... |
++--------+---------------------+----------------------------------------+
+| Topic  | notifications-topic | sqs: arn:aws:sqs:us-east-1:12345678... |
++--------+---------------------+----------------------------------------+
+| Topic  | notifications-topic | sqs: arn:aws:sqs:us-east-1:12345678... |
++--------+---------------------+----------------------------------------+
+| Topic  | notifications-topic | sqs: arn:aws:sqs:us-east-1:12345678... |
++--------+---------------------+----------------------------------------+
+
+--------------------------------------------------------------------------------
+MESSAGE VOLUME AT RISK
+--------------------------------------------------------------------------------
++--------------------+----------------------------------------------------+
+| Metric             | Value                                              |
++====================+====================================================+
+| Total DLQ Messages | 15                                                 |
++--------------------+----------------------------------------------------+
+| Status             | Failed processing attempts requiring investigation |
++--------------------+----------------------------------------------------+
+
+--------------------------------------------------------------------------------
+SUMMARY STATISTICS
+--------------------------------------------------------------------------------
++--------------------------+---------+
+| Metric                   |   Value |
++==========================+=========+
+| Total Findings           |      11 |
++--------------------------+---------+
+| Total Resources Affected |      38 |
++--------------------------+---------+
+| Critical Issues          |       2 |
++--------------------------+---------+
+| High Issues              |      13 |
++--------------------------+---------+
+| Medium Issues            |       4 |
++--------------------------+---------+
+| Low Issues               |      19 |
++--------------------------+---------+
+| Messages at Risk         |      15 |
++--------------------------+---------+
+
+================================================================================
