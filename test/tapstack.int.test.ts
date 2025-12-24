@@ -49,8 +49,8 @@ describe("TapStack Deployment Outputs Integration Tests", () => {
 
   test("Primary cluster endpoints contain environment suffix and domain", () => {
     ["PrimaryClusterReaderEndpoint", "PrimaryClusterEndpoint"].forEach(key => {
-      expect(outputs[key]).toContain("pr7385");
-      expect(outputs[key]).toMatch(/rds\.amazonaws\.com$/);
+      expect(outputs[key]).toContain("pr9158");
+      expect(outputs[key]).toMatch(/localhost\.localstack\.cloud$/);
     });
   });
 
@@ -63,7 +63,7 @@ describe("TapStack Deployment Outputs Integration Tests", () => {
   });
 
   test("Global cluster identifier contains environment suffix", () => {
-    expect(outputs.GlobalClusterIdentifier).toContain("pr7385");
+    expect(outputs.GlobalClusterIdentifier).toContain("pr9158");
   });
 
   test("All output strings have non-zero trimmed length", () => {
