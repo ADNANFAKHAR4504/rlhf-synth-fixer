@@ -9,8 +9,7 @@
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup",
-    "Failure Recovery Automation"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "EC2",
