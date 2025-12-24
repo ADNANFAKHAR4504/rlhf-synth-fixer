@@ -2425,7 +2425,7 @@
                     "BackupPlanName": {
                         "Fn::Sub": "${EnvironmentName}-meridian-backup-plan"
                     },
-                    "Rules": [
+                    "BackupPlanRule": [
                         {
                             "RuleName": "DailyBackups",
                             "TargetBackupVault": {
