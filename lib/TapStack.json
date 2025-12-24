@@ -45,11 +45,11 @@
       "AllowedValues": ["true", "false"],
       "Description": "Enable RDS database (set to false for LocalStack)"
     },
-    "UseLocalStack": {
+    "EnableEC2": {
       "Type": "String",
-      "Default": "false",
+      "Default": "true",
       "AllowedValues": ["true", "false"],
-      "Description": "Set to true when deploying to LocalStack"
+      "Description": "Enable EC2 instance (set to false for LocalStack)"
     }
   },
   "Conditions": {
@@ -73,10 +73,10 @@
         "true"
       ]
     },
-    "IsLocalStack": {
+    "CreateEC2": {
       "Fn::Equals": [
         {
-          "Ref": "UseLocalStack"
+          "Ref": "EnableEC2"
         },
         "true"
       ]
@@ -614,6 +614,7 @@
     },
     "EC2InstanceRole": {
       "Type": "AWS::IAM::Role",
+      "Condition": "CreateEC2",
       "Properties": {
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -735,6 +736,7 @@
     },
     "EC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
+      "Condition": "CreateEC2",
       "Properties": {
         "Roles": [
           {
@@ -745,6 +747,7 @@
     },
     "EC2Instance": {
       "Type": "AWS::EC2::Instance",
+      "Condition": "CreateEC2",
       "Properties": {
         "InstanceType": "t3.micro",
         "ImageId": "ami-0c55b159cbfafe1f0",
@@ -909,9 +912,15 @@
     },
     "EC2InstanceId": {
       "Value": {
-        "Ref": "EC2Instance"
+        "Fn::If": [
+          "CreateEC2",
+          {
+            "Ref": "EC2Instance"
+          },
+          "EC2-NOT-ENABLED"
+        ]
       },
-      "Description": "EC2 instance ID",
+      "Description": "EC2 instance ID (or EC2-NOT-ENABLED if disabled)",
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-EC2Instance-ID"
@@ -920,12 +929,18 @@
     },
     "EC2PublicIP": {
       "Value": {
-        "Fn::GetAtt": [
-          "EC2Instance",
-          "PublicIp"
+        "Fn::If": [
+          "CreateEC2",
+          {
+            "Fn::GetAtt": [
+              "EC2Instance",
+              "PublicIp"
+            ]
+          },
+          "EC2-NOT-ENABLED"
         ]
       },
-      "Description": "EC2 instance public IP address"
+      "Description": "EC2 instance public IP address (or EC2-NOT-ENABLED if disabled)"
     },
     "DatabaseCredentialsSecret": {
       "Value": {

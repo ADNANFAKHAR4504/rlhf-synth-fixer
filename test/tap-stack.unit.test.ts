@@ -49,7 +49,7 @@ describe('TapStack CloudFormation Template', () => {
         'DBUser',
         'KeyPairName',
         'EnableRDS',
-        'UseLocalStack'
+        'EnableEC2'
       ];
 
       expectedParameters.forEach(paramName => {
@@ -88,12 +88,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(enableRDSParam.AllowedValues).toContain('false');
     });
 
-    test('UseLocalStack parameter should have correct properties', () => {
-      const localStackParam = template.Parameters.UseLocalStack;
-      expect(localStackParam.Type).toBe('String');
-      expect(localStackParam.Default).toBe('false');
-      expect(localStackParam.AllowedValues).toContain('true');
-      expect(localStackParam.AllowedValues).toContain('false');
+    test('EnableEC2 parameter should control EC2 creation', () => {
+      const enableEC2Param = template.Parameters.EnableEC2;
+      expect(enableEC2Param.Type).toBe('String');
+      expect(enableEC2Param.Default).toBe('true');
+      expect(enableEC2Param.AllowedValues).toContain('true');
+      expect(enableEC2Param.AllowedValues).toContain('false');
     });
   });
 
@@ -108,9 +108,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Conditions.CreateRDS['Fn::Equals']).toBeDefined();
     });
 
-    test('should have IsLocalStack condition', () => {
-      expect(template.Conditions.IsLocalStack).toBeDefined();
-      expect(template.Conditions.IsLocalStack['Fn::Equals']).toBeDefined();
+    test('should have CreateEC2 condition', () => {
+      expect(template.Conditions.CreateEC2).toBeDefined();
+      expect(template.Conditions.CreateEC2['Fn::Equals']).toBeDefined();
     });
   });
 
@@ -382,11 +382,16 @@ describe('TapStack CloudFormation Template', () => {
 
     test('EC2 outputs should be correct', () => {
       const ec2Id = template.Outputs.EC2InstanceId;
-      expect(ec2Id.Value.Ref).toBe('EC2Instance');
+      // EC2 outputs use Fn::If for conditional EC2
+      expect(ec2Id.Value['Fn::If']).toBeDefined();
+      expect(ec2Id.Value['Fn::If'][0]).toBe('CreateEC2');
+      expect(ec2Id.Value['Fn::If'][1].Ref).toBe('EC2Instance');
       expect(ec2Id.Export.Name['Fn::Sub']).toBe('${AWS::StackName}-EC2Instance-ID');
       
       const ec2PublicIP = template.Outputs.EC2PublicIP;
-      expect(ec2PublicIP.Value['Fn::GetAtt']).toEqual(['EC2Instance', 'PublicIp']);
+      expect(ec2PublicIP.Value['Fn::If']).toBeDefined();
+      expect(ec2PublicIP.Value['Fn::If'][0]).toBe('CreateEC2');
+      expect(ec2PublicIP.Value['Fn::If'][1]['Fn::GetAtt']).toEqual(['EC2Instance', 'PublicIp']);
     });
   });
 
@@ -406,7 +411,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(7); // Updated count for EC2ImageId
+      expect(parameterCount).toBe(7); // Updated count with EnableEC2
     });
 
     test('should have correct number of outputs', () => {
