@@ -1,27 +1,38 @@
-> **Act as an experienced AWS Solution Architect.**
->
-> You are tasked with designing and implementing a secure, compliant cloud infrastructure across multiple AWS accounts and regions using **AWS CDK in Python**. Your focus is on applying **security best practices** and **compliance automation** via Infrastructure as Code.
->
-> Specifically, you need to build a CDK project targeting the `us-west-2` region that implements the following security configurations:
->
->  1. All S3 buckets are **private by default** (block all public access) and use customer-managed KMS encryption.
-> 2. A customer-managed KMS key is created and used for S3, CloudWatch Logs, RDS, Lambda, and SQS encryption.
-> 3. IAM roles are created for services (e.g., VPC Flow Logs, AWS Config) with **inline policies** (not managed policies).
-> 4. A VPC is created with **Flow Logs** enabled, logs are sent to a KMS-encrypted CloudWatch Log Group.
-> 5. **Security groups** restrict SSH (port 22) to private network ranges (10.0.0.0/8); no unrestricted inbound access.
-> 6. **RDS instance** is encrypted, not publicly accessible, and resides in private subnets.
-> 7. **Lambda function** is created with a Dead Letter Queue (DLQ), VPC configuration, and KMS environment encryption.
-> 8. **CloudTrail** is enabled and logs are sent to a centralized, encrypted S3 bucket with proper bucket and KMS policies.
-> 9. **AWS Config** is enabled with a managed rule for S3 public access, and proper dependencies are set between the recorder, delivery channel, and rule.
-> 10. All key resource ARNs/IDs are output for integration testing.
->
->
-> ### Additional Instructions:
->
-> * Use **modular CDK constructs** for each control to keep the code reusable and scalable.
-> * The output should be a fully functional **AWS CDK Python app** using best practices.
-> * The final solution should include **compliance validation**, either through AWS Config, assertions in CDK, or comments on how to test enforcement.
->
-> Please generate the full CDK Python application structure in:  `stack.py` 
+Need to set up a multi-layer security infrastructure in AWS using CDK Python for the us-west-2 region. This is for a compliance audit and everything needs to be locked down tight.
 
----
+Here's what needs to be connected:
+
+**Storage and Encryption Layer:**
+- S3 buckets need to be completely private with a custom KMS key for encryption
+- The same KMS key should encrypt CloudWatch Logs, RDS data, Lambda environment variables, and SQS messages
+- All the encryption needs to work together so the key policy allows each service to use it
+
+**Network Security:**
+- VPC with Flow Logs that stream to CloudWatch Logs
+- The log group receiving flow logs must use the KMS key for encryption
+- Security groups that block SSH from the internet - only allow from private ranges like 10.0.0.0/8
+- RDS instance sitting in private subnets, not publicly accessible, encrypted with the KMS key
+
+**Compute and Processing:**
+- Lambda function configured to run inside the VPC
+- Lambda needs a Dead Letter Queue for failed invocations - SQS queue encrypted with KMS
+- Lambda environment variables also encrypted with the same KMS key
+- The Lambda needs proper IAM permissions to write to the DLQ
+
+**Audit and Compliance:**
+- CloudTrail sending all management events to an encrypted S3 bucket
+- The CloudTrail bucket needs a bucket policy allowing CloudTrail to write logs
+- AWS Config enabled with the S3 public access check rule
+- Config needs a recorder that writes findings to an S3 bucket, and a delivery channel connecting the recorder to the bucket
+- Make sure the Config recorder starts only after the delivery channel is created
+
+**IAM Setup:**
+- Create service roles with inline policies for VPC Flow Logs and AWS Config
+- Don't use managed policies - write the specific permissions needed
+- Each role should have least privilege for its service
+
+**Testing Outputs:**
+- Export all the critical ARNs and IDs like the KMS key, VPC ID, Lambda ARN, S3 bucket names
+- These outputs are needed for integration tests to verify everything's configured correctly
+
+Build this as a modular CDK Python app in stack.py. Each security control should be its own construct or clearly separated so it's easy to update individual pieces later.
