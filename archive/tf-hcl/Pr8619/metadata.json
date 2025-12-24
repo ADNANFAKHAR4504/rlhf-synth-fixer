@@ -16,8 +16,10 @@
     "RDS Aurora",
     "Application Load Balancer",
     "Route 53",
+    "DMS",
     "CloudWatch",
     "SNS",
+    "AWS Backup",
     "Secrets Manager",
     "SSM Parameter Store",
     "Lambda",
@@ -29,5 +31,12 @@
     "S3"
   ],
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
