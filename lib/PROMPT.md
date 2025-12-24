@@ -3,7 +3,7 @@ Need to lock down S3 access for our EC2 instances using IAM. The app running on 
 ## What to build:
 
 ### EC2 Role with S3 Access
-Set up an IAM role that EC2 instances **assume to connect to** S3 buckets. The role grants read-only access (GetObject, ListBucket) but explicitly blocks write operations (PutObject, DeleteObject, etc) using a deny statement.
+Set up an IAM role that EC2 instances **assume to connect to** S3 buckets. The role grants read-only access like GetObject and ListBucket but explicitly blocks write operations like PutObject, DeleteObject, and similar using a deny statement.
 
 When the EC2 app **calls** S3, it **uses** this role's credentials **through** the instance profile.
 
