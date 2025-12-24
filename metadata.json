@@ -6,14 +6,13 @@
   "po_id": "LS-291318",
   "team": "synth-2",
   "startedAt": "2025-08-14T22:28:29.940Z",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup",
     "General Infrastructure Tooling QA",
     "Infrastructure Analysis/Monitoring",
-    "Security Configuration as Code",
-    "Web Application Deployment"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "VPC",
