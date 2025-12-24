@@ -464,9 +464,18 @@ Resources:
             Statement:
               - Sid: DenyNoMFA
                 Effect: Deny
-                Action: '*'
+                NotAction:
+                  - iam:CreateVirtualMFADevice
+                  - iam:EnableMFADevice
+                  - iam:ListMFADevices
+                  - iam:ListUsers
+                  - iam:ListVirtualMFADevices
+                  - iam:ResyncMFADevice
+                  - sts:GetSessionToken
                 Resource: '*'
-                Condition: { Bool: { aws:MultiFactorAuthPresent: false } }
+                Condition:
+                  BoolIfExists:
+                    aws:MultiFactorAuthPresent: false
 
   # ---------------- EC2 via Launch Template + ASG (capacity 0) ----------------
   RoleApp:

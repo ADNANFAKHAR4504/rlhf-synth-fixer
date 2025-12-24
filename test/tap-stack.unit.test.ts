@@ -1,11 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import yaml from 'js-yaml';
 
 describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () => {
   let template: any;
 
- beforeAll(() => {
+  beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -60,7 +59,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
     test('should have Internet Gateway and attachment', () => {
       expect(template.Resources.IGW).toBeDefined();
       expect(template.Resources.IGW.Type).toBe('AWS::EC2::InternetGateway');
-      
+
       const attach = template.Resources.VPCIGWAttach;
       expect(attach.Type).toBe('AWS::EC2::VPCGatewayAttachment');
       expect(attach.Properties.VpcId.Ref).toBe('VPC');
@@ -73,7 +72,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
         'PrivateAppSubnetAz1', 'PrivateAppSubnetAz2',
         'PrivateDbSubnetAz1', 'PrivateDbSubnetAz2'
       ];
-      
+
       subnets.forEach(subnet => {
         expect(template.Resources[subnet]).toBeDefined();
         expect(template.Resources[subnet].Type).toBe('AWS::EC2::Subnet');
@@ -94,7 +93,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
       expect(template.Resources.NatEipAz2).toBeDefined();
       expect(template.Resources.NatGwAz1).toBeDefined();
       expect(template.Resources.NatGwAz2).toBeDefined();
-      
+
       expect(template.Resources.NatGwAz1.Properties.SubnetId.Ref).toBe('PublicSubnetAz1');
       expect(template.Resources.NatGwAz2.Properties.SubnetId.Ref).toBe('PublicSubnetAz2');
     });
@@ -137,7 +136,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
       const dbRule1 = template.Resources.NaclDbIn3306FromApp1;
       expect(dbRule1.Properties.CidrBlock).toBe('10.0.32.0/20');
       expect(dbRule1.Properties.PortRange.From).toBe(3306);
-      
+
       const dbRule2 = template.Resources.NaclDbIn3306FromApp2;
       expect(dbRule2.Properties.CidrBlock).toBe('10.0.48.0/20');
       expect(dbRule2.Properties.PortRange.From).toBe(3306);
@@ -155,11 +154,11 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
     test('should have App security group with restricted SSH', () => {
       const sg = template.Resources.SgApp;
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const httpRule = sg.Properties.SecurityGroupIngress[0];
       expect(httpRule.FromPort).toBe(80);
       expect(httpRule.SourceSecurityGroupId.Ref).toBe('SgALB');
-      
+
       const sshRule = sg.Properties.SecurityGroupIngress[1];
       expect(sshRule.FromPort).toBe(22);
       expect(sshRule.CidrIp).toBe('203.0.113.0/24');
@@ -168,7 +167,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
     test('should have DB security group', () => {
       const sg = template.Resources.SgDb;
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const rules = sg.Properties.SecurityGroupIngress;
       expect(rules[0].FromPort).toBe(3306);
       expect(rules[0].SourceSecurityGroupId.Ref).toBe('SgApp');
@@ -178,7 +177,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
     test('should have VPC endpoint security group', () => {
       const sg = template.Resources.SgEndpointSM;
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const rules = sg.Properties.SecurityGroupIngress;
       expect(rules[0].FromPort).toBe(443);
       expect(rules[0].SourceSecurityGroupId.Ref).toBe('SgApp');
@@ -228,7 +227,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
     test('should have data bucket with KMS encryption', () => {
       const bucket = template.Resources.S3Data;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
       expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
       expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID.Ref).toBe('CMKData');
@@ -237,7 +236,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
     test('should have logs bucket with KMS encryption', () => {
       const bucket = template.Resources.S3Logs;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
       expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
       expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID.Ref).toBe('CMKLogs');
@@ -292,7 +291,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
     test('should have Flow Logs IAM role', () => {
       const role = template.Resources.RoleFlowLogs;
       expect(role.Type).toBe('AWS::IAM::Role');
-      
+
       const assumePolicy = role.Properties.AssumeRolePolicyDocument;
       expect(assumePolicy.Statement[0].Principal.Service).toBe('delivery.logs.amazonaws.com');
     });
@@ -303,36 +302,37 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
       const group = template.Resources.GroupMFARequired;
       expect(group.Type).toBe('AWS::IAM::Group');
       expect(group.Properties.GroupName).toBe('MFAEnforced');
-      
+
       const policy = group.Properties.Policies[0];
       expect(policy.PolicyName).toBe('DenyWithoutMFA');
-      
+
       const statement = policy.PolicyDocument.Statement[0];
       expect(statement.Effect).toBe('Deny');
-      expect(statement.Action).toBe('*');
-      expect(statement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe(false);
+      expect(statement.NotAction).toBeDefined();
+      expect(statement.NotAction.length).toBeGreaterThan(0);
+      expect(statement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe(false);
     });
 
     test('should have App IAM role with least privilege', () => {
       const role = template.Resources.RoleApp;
       expect(role.Type).toBe('AWS::IAM::Role');
-      
+
       const policies = role.Properties.Policies[0].PolicyDocument.Statement;
-      
+
       // Check DB secret access
       const secretAccess = policies.find((p: any) => p.Sid === 'ReadDBSecret');
       expect(secretAccess.Action).toBe('secretsmanager:GetSecretValue');
       expect(secretAccess.Resource.Ref).toBe('SecretDB');
-      
+
       // Check KMS access
       const kmsAccess = policies.find((p: any) => p.Sid === 'UseDataCMK');
       expect(kmsAccess.Action).toContain('kms:Decrypt');
       expect(kmsAccess.Action).toContain('kms:Encrypt');
-      
+
       // Check S3 access
       const s3List = policies.find((p: any) => p.Sid === 'S3DataAccess');
       expect(s3List.Action).toContain('s3:ListBucket');
-      
+
       const s3Objects = policies.find((p: any) => p.Sid === 'S3DataObjects');
       expect(s3Objects.Action).toContain('s3:GetObject');
       expect(s3Objects.Action).toContain('s3:PutObject');
@@ -343,10 +343,10 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
     test('should have launch template with encrypted EBS', () => {
       const lt = template.Resources.LTApp;
       expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
-      
+
       const data = lt.Properties.LaunchTemplateData;
       expect(data.InstanceType).toBe('t3.micro');
-      
+
       const blockDevice = data.BlockDeviceMappings[0];
       expect(blockDevice.Ebs.Encrypted).toBe(true);
       expect(blockDevice.Ebs.KmsKeyId.Ref).toBe('CMKData');
@@ -381,7 +381,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
       const alb = template.Resources.ALB;
       expect(alb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
       expect(alb.Properties.Scheme).toBe('internet-facing');
-      
+
       const subnets = alb.Properties.Subnets;
       expect(subnets[0].Ref).toBe('PublicSubnetAz1');
       expect(subnets[1].Ref).toBe('PublicSubnetAz2');
@@ -409,7 +409,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
     test('should have DB subnet group', () => {
       const subnetGroup = template.Resources.DBSubnetGroup;
       expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
-      
+
       const subnets = subnetGroup.Properties.SubnetIds;
       expect(subnets[0].Ref).toBe('PrivateDbSubnetAz1');
       expect(subnets[1].Ref).toBe('PrivateDbSubnetAz2');
@@ -431,7 +431,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
       expect(secret.Type).toBe('AWS::SecretsManager::Secret');
       expect(secret.Properties.Name).toBe('secure-rds-master');
       expect(secret.Properties.KmsKeyId.Ref).toBe('CMKData');
-      
+
       const genString = secret.Properties.GenerateSecretString;
       expect(genString.SecretStringTemplate).toBe('{"username":"dbadmin"}');
       expect(genString.GenerateStringKey).toBe('password');
@@ -466,7 +466,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = ['VpcId', 'ALBDNS', 'RDSEndpoint', 'DataBucketName', 'LogsBucketName'];
-      
+
       expectedOutputs.forEach(output => {
         expect(template.Outputs[output]).toBeDefined();
       });
@@ -486,14 +486,14 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
       // KMS keys have rotation
       expect(template.Resources.CMKData.Properties.EnableKeyRotation).toBe(true);
       expect(template.Resources.CMKLogs.Properties.EnableKeyRotation).toBe(true);
-      
+
       // S3 buckets encrypted
       expect(template.Resources.S3Data.Properties.BucketEncryption).toBeDefined();
       expect(template.Resources.S3Logs.Properties.BucketEncryption).toBeDefined();
-      
+
       // RDS encrypted
       expect(template.Resources.DBInstance.Properties.StorageEncrypted).toBe(true);
-      
+
       // EBS encrypted
       expect(template.Resources.LTApp.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs.Encrypted).toBe(true);
     });
@@ -520,7 +520,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
       // Security Group
       const sgSsh = template.Resources.SgApp.Properties.SecurityGroupIngress[1];
       expect(sgSsh.CidrIp).toBe('203.0.113.0/24');
-      
+
       // NACL
       const naclSsh = template.Resources.NaclAppIn22FromAdmin;
       expect(naclSsh.Properties.CidrBlock).toBe('203.0.113.0/24');
@@ -536,7 +536,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
       const group = template.Resources.GroupMFARequired;
       const policy = group.Properties.Policies[0].PolicyDocument.Statement[0];
       expect(policy.Effect).toBe('Deny');
-      expect(policy.Condition.Bool['aws:MultiFactorAuthPresent']).toBe(false);
+      expect(policy.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe(false);
     });
 
     test('should use VPC endpoint for Secrets Manager', () => {
@@ -569,7 +569,7 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
         'AWS::SecretsManager::RotationSchedule', 'AWS::Lambda::Function',
         'AWS::Lambda::Permission', 'AWS::SNS::Topic'
       ];
-      
+
       Object.values(template.Resources).forEach((resource: any) => {
         expect(validTypes).toContain(resource.Type);
       });
