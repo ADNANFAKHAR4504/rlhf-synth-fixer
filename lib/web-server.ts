@@ -284,7 +284,7 @@ export class WebServerStack extends cdk.Stack {
         ? logs.RetentionDays.ONE_WEEK
         : undefined,
       // Deletion protection for production
-      deletionProtection: props?.environmentSuffix === 'prod',
+      deletionProtection: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
