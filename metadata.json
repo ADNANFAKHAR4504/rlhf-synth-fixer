@@ -7,7 +7,7 @@
   "team": "synth-2",
   "startedAt": "2025-07-27T05:50:29.853Z",
   "subtask": "Provisioning of Infrastructure Environments",
-  "provider": "aws",
+  "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
