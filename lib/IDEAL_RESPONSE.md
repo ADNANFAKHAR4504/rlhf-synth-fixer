@@ -1,8 +1,19 @@
 ```yaml
-# LocalStack Compatibility Note:
-# This template includes DynamoDB resources for the complete AWS solution.
-# For LocalStack Community deployment, DynamoDB resources are excluded (not available in Community edition).
-# See lib/LOCALSTACK_MIGRATION.md for migration path to LocalStack Pro or full AWS deployment.
+# LocalStack Compatibility and Migration Strategy:
+#
+# CURRENT STATE: This template includes DynamoDB resources for the complete AWS solution.
+#
+# LocalStack Community: DynamoDB resources are NOT SUPPORTED and must be removed for deployment
+# LocalStack Pro: Full DynamoDB support available - use complete template as-is
+# AWS Deployment: Full DynamoDB support - use complete template as-is
+#
+# MIGRATION PATH TO LOCALSTACK PRO:
+# 1. Upgrade to LocalStack Pro license (enables DynamoDB support)
+# 2. Deploy this complete template without modifications
+# 3. All DynamoDB resources (EnvironmentDynamoDBTable, EnvironmentDynamoDBPolicy) will work
+# 4. See lib/LOCALSTACK_MIGRATION.md for detailed step-by-step migration instructions
+#
+# COMPLETE MIGRATION GUIDE: lib/LOCALSTACK_MIGRATION.md
 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Multi-environment web application infrastructure with S3, DynamoDB, IAM, CloudWatch, and SSM Parameter Store'
@@ -108,10 +119,23 @@ Resources:
   # =====================================================
   # DYNAMODB TABLES
   # =====================================================
-  # NOTE: DynamoDB is included in this complete template but is not available in LocalStack Community Edition.
-  # For LocalStack Community deployment, these resources are excluded automatically.
-  # MIGRATION PATH: See lib/LOCALSTACK_MIGRATION.md for complete migration instructions
-  # to restore DynamoDB functionality using LocalStack Pro or AWS deployment.
+  # LOCALSTACK COMPATIBILITY:
+  # - LocalStack Community: NOT SUPPORTED - Remove this resource and EnvironmentDynamoDBPolicy
+  # - LocalStack Pro: FULLY SUPPORTED - Use as-is with no modifications needed
+  # - AWS: FULLY SUPPORTED - Use as-is with no modifications needed
+  #
+  # MIGRATION TO LOCALSTACK PRO:
+  # Step 1: Obtain LocalStack Pro license key
+  # Step 2: Set LOCALSTACK_API_KEY environment variable
+  # Step 3: Restart LocalStack with Pro features enabled
+  # Step 4: Deploy this template - DynamoDB will work automatically
+  #
+  # DETAILED MIGRATION GUIDE: lib/LOCALSTACK_MIGRATION.md contains:
+  # - Complete step-by-step LocalStack Pro upgrade instructions
+  # - Full DynamoDB resource definitions
+  # - IAM policy restoration steps
+  # - Test updates required
+  # - Feature comparison: Community vs Pro vs AWS
   EnvironmentDynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
