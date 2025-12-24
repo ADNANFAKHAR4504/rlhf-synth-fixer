@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291210",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T12:48:38.443Z",
+  "subtask": "General Infrastructure Provisioning",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Route53",
+    "CloudFront",
+    "KMS",
+    "SecretsManager",
+    "EIP",
+    "NATGateway",
+    "InternetGateway",
+    "SecurityGroup",
+    "Subnet",
+    "RouteTable"
+  ],
+  "wave": "P1"
+}
