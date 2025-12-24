@@ -10,7 +10,7 @@
   "provider": "localstack",
   "subject_labels": ["Security Configuration as Code"],
   "aws_services": ["S3", "KMS", "IAM", "CloudTrail"],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291612",
     "pr": "Pr1180"
