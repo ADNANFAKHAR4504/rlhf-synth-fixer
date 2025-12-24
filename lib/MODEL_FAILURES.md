@@ -48,6 +48,8 @@
 
 ### DynamoDB Removal and Migration Strategy
 
+**MIGRATION PATH DOCUMENTED**: YES - Full migration path to LocalStack Pro is documented in **lib/LOCALSTACK_MIGRATION.md**
+
 For **LocalStack Community Edition** deployment, the following changes were made:
 
 - **Removed** `EnvironmentDynamoDBTable` resource (DynamoDB not available in Community edition)
@@ -55,14 +57,18 @@ For **LocalStack Community Edition** deployment, the following changes were made
 - **Updated** tests to skip DynamoDB-related assertions
 - **Removed** DynamoDB output from stack outputs
 
-### Migration Path
+### Migration Path to Restore DynamoDB Functionality
 
-The complete DynamoDB implementation is preserved in the template for reference. To restore DynamoDB functionality:
+**STATUS**: FULLY DOCUMENTED - Complete migration instructions available
 
-1. **LocalStack Pro**: Upgrade to Pro license (supports DynamoDB)
-2. **AWS Deployment**: Change provider to `aws` in metadata.json
+The complete DynamoDB implementation is preserved in the template for reference. Two migration paths are available and fully documented:
 
-See **lib/LOCALSTACK_MIGRATION.md** for detailed migration instructions including:
+1. **LocalStack Pro Migration**: Upgrade to Pro license to restore DynamoDB support
+2. **AWS Deployment**: Deploy to real AWS for full DynamoDB functionality
+
+**DOCUMENTATION LOCATION**: **lib/LOCALSTACK_MIGRATION.md**
+
+This comprehensive migration guide includes:
 - Step-by-step restoration process
 - Complete DynamoDB resource definitions
 - Test updates required
