@@ -9,11 +9,6 @@
   "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup",
-    "General Infrastructure Tooling QA",
-    "IaC Optimization",
-    "Infrastructure Analysis/Monitoring",
-    "Security Configuration as Code",
     "Web Application Deployment"
   ],
   "aws_services": [
