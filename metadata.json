@@ -21,7 +21,7 @@
     "SecretsManager",
     "IAM"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "274677",
     "pr": "Pr248"
