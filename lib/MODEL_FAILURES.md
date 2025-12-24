@@ -174,22 +174,22 @@ The model response provided a basic CloudFormation template that would face sign
 ## Compliance Failures
 
 ### 1. **Data Protection**
-- ❌ No encryption at rest
-- ❌ No encryption in transit
-- ❌ No secure credential management
-- ❌ No access logging
+- No encryption at rest
+- No encryption in transit
+- No secure credential management
+- No access logging
 
 ### 2. **Infrastructure Security**
-- ❌ No network segmentation
-- ❌ No principle of least privilege
-- ❌ No security group restrictions
-- ❌ No public access controls
+- No network segmentation
+- No principle of least privilege
+- No security group restrictions
+- No public access controls
 
 ### 3. **Audit Requirements**
-- ❌ No resource tagging strategy
-- ❌ No CloudTrail integration
-- ❌ No monitoring/alerting
-- ❌ No change management controls
+- No resource tagging strategy
+- No CloudTrail integration
+- No monitoring/alerting
+- No change management controls
 
 ## Deployment Failure Scenarios
 
