@@ -60,7 +60,7 @@ Create a CloudFormation template to deploy a production-ready AWS environment fo
    - Parameters for configurable values like instance types and CIDR blocks
    - Outputs for key resource identifiers
 
-2. **Resource Organization**:
+2. **Infrastructure Organization**:
    - VPC and networking resources: VPC, subnets, IGW, NAT Gateways, route tables
    - Security groups with proper ingress and egress rules
    - EC2 Auto Scaling Group with Launch Template
