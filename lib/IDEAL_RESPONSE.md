@@ -4,7 +4,7 @@
 
 * Provision a production-grade Aurora MySQL cluster in **us-east-1** spanning **three private subnets (AZ a/b/c)** with one writer and two readers using **db.r5.2xlarge**.
 * Enforce **environment-safe naming** by suffixing all logical names and tags with **`EnvironmentSuffix`**; restrict the suffix via a **safe kebab-case regex** (no hardcoded AllowedValues).
-* Create fresh **VPC primitives** required for database isolation (VPC, three private subnets, private route table associations) plus **interface VPC endpoints** for Secrets Manager and CloudWatch Logs to support rotation in private networks.
+* Create fresh **VPC primitives** required for database isolation (VPC, three private subnets, private route table associations) plus **VPC endpoints (InterfaceVpcEndpoint)** for Secrets Manager and CloudWatch Logs to support rotation in private networks.
 * Configure **DB cluster and instance parameter groups** tuned for high-throughput OLTP:
 
   * `max_connections = 16000` at the **instance** level.
@@ -41,7 +41,7 @@
 * **Query cache** is disabled on Aurora MySQL 5.7; keeping `query_cache_size=0` avoids parameter validation failures while meeting the intent (read path optimized by Aurora).
 * **`innodb_buffer_pool_size`** is **not hard-set**; Aurora auto-sizes this optimally for the instance class, preventing engine-level rejections and unnecessary restarts.
 * **Max connections** configured at the **instance parameter group** aligns with Aurora modifiability and supports the stated concurrency.
-* **Hosted rotation** (Secrets Manager transform) avoids custom Lambda packaging, reduces operational overhead, and keeps rotation inside private subnets through **interface endpoints**.
+* **Hosted rotation** (Secrets Manager transform) avoids custom Lambda packaging, reduces operational overhead, and keeps rotation inside private subnets through **VPC endpoints (InterfaceVpcEndpoint)**.
 * **Snapshot policies** on cluster/instances ensure **zero-data-loss rollback** potential and safer blue/green patterns.
 * **Reader endpoint** centralizes read-distribution without client-side topology logic.
 
@@ -57,7 +57,7 @@
 
 * **Secret name conflicts** when a prior secret is pending deletion → mitigated by **unique name** with **StackId GUID tail**.
 * **Parameter rejection** by engine (e.g., legacy query cache) → mitigated by setting **cluster param `query_cache_size=0`** and excluding unsupported params.
-* **Rotation in private subnets** failing due to egress → mitigated via **VPC interface endpoints** for Secrets Manager and CloudWatch Logs.
+* **Rotation in private subnets** failing due to egress → mitigated via **VPC endpoints** for Secrets Manager and CloudWatch Logs.
 * **Deployment capability errors** → explicitly require **`CAPABILITY_AUTO_EXPAND`** when using the transform.
 
 ## Operational notes:
