@@ -23,5 +23,5 @@
     "EC2"
   ],
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P0"
 }
