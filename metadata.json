@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "iac",
+  "po_id": "trainr915",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T00:00:00Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "AWS CloudWatch",
+    "AWS X-Ray",
+    "Amazon SQS",
+    "AWS IAM",
+    "AWS CloudFormation",
+    "AWS SAM"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr1918"
+  }
+}
