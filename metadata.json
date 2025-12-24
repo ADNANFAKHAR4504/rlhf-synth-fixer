@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350234",
+  "team": "synth",
+  "startedAt": "2025-11-24T12:54:19.661Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "EC2",
+    "Route Table",
+    "NAT Gateway",
+    "Elastic IP",
+    "Security Group",
+    "Launch Template",
+    "ASG",
+    "ALB",
+    "SNS",
+    "RDS",
+    "Secrets Manager",
+    "S3 Bucket",
+    "S3 Bucket Policy",
+    "IAM"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
