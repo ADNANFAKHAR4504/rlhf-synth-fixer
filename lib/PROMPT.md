@@ -37,7 +37,7 @@ You are tasked with setting up a cloud environment using AWS CloudFormation. The
 ## Additional Constraints
 
 - **Region**: The infrastructure must be deployed in the us-east-1 region
-- **Resource Naming**: Utilize existing resource naming conventions with prefixes for easy identification
+- **Naming Conventions**: Utilize existing naming conventions with prefixes for easy identification
 - **Cost Tracking**: Ensure all resources are tagged for cost tracking purposes
 - **Availability Zones**: Use us-east-1a and us-east-1b for subnet distribution
 
