@@ -1268,7 +1268,7 @@ The PR creation script automatically:
 | Missing `PROMPT.md` | Creates placeholder with task context |
 | Missing `MODEL_RESPONSE.md` | Creates placeholder with migration summary |
 | Invalid metadata fields | Sanitizes to valid enum values via `localstack-sanitize-metadata.sh` |
-| Missing `wave` field | Defaults to "P1" |
+| Missing `wave` field | Looks up from P0.csv/P1.csv, defaults to "P1" if not found |
 | Invalid `subtask` values | Maps to closest valid subtask |
 | Invalid `subject_labels` | Maps to closest valid labels |
 
