@@ -65,8 +65,8 @@ Mappings:
 
   AMIConfig:
     us-east-1:
-      # LocalStack uses a dummy AMI ID
-      LocalStack: ami-ff0fea8310f3
+      # LocalStack uses a dummy AMI ID (8-character format)
+      LocalStack: ami-12345678
       # AWS uses Amazon Linux 2 AMI (update this periodically for real AWS deployments)
       AWS: ami-0c02fb55b2485eb75
 

@@ -79,7 +79,7 @@
         },
         "AMIConfig": {
             "us-east-1": {
-                "LocalStack": "ami-ff0fea8310f3",
+                "LocalStack": "ami-12345678",
                 "AWS": "ami-0c02fb55b2485eb75"
             }
         }
