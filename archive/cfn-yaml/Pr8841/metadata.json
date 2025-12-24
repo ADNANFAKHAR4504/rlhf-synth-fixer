@@ -30,5 +30,11 @@
     "po_id": "barun-turing",
     "pr": "Pr2037"
   },
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
