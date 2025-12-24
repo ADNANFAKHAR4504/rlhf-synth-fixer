@@ -69,7 +69,21 @@ echo -e "${GREEN}✅ Template uploaded to LocalStack S3${NC}"
 
 # Set stack name and parameters
 STACK_NAME="tap-stack-localstack"
-ENVIRONMENT_SUFFIX="${ENVIRONMENT_SUFFIX:-dev}"
+
+# Auto-detect environment suffix from branch name if not set
+if [ -z "$ENVIRONMENT_SUFFIX" ]; then
+    # Get current branch name
+    BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "")
+
+    # Extract PR number from branch name (e.g., ls-synth-Pr265 -> pr265)
+    if [[ "$BRANCH_NAME" =~ [Pp][Rr]([0-9]+) ]]; then
+        ENVIRONMENT_SUFFIX="pr${BASH_REMATCH[1]}"
+        echo -e "${GREEN}✅ Auto-detected environment suffix from branch: $ENVIRONMENT_SUFFIX${NC}"
+    else
+        ENVIRONMENT_SUFFIX="dev"
+    fi
+fi
+
 KEY_PAIR_NAME="${KEY_PAIR_NAME:-localstack-key}"
 
 # Create key pair if it doesn't exist
