@@ -26,5 +26,12 @@
   "migrated_from": {
     "po_id": "barun-turing",
     "pr": "Pr2004"
-  }
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
