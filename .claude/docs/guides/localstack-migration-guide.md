@@ -317,20 +317,21 @@ The `localstack-fixer` agent uses a **batch fix approach** for speed - it applie
 
 ### Fix Priority Order
 
-| Priority | Fix | When Applied |
-|----------|-----|--------------|
-| 🔴 Critical | Endpoint Configuration | Always (if not present) |
-| 🔴 Critical | S3 Path-Style Access | If using S3/buckets |
-| 🟡 High | Removal Policies | Always (if not present) |
-| 🟡 High | Test Configuration | If test/ exists |
-| 🟡 Medium | IAM Simplification | If IAM errors detected |
-| 🟡 Medium | Resource Naming | If naming errors detected |
-| 🟡 Medium | Unsupported Services | If service errors detected |
-| 🟢 Low | Default Parameters | If parameter errors detected |
+| Priority    | Fix                    | When Applied                 |
+| ----------- | ---------------------- | ---------------------------- |
+| 🔴 Critical | Endpoint Configuration | Always (if not present)      |
+| 🔴 Critical | S3 Path-Style Access   | If using S3/buckets          |
+| 🟡 High     | Removal Policies       | Always (if not present)      |
+| 🟡 High     | Test Configuration     | If test/ exists              |
+| 🟡 Medium   | IAM Simplification     | If IAM errors detected       |
+| 🟡 Medium   | Resource Naming        | If naming errors detected    |
+| 🟡 Medium   | Unsupported Services   | If service errors detected   |
+| 🟢 Low      | Default Parameters     | If parameter errors detected |
 
 ### Performance Improvement
 
 With batch fix approach:
+
 - **Old**: 5 fixes = 5 deployment cycles (~5 minutes)
 - **New**: 5 fixes = 1-2 deployment cycles (~1-2 minutes)
 - **Time saved**: 60-80% for typical migrations
@@ -364,6 +365,7 @@ The `metadata.json` is updated with migration tracking fields:
 ```
 
 **Migration Tracking Fields:**
+
 - `po_id`: New ID with `LS-` prefix (e.g., `LS-trainr97`)
 - `migrated_from.po_id`: Original task's PO ID before migration
 - `migrated_from.pr`: Original PR number (e.g., `Pr7179`)
@@ -381,6 +383,7 @@ The PR pipeline handles:
 ### Common CI/CD Failures
 
 If you see errors like:
+
 - `Invalid #/subtask (schema path: #/properties/subtask/enum)`
 - `Invalid #/subject_labels/1 (schema path: #/properties/subject_labels/items/enum)`
 - `Invalid #/task_id (schema path: #/additionalProperties)`
@@ -391,15 +394,27 @@ This means the metadata.json has fields or values not allowed by the schema.
 
 The schema has `additionalProperties: false`. These fields must be REMOVED:
 
-| Field | Action |
-|-------|--------|
-| `task_id` | Remove (use `po_id` instead) |
-| `training_quality` | Remove |
-| `coverage` | Remove |
-| `author` | Remove |
-| `dockerS3Location` | Remove |
-| `pr_id` | Remove |
-| `localstack_migration` | Remove (use `original_po_id` and `original_pr_id` for tracking) |
+| Field                            | Action                                           |
+| -------------------------------- | ------------------------------------------------ |
+| `task_id`                        | Remove (use `po_id` instead)                     |
+| `training_quality`               | Remove                                           |
+| `training_quality_justification` | Remove                                           |
+| `coverage`                       | Remove                                           |
+| `author`                         | Remove                                           |
+| `dockerS3Location`               | Remove                                           |
+| `pr_id`                          | Remove                                           |
+| `localstack_migration`           | Remove (use `migrated_from` object for tracking) |
+| `testDependencies`               | Remove (not part of metadata schema)             |
+| `background`                     | Remove (not part of metadata schema)             |
+
+### Type Conversion Notes
+
+The sanitization script automatically handles these type conversions:
+
+| Field            | If Found As            | Converted To           |
+| ---------------- | ---------------------- | ---------------------- |
+| `subject_labels` | string                 | array with single item |
+| `aws_services`   | comma-separated string | array (split by comma) |
 
 ### Migration Tracking Object (Optional)
 
@@ -414,26 +429,27 @@ The `migrated_from` object tracks the original task lineage:
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `migrated_from.po_id` | string | Original task PO ID before migration |
-| `migrated_from.pr` | string | Original PR number (e.g., `Pr7179`) |
+| Field                  | Type   | Description                          |
+| ---------------------- | ------ | ------------------------------------ |
+| `migrated_from.po_id`  | string | Original task PO ID before migration |
+| `migrated_from.pr`     | string | Original PR number (e.g., `Pr7179`)  |
 | `localstack_migration` | Remove |
 
 ### Subtask Mapping
 
 Old tasks may have invalid subtask values. Map them:
 
-| Invalid Value | Valid Value |
-|--------------|-------------|
-| "Security and Compliance Implementation" | "Security, Compliance, and Governance" |
-| "Security Configuration" | "Security, Compliance, and Governance" |
-| "Database Management" | "Provisioning of Infrastructure Environments" |
-| "Monitoring Setup" | "Infrastructure QA and Management" |
+| Invalid Value                            | Valid Value                                   |
+| ---------------------------------------- | --------------------------------------------- |
+| "Security and Compliance Implementation" | "Security, Compliance, and Governance"        |
+| "Security Configuration"                 | "Security, Compliance, and Governance"        |
+| "Database Management"                    | "Provisioning of Infrastructure Environments" |
+| "Monitoring Setup"                       | "Infrastructure QA and Management"            |
 
 ### Subject Labels Mapping
 
 Only these 12 labels are valid:
+
 - Environment Migration
 - Cloud Environment Setup
 - Multi-Environment Consistency
@@ -578,16 +594,16 @@ All LocalStack migration settings are centralized in `.claude/config/localstack.
 
 ### Key Configuration Sections
 
-| Section | Description |
-|---------|-------------|
-| `iteration` | Max iterations, batch fix settings |
-| `timeouts` | Deployment, test, install timeouts |
-| `localstack` | Endpoint, region, credentials |
-| `batch_fix` | Fix priority, preventive fixes |
-| `service_compatibility` | High/Medium/Low/Pro-only services |
-| `smart_selection` | Scoring for task selection |
-| `parallel` | Parallel execution settings |
-| `platforms` | CDK, CFN, TF, Pulumi specific settings |
+| Section                 | Description                            |
+| ----------------------- | -------------------------------------- |
+| `iteration`             | Max iterations, batch fix settings     |
+| `timeouts`              | Deployment, test, install timeouts     |
+| `localstack`            | Endpoint, region, credentials          |
+| `batch_fix`             | Fix priority, preventive fixes         |
+| `service_compatibility` | High/Medium/Low/Pro-only services      |
+| `smart_selection`       | Scoring for task selection             |
+| `parallel`              | Parallel execution settings            |
+| `platforms`             | CDK, CFN, TF, Pulumi specific settings |
 
 ### Example Configuration Changes
 
@@ -602,7 +618,7 @@ batch_fix:
 
 # Change LocalStack endpoint
 localstack:
-  endpoint: "http://localstack:4566"
+  endpoint: 'http://localstack:4566'
 
 # Adjust parallel execution
 parallel:
