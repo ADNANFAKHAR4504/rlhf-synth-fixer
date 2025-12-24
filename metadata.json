@@ -20,5 +20,5 @@
   ],
   "provider": "localstack",
   "wave": "P0",
-  "training_quality": 7
+  "training_quality": 8
 }
