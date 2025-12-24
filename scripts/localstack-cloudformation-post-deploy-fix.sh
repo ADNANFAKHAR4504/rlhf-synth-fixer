@@ -33,10 +33,10 @@ if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
     exit 1
 fi
 
-VPC_ID=$(cat cfn-outputs/flat-outputs.json | jq -r '.VPCId // empty')
-SG_ID=$(cat cfn-outputs/flat-outputs.json | jq -r '.SecurityGroupId // empty')
-IGW_ID=$(cat cfn-outputs/flat-outputs.json | jq -r '.InternetGatewayId // empty')
-NAT_ID=$(cat cfn-outputs/flat-outputs.json | jq -r '.NATGatewayId // empty')
+VPC_ID=$(cat cfn-outputs/flat-outputs.json | jq -r '.VPCId')
+SG_ID=$(cat cfn-outputs/flat-outputs.json | jq -r '.SecurityGroupId')
+IGW_ID=$(cat cfn-outputs/flat-outputs.json | jq -r '.InternetGatewayId')
+NAT_ID=$(cat cfn-outputs/flat-outputs.json | jq -r '.NATGatewayId')
 
 echo -e "${BLUE}📋 Resource IDs:${NC}"
 echo -e "${BLUE}  • VPC: ${VPC_ID:-<not present>}${NC}"
