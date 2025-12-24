@@ -25,10 +25,15 @@ if (fs.existsSync(cdkOutputsPath)) {
 
 // Helper function to extract value from Terraform output format
 function getOutputValue(key: string): any {
+  // Check if key exists in outputs (handles falsy values like "" or false)
+  if (!(key in rawOutputs)) return undefined;
   const output = rawOutputs[key];
-  if (!output) return undefined;
-  // Handle both flat format and Terraform output format
-  return output.value !== undefined ? output.value : output;
+  // Handle Terraform output format (object with value property)
+  if (output !== null && typeof output === 'object' && 'value' in output) {
+    return output.value;
+  }
+  // Handle flat format (direct value)
+  return output;
 }
 
 // Helper function to get boolean output value with default
