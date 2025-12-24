@@ -620,7 +620,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub 'rds-postgres-${EnvironmentSuffix}'
       Engine: postgres
-      EngineVersion: '15'
+      EngineVersion: '15.4'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: 20
       StorageType: gp2
