@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr929",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T08:56:11+00:00",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Serverless Infrastructure",
+    "API Gateway Integration",
+    "DynamoDB Management",
+    "Lambda Function Configuration",
+    "Stream Processing",
+    "Security Configuration",
+    "IAM Roles and Policies",
+    "KMS Encryption",
+    "CloudFormation Templates",
+    "Resource Tagging"
+  ],
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon DynamoDB",
+    "AWS IAM",
+    "AWS KMS",
+    "AWS X-Ray",
+    "Amazon CloudWatch"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr2005"
+  }
+}
