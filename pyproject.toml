@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_backend"
+
+[project]
+name = "iac-test-automations"
+version = "0.1"
+
+[tool.pytest.ini_options]
+# Only collect tests from the test/ folder
+testpaths = ["test"]
+
+# Test file patterns to collect
+python_files = ["test_*.py", "*_test.py"]
+
+# Add the current directory to the Python path
+pythonpath = ["."]
+
+# Silence deprecation warnings
+filterwarnings = [
+    "ignore::DeprecationWarning:google._upb._message"
+]
+
+# Ignore these directories during test discovery
+norecursedirs = ["node_modules", "__pycache__", ".venv", ".git", "archive", "templates"]
+
+# Show verbose output and collect coverage data for lib/
+# Also include the coverage report options here for pytest-cov
+addopts = "-vv --cov=lib --cov-report=term-missing --cov-report=json:cov.json --cov-fail-under=90 --cov-branch"
+
+# Set the default marker for tests
+markers = [
+    "unit: mark test as a unit test",
+    "integration: mark test as an integration test",
+    "slow: mark test as slow (typically skipped in CI)",
+    "live: mark test as requiring live AWS resources"
+]
+
+# Configure JUnit XML report
+junit_family = "xunit2"
+
+[tool.coverage.run]
+# Point the source to the 'lib' directory where your actual code resides
+source = ["lib"]
+omit = ["test/*", "setup.py", "__init__.py", "lib/__init__.py", "lib/tap.py", "lib/lib/*", "lib/test/*"]
+
+[tool.coverage.report]
+# You can keep this section as is, or move fail_under here
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:"
+]
