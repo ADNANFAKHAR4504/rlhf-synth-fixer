@@ -1,33 +1,29 @@
-We need a Terraform file (`main.tf`) that sets up a security group in AWS.
-The provider config already exists in `provider.tf`, and it uses a variable called `aws_region`.
-This means `main.tf` has to declare `aws_region` and any other variables we need for this setup.
-Everything should be in this one file — no pulling in other modules or splitting across multiple files.
+We need a Terraform configuration that sets up a complete VPC environment with secure HTTP/HTTPS access through a security group.
 
-The main goal: only allow inbound traffic on **port 80 (HTTP)** and **port 443 (HTTPS)**,
-and only from certain IP ranges we specify.
-Everything else inbound should be blocked.
+The provider config already exists in provider.tf and uses a variable called aws_region.
 
-Some things to keep in mind:
+Here's what we need:
 
-* We’ll need a `vpc_id` variable (no default) so the security group can attach to the right VPC.
-* Add variables for allowed IPv4 and IPv6 CIDRs.
-  By default these can be empty lists, but if both are empty we should fail or at least warn the user.
-* Let’s have a toggle for whether outbound traffic is wide open or locked down (`allow_all_outbound`).
-* Give the SG a sensible default name and description, but make them configurable.
-* Add some default tags like `Owner` and `Environment`, but allow overrides.
+A VPC with public subnet, internet gateway, and route table that connects the subnet to the gateway for internet access. Then a security group in that VPC that only allows inbound traffic on port 80 for HTTP and port 443 for HTTPS from specified IP ranges. Everything else inbound should be blocked.
 
-Outputs should include at least:
+The security group should:
+- Accept variables for allowed IPv4 and IPv6 CIDR blocks
+- Default to empty lists but warn if both are empty
+- Have a toggle for outbound traffic: either wide open or locked down
+- Use sensible default name and description but make them configurable
+- Include default tags like Owner and Environment with override capability
 
-* The security group ID
-* ARN
-* Name
-* A summary of ingress rules
+The VPC setup should:
+- Use a /16 CIDR block for the VPC
+- Create a /24 public subnet in the first availability zone
+- Attach an internet gateway to enable external connectivity
+- Set up route table with default route pointing to the gateway
 
-Make sure `main.tf` includes Terraform’s `required_providers` and `required_version` so it’s self-contained (but skip the actual `provider` block since that’s already in `provider.tf`).
+Outputs should include:
+- VPC ID and subnet ID
+- Security group ID, ARN, and name
+- Summary of ingress rules showing what traffic is allowed
 
-At the top of the file, add a quick comment explaining how to run it (`terraform init`, `terraform plan`, `terraform apply`)
-and maybe an example of passing in `vpc_id` and an IP range.
+Everything should be in main.tf with all variables declared there. No splitting across multiple files or pulling in external modules. Include required_providers and required_version at the top but skip the provider block since that's in provider.tf.
 
-We’re aiming for something minimal, secure, and easy to understand — no unnecessary permissive rules.
-
-
+Add a comment at the top explaining the terraform commands to run and show an example of passing in the required variables.
