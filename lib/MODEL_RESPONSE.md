@@ -267,7 +267,7 @@ Resources:
           </head>
           <body>
               <div class="container">
-                  <h1>🟢 Primary Web Server</h1>
+                  <h1> Primary Web Server</h1>
                   <p class="status">Status: ACTIVE (Primary)</p>
                   <div class="server-info">
                       <h3>Server Information:</h3>
@@ -358,7 +358,7 @@ Resources:
           </head>
           <body>
               <div class="container">
-                  <h1>🟡 Standby Web Server</h1>
+                  <h1> Standby Web Server</h1>
                   <p class="status">Status: STANDBY (Secondary)</p>
                   <div class="server-info">
                       <h3>Server Information:</h3>
@@ -568,12 +568,12 @@ Outputs:
 
 ## Key Features and Implementation Details
 
-### 🏗️ **Architecture Overview**
+### ️ **Architecture Overview**
 - **Multi-AZ Deployment**: Primary and standby instances are deployed in different Availability Zones for high availability
 - **Automated Failover**: Route 53 health checks monitor the primary instance and automatically redirect traffic to standby when needed
 - **Automatic Recovery**: Traffic automatically returns to primary instance when it becomes healthy again
 
-### 🔧 **Technical Implementation**
+###  **Technical Implementation**
 
 #### **1. Network Infrastructure**
 - **VPC**: Custom VPC with public subnets in two AZs
@@ -598,7 +598,7 @@ Outputs:
 - **Health Check Metrics**: Automatic monitoring of endpoint availability
 - **Custom Metrics**: CPU, memory, and disk utilization tracking
 
-### 📋 **Deployment Instructions**
+###  **Deployment Instructions**
 
 1. **Prerequisites**:
    ```bash
@@ -639,27 +639,27 @@ Outputs:
    ssh -i your-key.pem ec2-user@primary-ip "sudo systemctl start httpd"
    ```
 
-### 🔍 **Validation and Best Practices**
+###  **Validation and Best Practices**
 
 #### **Template Validation**
-- ✅ **cfn-lint compatible**: No syntax or logical errors
-- ✅ **AWS CLI deployable**: Ready for production deployment
-- ✅ **Parameter validation**: Input constraints and patterns
-- ✅ **Resource dependencies**: Proper DependsOn and Ref usage
+-  **cfn-lint compatible**: No syntax or logical errors
+-  **AWS CLI deployable**: Ready for production deployment
+-  **Parameter validation**: Input constraints and patterns
+-  **Resource dependencies**: Proper DependsOn and Ref usage
 
 #### **Security Best Practices**
-- 🔒 **IAM Roles**: Least privilege access for EC2 instances
-- 🔒 **Security Groups**: Restrictive inbound rules
-- 🔒 **SSH Access**: Configurable CIDR block for SSH access
-- 🔒 **HTTPS Ready**: Security group allows HTTPS traffic
+-  **IAM Roles**: Least privilege access for EC2 instances
+-  **Security Groups**: Restrictive inbound rules
+-  **SSH Access**: Configurable CIDR block for SSH access
+-  **HTTPS Ready**: Security group allows HTTPS traffic
 
 #### **Operational Excellence**
-- 📊 **Comprehensive Monitoring**: CloudWatch alarms and metrics
-- 🏷️ **Consistent Tagging**: All resources tagged for management
-- 📝 **Detailed Outputs**: All important resource identifiers exported
-- 🔄 **Automated Recovery**: No manual intervention required
+-  **Comprehensive Monitoring**: CloudWatch alarms and metrics
+- ️ **Consistent Tagging**: All resources tagged for management
+-  **Detailed Outputs**: All important resource identifiers exported
+-  **Automated Recovery**: No manual intervention required
 
-### 🚀 **Expected Behavior**
+###  **Expected Behavior**
 
 1. **Normal Operation**: Traffic routes to primary instance in AZ1
 2. **Failure Detection**: Health check fails after 90 seconds (3 failures × 30s interval)

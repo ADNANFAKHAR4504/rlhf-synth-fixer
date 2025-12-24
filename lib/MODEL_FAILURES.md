@@ -1,8 +1,8 @@
 # Model Failures Analysis - Route53 Failover Infrastructure
 
-## ❌ Critical Security Issues
+##  Critical Security Issues
 
-### 1. ⚠️ Overly Permissive IAM Policy
+### 1. ️ Overly Permissive IAM Policy
 ```yaml
 # Current Issue:
 - Effect: Allow
@@ -12,9 +12,9 @@
     - cloudwatch:PutMetricData
   Resource: '*'
 ```
-**🔥 Issue:** Grants broad permissions to all Route53 health checks and CloudWatch metrics across the account.
+** Issue:** Grants broad permissions to all Route53 health checks and CloudWatch metrics across the account.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 ```yaml
 - Effect: Allow
   Action:
@@ -31,7 +31,7 @@
       'cloudwatch:namespace': 'Route53FailoverDemo'
 ```
 
-### 2. ⚠️ Overly Permissive Security Group
+### 2. ️ Overly Permissive Security Group
 ```yaml
 # Current Issue:
 - IpProtocol: tcp
@@ -40,9 +40,9 @@
   CidrIp: !Ref AllowedSSHCIDR
   # Default: 0.0.0.0/0 (allows SSH from anywhere)
 ```
-**🔥 Issue:** Default SSH access from anywhere (0.0.0.0/0) is a major security risk.
+** Issue:** Default SSH access from anywhere (0.0.0.0/0) is a major security risk.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 ```yaml
 AllowedSSHCIDR:
   Type: String
@@ -52,9 +52,9 @@ AllowedSSHCIDR:
   ConstraintDescription: Must be a valid CIDR block (recommend specific IP ranges)
 ```
 
-## ❌ Missing Environment Management
+##  Missing Environment Management
 
-### 3. ❌ Missing EnvironmentSuffix Parameter
+### 3.  Missing EnvironmentSuffix Parameter
 ```yaml
 # Missing:
 Parameters:
@@ -63,9 +63,9 @@ Parameters:
     Default: 'dev'
     Description: 'Environment suffix for resource naming'
 ```
-**🔥 Issue:** No environment isolation, making it impossible to run multiple environments in the same account.
+** Issue:** No environment isolation, making it impossible to run multiple environments in the same account.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 ```yaml
 Parameters:
   EnvironmentSuffix:
@@ -76,7 +76,7 @@ Parameters:
     ConstraintDescription: 'Must contain only alphanumeric characters'
 ```
 
-### 4. ❌ Missing Environment Tags
+### 4.  Missing Environment Tags
 ```yaml
 # Current Issue:
 Tags:
@@ -84,9 +84,9 @@ Tags:
     Value: Route53FailoverDemo
   # Missing Environment tag
 ```
-**🔥 Issue:** No environment tagging makes cost allocation and resource management difficult.
+** Issue:** No environment tagging makes cost allocation and resource management difficult.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 ```yaml
 Tags:
   - Key: Name
@@ -99,9 +99,9 @@ Tags:
     Value: CloudFormation
 ```
 
-## ❌ Operational Issues
+##  Operational Issues
 
-### 5. ❌ Missing CloudWatch Alarm Actions
+### 5.  Missing CloudWatch Alarm Actions
 ```yaml
 # Current Issue:
 PrimaryInstanceStatusAlarm:
@@ -109,9 +109,9 @@ PrimaryInstanceStatusAlarm:
   Properties:
     # Missing AlarmActions, OKActions, InsufficientDataActions
 ```
-**🔥 Issue:** Alarms don't trigger any actions (SNS notifications, auto-recovery, etc.).
+** Issue:** Alarms don't trigger any actions (SNS notifications, auto-recovery, etc.).
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 ```yaml
 PrimaryInstanceStatusAlarm:
   Type: AWS::CloudWatch::Alarm
@@ -125,7 +125,7 @@ PrimaryInstanceStatusAlarm:
     # ... existing properties
 ```
 
-### 6. ❌ Missing SNS Topic for Notifications
+### 6.  Missing SNS Topic for Notifications
 ```yaml
 # Missing:
 AlarmNotificationTopic:
@@ -139,36 +139,36 @@ AlarmNotificationTopic:
         Value: !Ref EnvironmentSuffix
 ```
 
-### 7. ❌ No Backup Strategy
-**🔥 Issue:** No backup or disaster recovery strategy for the web server data.
+### 7.  No Backup Strategy
+** Issue:** No backup or disaster recovery strategy for the web server data.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 - Add EBS snapshots for data backup
 - Consider using Application Load Balancer instead of direct instance access
 - Implement automated backup policies
 
-## ❌ Performance and Reliability Issues
+##  Performance and Reliability Issues
 
-### 8. ❌ No Auto Scaling
+### 8.  No Auto Scaling
 ```yaml
 # Current Issue:
 # Fixed instance count (1 primary + 1 standby)
 ```
-**🔥 Issue:** No ability to scale based on load or automatically replace failed instances.
+** Issue:** No ability to scale based on load or automatically replace failed instances.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 - Replace EC2 instances with Auto Scaling Groups
 - Use Application Load Balancer for traffic distribution
 - Implement health checks and auto-recovery
 
-### 9. ❌ No Monitoring for Application Health
+### 9.  No Monitoring for Application Health
 ```yaml
 # Current Issue:
 # Only basic instance status checks
 ```
-**🔥 Issue:** No application-level monitoring or custom metrics.
+** Issue:** No application-level monitoring or custom metrics.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 ```yaml
 ApplicationHealthAlarm:
   Type: AWS::CloudWatch::Alarm
@@ -179,28 +179,28 @@ ApplicationHealthAlarm:
     # ... configure application-specific monitoring
 ```
 
-### 10. ❌ No Logging Configuration
-**🔥 Issue:** No centralized logging for web server access logs or application logs.
+### 10.  No Logging Configuration
+** Issue:** No centralized logging for web server access logs or application logs.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 - Configure CloudWatch Logs for web server logs
 - Add log group resources to the template
 - Implement log retention policies
 
-## ❌ Cost Optimization Issues
+##  Cost Optimization Issues
 
-### 11. ❌ No Instance Scheduling
-**🔥 Issue:** Instances run 24/7, increasing costs for non-production environments.
+### 11.  No Instance Scheduling
+** Issue:** Instances run 24/7, increasing costs for non-production environments.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 - Implement instance scheduling for dev/staging environments
 - Use AWS Instance Scheduler or Lambda functions
 - Consider using Spot Instances for cost savings
 
-### 12. ❌ No Resource Tagging for Cost Allocation
-**🔥 Issue:** Missing cost allocation tags makes it difficult to track expenses.
+### 12.  No Resource Tagging for Cost Allocation
+** Issue:** Missing cost allocation tags makes it difficult to track expenses.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 ```yaml
 Tags:
   - Key: CostCenter
@@ -211,20 +211,20 @@ Tags:
     Value: 'Failover-Demo'
 ```
 
-## ❌ Compliance and Governance Issues
+##  Compliance and Governance Issues
 
-### 13. ❌ No Encryption Configuration
-**🔥 Issue:** No explicit encryption settings for data at rest or in transit.
+### 13.  No Encryption Configuration
+** Issue:** No explicit encryption settings for data at rest or in transit.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 - Enable EBS encryption
 - Configure HTTPS for web traffic
 - Use AWS KMS for key management
 
-### 14. ❌ No Compliance Tags
-**🔥 Issue:** Missing compliance and governance tags.
+### 14.  No Compliance Tags
+** Issue:** Missing compliance and governance tags.
 
-**✅ Recommended Fix:**
+** Recommended Fix:**
 ```yaml
 Tags:
   - Key: DataClassification
@@ -235,24 +235,24 @@ Tags:
     Value: 'Yes'
 ```
 
-## ✅ Summary Table
+##  Summary Table
 
 | Category | Issue Summary | Status |
 |----------|---------------|---------|
-| IAM Policy Scope | Overly permissive Route53 and CloudWatch permissions | ❌ Fail |
-| Security Group | SSH access from anywhere (0.0.0.0/0) | ❌ Fail |
-| Environment Management | Missing EnvironmentSuffix parameter | ❌ Fail |
-| Resource Tagging | Missing environment and cost allocation tags | ❌ Fail |
-| Monitoring | No alarm actions or SNS notifications | ❌ Fail |
-| Backup Strategy | No backup or disaster recovery | ❌ Fail |
-| Auto Scaling | Fixed instance count, no scaling | ❌ Fail |
-| Application Monitoring | Only basic instance status checks | ❌ Fail |
-| Logging | No centralized logging configuration | ❌ Fail |
-| Cost Optimization | No instance scheduling or cost tags | ❌ Fail |
-| Encryption | No explicit encryption settings | ❌ Fail |
-| Compliance | Missing compliance and governance tags | ❌ Fail |
+| IAM Policy Scope | Overly permissive Route53 and CloudWatch permissions |  Fail |
+| Security Group | SSH access from anywhere (0.0.0.0/0) |  Fail |
+| Environment Management | Missing EnvironmentSuffix parameter |  Fail |
+| Resource Tagging | Missing environment and cost allocation tags |  Fail |
+| Monitoring | No alarm actions or SNS notifications |  Fail |
+| Backup Strategy | No backup or disaster recovery |  Fail |
+| Auto Scaling | Fixed instance count, no scaling |  Fail |
+| Application Monitoring | Only basic instance status checks |  Fail |
+| Logging | No centralized logging configuration |  Fail |
+| Cost Optimization | No instance scheduling or cost tags |  Fail |
+| Encryption | No explicit encryption settings |  Fail |
+| Compliance | Missing compliance and governance tags |  Fail |
 
-## ✅ Recommended Priority Fixes
+##  Recommended Priority Fixes
 
 ### High Priority (Security & Compliance)
 1. **Restrict IAM permissions** to specific resources
@@ -272,7 +272,7 @@ Tags:
 3. **Configure backup strategies**
 4. **Add cost allocation tags**
 
-## 🔧 Implementation Notes
+##  Implementation Notes
 
 - **Gradual Migration**: Implement changes incrementally to avoid service disruption
 - **Testing**: Test all changes in a non-production environment first

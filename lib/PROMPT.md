@@ -45,7 +45,7 @@ The generated YAML must be:
 
 ## Reference:
 Follow AWS best practices as described in:
-👉 https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html
+ https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html
 
 ## Deliverable:
 A single CloudFormation **YAML file** with:
