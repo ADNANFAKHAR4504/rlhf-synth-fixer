@@ -18,9 +18,21 @@ import * as path from "path";
 
 /** ===================== Types & IO ===================== */
 
+// Terraform format: {"key": {"value": "actual_value", "type": "string", "sensitive": false}}
 type TfValue<T> = { sensitive: boolean; type: any; value: T };
 
-type Outputs = {
+// Flat format: {"key": "actual_value"} or {"key": ["val1", "val2"]}
+type FlatOutputs = {
+  vpc_id?: string;
+  public_subnet_ids?: string[];
+  private_subnet_id?: string;
+  public_security_group_id?: string;
+  private_security_group_id?: string;
+  internet_gateway_id?: string;
+};
+
+// Terraform nested format
+type TerraformOutputs = {
   vpc_id?: TfValue<string>;
   public_subnet_ids?: TfValue<string[]>;
   private_subnet_id?: TfValue<string>;
@@ -40,30 +52,53 @@ function loadOutputs() {
   if (!fs.existsSync(p)) {
     throw new Error("Outputs file not found at cdk-outputs/flat-outputs.json. Please run terraform apply first.");
   }
-  
+
   try {
-    const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Outputs;
+    const raw = JSON.parse(fs.readFileSync(p, "utf8"));
 
+    // Helper to extract value - handles both flat and nested (Terraform) formats
+    const getValue = <T>(key: string): T | undefined => {
+      const val = raw[key];
+      if (val === undefined || val === null) {
+        return undefined;
+      }
+      // If it's an object with 'value' property (Terraform format), unwrap it
+      if (val && typeof val === 'object' && 'value' in val) {
+        return val.value as T;
+      }
+      // Otherwise use the value directly (flat format)
+      return val as T;
+    };
+
+    // Extract all required outputs
+    const vpc_id = getValue<string>("vpc_id");
+    const public_subnet_ids = getValue<string[]>("public_subnet_ids");
+    const private_subnet_id = getValue<string>("private_subnet_id");
+    const public_security_group_id = getValue<string>("public_security_group_id");
+    const private_security_group_id = getValue<string>("private_security_group_id");
+    const internet_gateway_id = getValue<string>("internet_gateway_id");
+
+    // Validate required outputs
     const missing: string[] = [];
-    const req = <K extends keyof Outputs>(k: K) => {
-      const v = raw[k]?.value as any;
-      if (v === undefined || v === null) missing.push(String(k));
-      return v;
-    };
+    if (!vpc_id) missing.push("vpc_id");
+    if (!public_subnet_ids) missing.push("public_subnet_ids");
+    if (!private_subnet_id) missing.push("private_subnet_id");
+    if (!public_security_group_id) missing.push("public_security_group_id");
+    if (!private_security_group_id) missing.push("private_security_group_id");
+    if (!internet_gateway_id) missing.push("internet_gateway_id");
 
-    const o = {
-      vpcId: req("vpc_id") as string,
-      publicSubnetIds: req("public_subnet_ids") as string[],
-      privateSubnetId: req("private_subnet_id") as string,
-      publicSecurityGroupId: req("public_security_group_id") as string,
-      privateSecurityGroupId: req("private_security_group_id") as string,
-      internetGatewayId: req("internet_gateway_id") as string,
-    };
-
-    if (missing.length) {
+    if (missing.length > 0) {
       throw new Error(`Missing required outputs in cdk-outputs/flat-outputs.json: ${missing.join(", ")}`);
     }
-    return o;
+
+    return {
+      vpcId: vpc_id,
+      publicSubnetIds: public_subnet_ids,
+      privateSubnetId: private_subnet_id,
+      publicSecurityGroupId: public_security_group_id,
+      privateSecurityGroupId: private_security_group_id,
+      internetGatewayId: internet_gateway_id,
+    };
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Error reading outputs file: ${error.message}`);
