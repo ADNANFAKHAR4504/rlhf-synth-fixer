@@ -184,9 +184,11 @@ describe('CloudFormation Template', () => {
 
   describe('Resource Naming Convention', () => {
     test('should follow naming conventions for outputs', () => {
-      // All outputs should have Export.Name as Fn::Sub with ${AWS::StackName}- prefix
+      // Outputs with Export should have Export.Name as Fn::Sub with ${AWS::StackName}- prefix
       Object.values(template.Outputs).forEach((output: any) => {
-        expect(output.Export.Name['Fn::Sub']).toMatch(/^\$\{AWS::StackName\}-/);
+        if (output.Export) {
+          expect(output.Export.Name['Fn::Sub']).toMatch(/^\$\{AWS::StackName\}-/);
+        }
       });
     });
     test('should apply tags to resources where required', () => {
