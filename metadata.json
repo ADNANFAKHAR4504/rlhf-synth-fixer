@@ -18,7 +18,7 @@
     "KMS",
     "SSM"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "ls-291429",
     "pr": "Pr874"
