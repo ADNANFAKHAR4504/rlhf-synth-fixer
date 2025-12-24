@@ -607,7 +607,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-alb-${AWSRegion}'
+      # Name omitted to allow CloudFormation auto-generation (avoids 32-char limit)
       Scheme: internet-facing
       Type: application
       SecurityGroups:
@@ -622,7 +622,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-tg-${AWSRegion}'
+      # Name omitted to allow CloudFormation auto-generation (avoids 32-char limit)
       Port: 80
       Protocol: HTTP
       VpcId: !Ref SecureVPC

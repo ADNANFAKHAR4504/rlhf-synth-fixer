@@ -69,12 +69,14 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(configBucket.Properties.BucketName['Fn::Sub']).toContain('${AWSRegion}');
     });
 
-    test('Load Balancer components should have region-specific naming', () => {
+    test('Load Balancer components should be properly configured', () => {
       const alb = template.Resources.ApplicationLoadBalancer;
       const targetGroup = template.Resources.ALBTargetGroup;
-      
-      expect(alb.Properties.Name['Fn::Sub']).toContain('${AWSRegion}');
-      expect(targetGroup.Properties.Name['Fn::Sub']).toContain('${AWSRegion}');
+
+      // Name properties removed to avoid 32-char limit issues with long stack names
+      // ALB and Target Group use CloudFormation auto-generated names
+      expect(alb.Properties.Scheme).toBe('internet-facing');
+      expect(targetGroup.Properties.Port).toBe(80);
     });
 
     test('Launch Template should have region-specific naming', () => {
@@ -353,11 +355,11 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet2' });
     });
 
-    test('Application Load Balancer should be internet-facing with region-specific naming', () => {
+    test('Application Load Balancer should be internet-facing', () => {
       const alb = template.Resources.ApplicationLoadBalancer;
       expect(alb.Properties.Scheme).toBe('internet-facing');
       expect(alb.Properties.Type).toBe('application');
-      expect(alb.Properties.Name['Fn::Sub']).toContain('${AWSRegion}');
+      // Name property removed to avoid 32-char limit with long stack names
     });
 
     test('ALB should be in public subnets', () => {

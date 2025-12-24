@@ -864,9 +864,6 @@
         "ApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-alb-${AWSRegion}"
-                },
                 "Scheme": "internet-facing",
                 "Type": "application",
                 "SecurityGroups": [
@@ -893,9 +890,6 @@
         "ALBTargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-tg-${AWSRegion}"
-                },
                 "Port": 80,
                 "Protocol": "HTTP",
                 "VpcId": {
