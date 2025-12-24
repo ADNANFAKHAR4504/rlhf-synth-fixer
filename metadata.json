@@ -8,12 +8,7 @@
   "startedAt": "2025-08-22T10:14:45+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Network Configuration",
-    "Security Configuration",
-    "Resource Scaling",
-    "Monitoring Setup",
-    "Access Control"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
