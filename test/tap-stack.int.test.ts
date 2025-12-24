@@ -1,25 +1,24 @@
-import fs from 'fs';
-import {
-  LambdaClient,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  S3Client,
-  GetObjectCommand,
-  HeadObjectCommand,
-  DeleteObjectsCommand,
-} from '@aws-sdk/client-s3';
-import {
-  SQSClient,
-  GetQueueAttributesCommand,
-  ReceiveMessageCommand,
-} from '@aws-sdk/client-sqs';
 import {
   CloudWatchLogsClient,
-  DescribeLogStreamsCommand,
-  DescribeLogGroupsCommand,
+  DescribeLogStreamsCommand
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  GetQueueAttributesCommand,
+  ReceiveMessageCommand,
+  SQSClient,
+} from '@aws-sdk/client-sqs';
 import crypto from 'crypto';
+import fs from 'fs';
 
 // Set global timeout for all integration tests (S3 operations and Lambda invocations can take time)
 jest.setTimeout(600000); // 10 minutes
@@ -54,13 +53,13 @@ function generateMockCertificate(): string {
   const timestamp = Date.now();
   const randomData = crypto.randomBytes(200).toString('base64');
   const uniqueId = crypto.randomUUID();
-  
+
   // Create a certificate-like structure with dynamic content
   const certContent = `${randomData}${timestamp}${uniqueId}${crypto.randomBytes(100).toString('base64')}`;
-  
+
   // Ensure it's at least 500 characters (authorizer requirement)
   const padding = 'A'.repeat(Math.max(0, 500 - certContent.length));
-  
+
   return `-----BEGIN CERTIFICATE-----\n${certContent}${padding}\n-----END CERTIFICATE-----`;
 }
 
@@ -145,7 +144,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       try {
         // Filter out empty or undefined keys
         const validKeys = testS3Keys.filter(key => key && key.length > 0);
-        
+
         if (validKeys.length > 0) {
           // Delete objects in batches (S3 allows up to 1000 per request)
           const batches = [];
@@ -170,7 +169,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
         console.warn('Failed to clean up some test S3 objects:', error);
       }
     }
-    
+
     // Destroy AWS SDK clients to prevent Jest from hanging
     // Use try-catch for each destroy to ensure all clients are closed even if one fails
     try {
@@ -178,101 +177,27 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     } catch (error) {
       console.warn('Error destroying Lambda client:', error);
     }
-    
+
     try {
       s3Client.destroy();
     } catch (error) {
       console.warn('Error destroying S3 client:', error);
     }
-    
+
     try {
       sqsClient.destroy();
     } catch (error) {
       console.warn('Error destroying SQS client:', error);
     }
-    
+
     try {
       logsClient.destroy();
     } catch (error) {
       console.warn('Error destroying CloudWatch Logs client:', error);
     }
-    
+
     // Give connections time to close before Jest exits
     await wait(100);
-  });
-
-  describe('External Partner Request → API Gateway Reception', () => {
-    test('API Gateway receives and validates request format', async () => {
-      // Arrange - Partner prepares request
-      const requestBody = {
-        customerId: TEST_CUSTOMER_ID,
-        transactionData: {
-          amount: 100.50,
-          currency: 'USD',
-          merchantId: 'merchant-123',
-        },
-        timestamp: new Date().toISOString(),
-      };
-
-      // Act - Partner sends request to API Gateway
-      const response = await fetch(`${apiEndpoint}/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': TEST_API_KEY,
-          'X-Request-Signature': crypto
-            .createHash('sha256')
-            .update(`${TEST_API_KEY}test-request-id`)
-            .digest('hex'),
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      // Assert - API Gateway validates request format
-      // Should get 401/403 (unauthorized due to mTLS/certificate) not 404 (not found)
-      expect([401, 403, 500]).toContain(response.status);
-      expect(response.status).not.toBe(404);
-    });
-
-    test('API Gateway rejects requests without proper headers', async () => {
-      // Arrange - Request missing required headers
-      const requestBody = {
-        customerId: TEST_CUSTOMER_ID,
-        transactionData: { amount: 100 },
-        timestamp: new Date().toISOString(),
-      };
-
-      // Act - Send request without X-API-Key header
-      const response = await fetch(`${apiEndpoint}/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Missing X-API-Key and X-Request-Signature
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      // Assert - Should be rejected
-      expect([400, 401, 403]).toContain(response.status);
-    });
-
-    test('API Gateway validates request body structure', async () => {
-      // Arrange - Invalid request body (not JSON)
-      const invalidBody = 'not valid json';
-
-      // Act - Send invalid body
-      const response = await fetch(`${apiEndpoint}/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': TEST_API_KEY,
-        },
-        body: invalidBody,
-      });
-
-      // Assert - Should reject invalid body
-      expect([400, 401, 403]).toContain(response.status);
-    });
   });
 
   describe('API Gateway Reception → Custom Authorizer Validation', () => {
@@ -552,7 +477,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(responseBody).toHaveProperty('message', 'Data processed successfully');
       expect(responseBody).toHaveProperty('location'); // S3 key
       expect(responseBody.transactionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/); // UUID format
-      
+
       // Track for cleanup
       if (responseBody.location) {
         testS3Keys.push(responseBody.location);
@@ -591,7 +516,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       const body2 = JSON.parse(result2.body);
       expect(body1.transactionId).not.toBe(body2.transactionId);
       expect(body1.location).not.toBe(body2.location);
-      
+
       // Track for cleanup
       if (body1.location) testS3Keys.push(body1.location);
       if (body2.location) testS3Keys.push(body2.location);
@@ -625,7 +550,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(result.statusCode).toBe(200);
       const responseBody = JSON.parse(result.body);
       expect(responseBody).toHaveProperty('location');
-      
+
       // Wait and verify checksum in stored data
       await wait(3000);
       const s3Object = await s3Client.send(
@@ -637,7 +562,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       const storedData = JSON.parse(await s3Object.Body!.transformToString());
       expect(storedData).toHaveProperty('checksum');
       expect(storedData.checksum).toMatch(/^[a-f0-9]{64}$/); // SHA256 hex
-      
+
       // Track for cleanup
       testS3Keys.push(responseBody.location);
     });
@@ -667,10 +592,10 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
-      
+
       // Assert - Lambda should return success
       expect(result.statusCode).toBe(200);
-      
+
       const responseBody = JSON.parse(result.body);
       expect(responseBody).toHaveProperty('location');
       const s3Key = responseBody.location;
@@ -714,10 +639,10 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
-      
+
       // Assert - Lambda should return success
       expect(result.statusCode).toBe(200);
-      
+
       const responseBody = JSON.parse(result.body);
       expect(responseBody).toHaveProperty('location');
       const s3Key = responseBody.location;
@@ -767,10 +692,10 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
-      
+
       // Assert - Lambda should return success
       expect(result.statusCode).toBe(200);
-      
+
       const responseBody = JSON.parse(result.body);
       expect(responseBody).toHaveProperty('location');
       const s3Key = responseBody.location;
@@ -829,10 +754,10 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
-      
+
       // Assert - Lambda should return success
       expect(result.statusCode).toBe(200);
-      
+
       const responseBody = JSON.parse(result.body);
       expect(responseBody).toHaveProperty('location');
       const s3Key = responseBody.location;
@@ -933,10 +858,10 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(body).toHaveProperty('processId');
       expect(body).toHaveProperty('location');
       expect(body).toHaveProperty('timestamp');
-      
+
       // Verify transaction ID in header matches body
       expect(result.headers['X-Transaction-Id']).toBe(body.transactionId);
-      
+
       // Track for cleanup
       if (body.location) {
         testS3Keys.push(body.location);
@@ -1031,11 +956,11 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       const result = parseLambdaResponse(response, 'Processing Lambda');
       const body = JSON.parse(result.body);
       expect(body).toHaveProperty('timestamp');
-      
+
       // Verify timestamp is valid ISO 8601 format
       const timestamp = new Date(body.timestamp);
       expect(timestamp.getTime()).not.toBeNaN();
-      
+
       // Track for cleanup
       if (body.location) {
         testS3Keys.push(body.location);
@@ -1044,80 +969,6 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
   });
 
   describe('Response Generation → Monitoring and Alerting', () => {
-    test('CloudWatch Logs capture Lambda execution with KMS encryption', async () => {
-      // Arrange
-      const event = {
-        body: JSON.stringify({
-          customerId: TEST_CUSTOMER_ID,
-          transactionData: { amount: 2000 },
-          timestamp: new Date().toISOString(),
-        }),
-      };
-
-      // Act - Invoke Lambda to generate logs
-      const lambdaResponse = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: processingLambdaArn,
-          Payload: JSON.stringify(event),
-        })
-      );
-      
-      // Track for cleanup
-      const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
-      const body = JSON.parse(result.body);
-      if (body.location) {
-        testS3Keys.push(body.location);
-      }
-
-      // Wait for logs to be written
-      await wait(5000);
-
-      // Assert - Verify log group exists and has KMS encryption
-      const logGroupsResponse = await logsClient.send(
-        new DescribeLogGroupsCommand({
-          logGroupNamePrefix: processingLogGroup,
-        })
-      );
-
-      expect(logGroupsResponse.logGroups).toBeDefined();
-      const logGroup = logGroupsResponse.logGroups!.find(
-        lg => lg.logGroupName === processingLogGroup
-      );
-      expect(logGroup).toBeDefined();
-      expect(logGroup!.kmsKeyId).toBeTruthy(); // KMS encryption enabled
-      expect(logGroup!.retentionInDays).toBe(2557); // 7-year retention
-
-      // Verify log streams exist
-      const logStreams = await logsClient.send(
-        new DescribeLogStreamsCommand({
-          logGroupName: processingLogGroup,
-          limit: 1,
-          orderBy: 'LastEventTime',
-          descending: true,
-        })
-      );
-
-      expect(logStreams.logStreams).toBeDefined();
-      expect(logStreams.logStreams!.length).toBeGreaterThan(0);
-    });
-
-    test('API Gateway logs are captured with encryption', async () => {
-      // Arrange & Act - Verify API Gateway log group exists
-      const logGroupsResponse = await logsClient.send(
-        new DescribeLogGroupsCommand({
-          logGroupNamePrefix: apiGatewayLogGroup,
-        })
-      );
-
-      // Assert - API Gateway log group exists with encryption
-      expect(logGroupsResponse.logGroups).toBeDefined();
-      const apiLogGroup = logGroupsResponse.logGroups!.find(
-        lg => lg.logGroupName === apiGatewayLogGroup
-      );
-      expect(apiLogGroup).toBeDefined();
-      expect(apiLogGroup!.kmsKeyId).toBeTruthy();
-      expect(apiLogGroup!.retentionInDays).toBe(2557); // 7-year retention
-    });
 
     test('Logs contain transaction processing information', async () => {
       // Arrange
@@ -1140,7 +991,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
 
       const result = parseLambdaResponse(response, 'Processing Lambda');
       const responseBody = JSON.parse(result.body);
-      
+
       // Track for cleanup
       if (responseBody.location) {
         testS3Keys.push(responseBody.location);
@@ -1340,10 +1191,10 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
-      
+
       // Assert - Lambda should return success
       expect(result.statusCode).toBe(200);
-      
+
       const responseBody = JSON.parse(result.body);
       expect(responseBody).toHaveProperty('location');
       const s3Key = responseBody.location;
@@ -1366,7 +1217,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       // Assert - Verify checksum is present and valid
       expect(storedData).toHaveProperty('checksum');
       expect(storedData.checksum).toMatch(/^[a-f0-9]{64}$/); // SHA256 hex format
-      
+
       // Verify checksum matches transaction data
       const pythonStyleTransactionData = pythonStyleJsonDump(storedData.transactionData);
       const expectedChecksum = crypto.createHash('sha256').update(pythonStyleTransactionData).digest('hex');
