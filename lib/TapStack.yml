@@ -595,7 +595,7 @@ Resources:
         - Ref: Environment
         - DBInstanceClass
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.40'
       AllocatedStorage:
         Fn::FindInMap:
         - EnvironmentConfig
@@ -612,7 +612,7 @@ Resources:
       DBSubnetGroupName:
         Ref: DBSubnetGroup
       MultiAZ: false
-      BackupRetentionPeriod: 1
+      BackupRetentionPeriod: 0
       DeletionProtection: false
       Tags:
       - Key: Name
