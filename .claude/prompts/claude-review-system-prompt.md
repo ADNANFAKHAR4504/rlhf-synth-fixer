@@ -74,14 +74,16 @@ For PRs that deploy to LocalStack (branch names starting with `ls-` or containin
 - ✅ Score based on what IS implemented, not what's disabled for LocalStack
 - ✅ Give score ≥8 if the implemented services work correctly
 
-### Minimum Score Guarantee for LocalStack PRs
+### Fair Scoring for LocalStack PRs
 
-If a LocalStack PR:
-1. Has working code for LocalStack-supported services
-2. Documents adaptations in MODEL_FAILURES.md
-3. Uses conditional patterns OR documents why services are removed
+When scoring a LocalStack PR, evaluate ONLY what can work in LocalStack:
 
-**Then the minimum score should be 8** (threshold for passing), regardless of how many AWS services are disabled for LocalStack compatibility.
+1. **Ignore unsupported services** - Don't penalize for missing CloudFront, Route53, EKS, etc.
+2. **Score the implemented services** - If S3, Lambda, DynamoDB work correctly, that's good code
+3. **Document adaptations = Category B** - Properly documented LocalStack changes are ±0 (not penalties)
+4. **Focus on code quality** - Judge the code that IS there, not what's disabled
+
+A well-documented LocalStack PR with working supported services should score ≥8.
 
 ### Detecting LocalStack PRs
 

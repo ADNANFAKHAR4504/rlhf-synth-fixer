@@ -71,39 +71,6 @@ BRANCH_NAME=$(gh api \
 if [[ "$BRANCH_NAME" == ls-* ]] || [[ "$BRANCH_NAME" == *localstack* ]] || [[ "$BRANCH_NAME" == *LS-* ]]; then
   IS_LOCALSTACK_MIGRATION=true
   echo "🔧 LocalStack migration detected (branch: $BRANCH_NAME) - applying adjusted criteria"
-  
-  # For LocalStack migrations, check if the score is reasonable (>=6)
-  # If so, we'll be more lenient about other issues
-  LOCALSTACK_SCORE=$(grep -oE "SCORE:[0-9]+" latest_claude_comment.txt | head -1 | cut -d: -f2 || echo "0")
-  echo "📊 LocalStack PR score: $LOCALSTACK_SCORE"
-  
-  # Check if MODEL_FAILURES.md documents LocalStack compatibility
-  HAS_LOCALSTACK_DOCS=false
-  if grep -qiE "LocalStack Compatibility|localstack.*adjustment|localstack.*limitation" latest_claude_comment.txt; then
-    HAS_LOCALSTACK_DOCS=true
-    echo "✅ LocalStack compatibility is documented"
-  fi
-  
-  # Early exit for LocalStack PRs with reasonable scores and documentation
-  if [ "$HAS_LOCALSTACK_DOCS" = true ] && [ "$LOCALSTACK_SCORE" -ge 6 ]; then
-    echo ""
-    echo "════════════════════════════════════════════════════════════════"
-    echo "✅ LOCALSTACK MIGRATION - ADJUSTED PASS"
-    echo "════════════════════════════════════════════════════════════════"
-    echo ""
-    echo "This is a LocalStack migration PR with:"
-    echo "  - Score: $LOCALSTACK_SCORE/10"
-    echo "  - LocalStack compatibility: Documented"
-    echo ""
-    echo "LocalStack PRs are evaluated against adjusted criteria because"
-    echo "LocalStack Community Edition doesn't support all AWS features."
-    echo ""
-    echo "Proceeding with adjusted pass criteria."
-    echo "════════════════════════════════════════════════════════════════"
-    echo ""
-    echo "critical_issues_found=false" >> "$GITHUB_OUTPUT"
-    exit 0
-  fi
 fi
 
 # ============================================================

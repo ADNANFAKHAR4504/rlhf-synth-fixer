@@ -363,11 +363,12 @@ LocalStack Community Edition does not support many AWS services. The following a
 - If S3, Lambda, DynamoDB, SQS, SNS work correctly → That's success
 - Do not penalize for "missing" services that can't work in LocalStack
 
-**RULE 3: Minimum Score = 8 for Documented LocalStack PRs**
+**RULE 3: Fair Scoring for LocalStack PRs**
 If MODEL_FAILURES.md has a "LocalStack Compatibility" section documenting the adaptations:
-- Start with score = 8 (not base 8 with penalties)
+- Start with base score = 8 (standard)
+- Do NOT apply "missing services" penalties for documented LocalStack limitations
+- LocalStack adaptations are Category B (±0) - they don't reduce score
 - Only deduct for actual code quality issues in SUPPORTED services
-- LocalStack adaptations are Category B (±0) or better
 
 **If LocalStack migration (`IS_LOCALSTACK_MIGRATION=true`)**:
 
