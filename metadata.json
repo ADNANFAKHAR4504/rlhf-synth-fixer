@@ -12,10 +12,11 @@
   ],
   "provider": "localstack",
   "aws_services": [
-    "Amazon VPC",
-    "Amazon EC2",
-    "AWS IAM",
-    "Amazon CloudWatch"
+    "API Gateway",
+    "S3",
+    "WAF",
+    "IAM"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 8
 }
