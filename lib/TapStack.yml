@@ -1408,7 +1408,7 @@ Resources:
     Properties:
       BackupPlan:
         BackupPlanName: webapp-backup-plan
-        BackupPlanRule:
+        BackupPlanRules:
           - RuleName: DailyBackups
             TargetBackupVault: !Ref BackupVault
             ScheduleExpression: cron(0 5 ? * * *)
