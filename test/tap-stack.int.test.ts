@@ -171,7 +171,7 @@ describe('VPC Infrastructure Integration Tests', () => {
           rule => rule.IpProtocol === 'tcp' && rule.FromPort === 22 && rule.ToPort === 22
         );
         expect(sshRule).toBeDefined();
-        expect(sshRule?.IpRanges).toContainEqual({ CidrIp: '203.0.113.0/24' });
+        expect(sshRule?.IpRanges?.some(range => range.CidrIp === '203.0.113.0/24')).toBe(true);
       } catch (error) {
         console.log(`Security Group test failed: ${error}`);
         throw error;
