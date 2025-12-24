@@ -59,23 +59,30 @@ Details in `.claude/agents/synth-fixer.md`
 
 ## REQUIRED FIELD: wave
 
-**CRITICAL**: The `wave` field is REQUIRED and must ALWAYS be "P1"
+**CRITICAL**: The `wave` field is REQUIRED
 
 ### Rule:
-- `wave` must ALWAYS be `"P1"` - no exceptions
-- Synth team only uses P1
+| Language | Wave Value |
+|----------|------------|
+| `hcl` (Terraform) | **P0** |
+| All others (`ts`, `js`, `py`, `go`, `java`, etc.) | **P1** |
 
 ### Fix Pattern:
 ```bash
-# Always set wave to P1
-jq '.wave = "P1"' metadata.json > tmp.json && mv tmp.json metadata.json
+# Set wave based on language
+LANG=$(jq -r '.language // "unknown"' metadata.json)
+if [[ "$LANG" == "hcl" ]]; then
+  jq '.wave = "P0"' metadata.json > tmp.json && mv tmp.json metadata.json
+else
+  jq '.wave = "P1"' metadata.json > tmp.json && mv tmp.json metadata.json
+fi
 ```
 
 ### Schema Requirement:
 ```json
 "wave": {
   "type": "string",
-  "const": "P1"
+  "enum": ["P0", "P1"]
 }
 ```
 

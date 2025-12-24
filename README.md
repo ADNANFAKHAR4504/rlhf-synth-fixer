@@ -181,9 +181,13 @@ The agent automatically ensures `metadata.json` has correct values:
 {
   "team": "synth",           // ALWAYS "synth"
   "provider": "localstack",  // ALWAYS "localstack"
-  "wave": "P1"               // ALWAYS "P1" - required field
+  "wave": "P0 or P1"         // P0 for tf/hcl, P1 for all others
 }
 ```
+
+**Wave Rules:**
+- `hcl` (Terraform) → `"P0"`
+- All other languages → `"P1"`
 
 ## Error Types Fixed
 

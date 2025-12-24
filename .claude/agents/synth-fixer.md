@@ -768,9 +768,15 @@ When fixing `metadata.json`, these fields are MANDATORY:
   "team": "synth",           // ⚠️ ALWAYS "synth" - no other value!
   "provider": "localstack",  // ALWAYS "localstack"
   "subtask": "<string>",     // Must be string, not array
-  "wave": "P1"               // ⚠️ ALWAYS "P1" - required field
+  "wave": "P0 or P1"         // ⚠️ P0 for tf/hcl, P1 for all other languages
 }
 ```
+
+**Wave Field Rules:**
+| Platform/Language | Wave Value |
+|-------------------|------------|
+| `tf` / `hcl` (Terraform) | **P0** |
+| `ts`, `js`, `py`, `go`, `java`, etc. | **P1** |
 
 **Fields to REMOVE:**
 - `task_id`
@@ -2664,7 +2670,14 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
               fi
             fi
             # Ensure provider, team, and wave are set
-            jq '.provider = "localstack" | .team = "synth" | .wave = "P1"' metadata.json > metadata.json.tmp
+            # Wave: P0 for tf/hcl, P1 for all other languages
+            LANG=$(jq -r '.language // "unknown"' metadata.json)
+            if [[ "$LANG" == "hcl" ]]; then
+              WAVE_VALUE="P0"
+            else
+              WAVE_VALUE="P1"
+            fi
+            jq --arg wave "$WAVE_VALUE" '.provider = "localstack" | .team = "synth" | .wave = $wave' metadata.json > metadata.json.tmp
             mv metadata.json.tmp metadata.json
             APPLIED_FIXES+=("$fix")
           fi
@@ -2673,14 +2686,21 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
           echo "   Attempting minimal inline sanitization..."
 
           # Minimal inline fix: ensure critical fields
-          jq '
+          # Wave: P0 for tf/hcl, P1 for all other languages
+          LANG=$(jq -r '.language // "unknown"' metadata.json)
+          if [[ "$LANG" == "hcl" ]]; then
+            WAVE_VALUE="P0"
+          else
+            WAVE_VALUE="P1"
+          fi
+          jq --arg wave "$WAVE_VALUE" '
             # Ensure subtask is a string
             .subtask = (if .subtask | type == "array" then .subtask[0] // "Infrastructure QA and Management" else .subtask // "Infrastructure QA and Management" end) |
             # Set required fields
             .provider = "localstack" |
             .team = "synth" |
-            # Ensure wave field is ALWAYS P1 (required)
-            .wave = "P1" |
+            # Wave: P0 for tf/hcl, P1 for others
+            .wave = $wave |
             # Remove disallowed fields
             del(.task_id, .training_quality, .coverage, .author, .dockerS3Location, .pr_id, .original_pr_id, .localstack_migration)
           ' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
@@ -4027,7 +4047,7 @@ The schema has `additionalProperties: false`, meaning ONLY these fields are allo
 - `provider` - enum: aws, localstack
 - `subject_labels` - array of enums (see below)
 - `aws_services` - array of strings
-- `wave` - **ALWAYS "P1"** (required field - synth team uses P1)
+- `wave` - **"P0" for tf/hcl (Terraform), "P1" for all other languages**
 
 ### CRITICAL: `subtask` vs `subject_labels` Type Enforcement
 
