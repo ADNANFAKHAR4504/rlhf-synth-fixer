@@ -1,75 +1,22 @@
-You are an expert AWS CloudFormation engineer.
-Your task is to write a single, production-ready CloudFormation template in YAML that configures a secure and compliant application infrastructure environment.
+You need to build secure application infrastructure on AWS using CloudFormation YAML templates.
 
-Language & Platform
+The system processes application data through connected AWS services. Lambda functions run inside private VPC subnets and connect to an RDS MySQL database to read and write application records. These functions also write processed files to S3 buckets where all data gets encrypted using KMS keys. CloudWatch Logs streams capture every Lambda invocation for debugging. EC2 instances provide compute capacity within the same VPC, protected by security groups that only allow traffic from approved IP addresses. SSM Parameter Store holds database passwords that Lambda functions fetch at runtime instead of hardcoding secrets.
 
-Language: YAML
+Build everything in us-east-1 region. Create IAM roles with minimal permissions - no wildcards. Tag every resource with Environment, CostCenter, Owner, and Project tags. Enable KMS encryption and versioning on all S3 buckets. Deploy Lambda functions inside the VPC with environment variables for config. Keep RDS instances private and encrypted. Lock down security groups to specific IP ranges only. Store secrets in SSM Parameter Store. Send Lambda logs to CloudWatch Log Groups.
 
-Platform: AWS CloudFormation - no SAM, no CDK
+Create these AWS resources in your CloudFormation template:
 
-Reference: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html
+- VPC spanning multiple availability zones with both public and private subnets
+- Internet Gateway connecting to route tables
+- Two Lambda functions running in VPC with IAM roles that specify exact KMS and S3 permissions
+- RDS MySQL database in private subnet with encryption enabled and seven day backup retention
+- Two S3 buckets with KMS encryption, versioning, and lifecycle rules for archiving
+- SSM parameters storing database credentials
+- KMS keys with policies allowing Lambda to decrypt
+- Security groups restricting access by IP CIDR blocks
+- CloudWatch Log Groups for Lambda monitoring
+- IAM roles for Lambda and EC2 with explicit action permissions
 
-Service Architecture & Data Flow
+Use CloudFormation parameters for environment settings. Apply complete tagging with Environment, CostCenter, Owner, Project, and ManagedBy on every resource. Write IAM policies with explicit KMS decrypt and S3 object actions instead of wildcards. Set RDS backup retention to seven days with automated backups enabled. Configure S3 lifecycle policies to transition old objects to cheaper storage.
 
-The application infrastructure connects services in this pattern:
-
-Lambda functions deployed in private VPC subnets query the RDS database for application data and store processing results in S3 buckets. All data is encrypted at rest using KMS keys. CloudWatch Logs capture Lambda execution logs for monitoring and debugging. EC2 instances deployed in the VPC provide additional compute capacity with security groups restricting access to specific IP ranges. SSM Parameter Store securely stores database credentials and other sensitive configuration values that Lambda functions retrieve at runtime.
-
-Environment & Constraints
-
-All resources must deploy to us-east-1.
-
-IAM Roles must follow the principle of least privilege.
-
-All resources must be tagged with Environment, CostCenter, Owner, and Project for governance.
-
-All S3 buckets must enable server-side encryption with KMS managed keys and versioning.
-
-Lambda functions must run inside a VPC and use environment variables for configuration.
-
-RDS instances must not be publicly accessible and must enable encryption at rest.
-
-Security groups must allow inbound access only from specific IP ranges.
-
-Sensitive values must be stored in SSM Parameter Store.
-
-CloudWatch Logs must be enabled for Lambda function monitoring.
-
-Resources to Include
-
-VPC with public and private subnets across multiple availability zones
-
-Internet Gateway and route tables for network connectivity
-
-Multiple Lambda functions deployed in VPC with environment variables and least-privilege IAM roles
-
-RDS MySQL instance in private subnet with encryption and backup retention
-
-Multiple S3 buckets with KMS encryption, versioning, and lifecycle policies
-
-SSM Parameter Store parameters for sensitive values (database credentials)
-
-KMS encryption keys with proper key policies
-
-Security groups with restricted CIDR ranges
-
-CloudWatch Log Groups for Lambda function logging
-
-IAM roles for Lambda and EC2 with explicit permissions
-
-Additional Implementation Notes
-
-Use Parameters for Environment configuration.
-
-Apply comprehensive tagging (Environment, CostCenter, Owner, Project, ManagedBy) to all resources.
-
-Ensure least-privilege IAM policies for Lambda roles with explicit KMS and S3 actions.
-
-Follow AWS Well-Architected Framework security best practices.
-
-Configure RDS with 7-day backup retention and automated backups.
-
-Enable S3 lifecycle policies for cost optimization.
-
-Expected Output
-Produce only a valid .yaml CloudFormation template inside a fenced code block
+Output only valid YAML CloudFormation template code in a fenced code block.
