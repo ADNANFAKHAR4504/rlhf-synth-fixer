@@ -1,0 +1,24 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "provider": "localstack",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "4027",
+  "team": "5",
+  "startedAt": "2025-10-09T14:46:12.481Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "DynamoDB"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

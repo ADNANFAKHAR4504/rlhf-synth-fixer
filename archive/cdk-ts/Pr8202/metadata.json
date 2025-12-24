@@ -1,0 +1,39 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "provider": "localstack",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "trainr269",
+  "team": "5",
+  "startedAt": "2025-08-12T17:28:30+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "cloudformation",
+    "ec2",
+    "s3",
+    "dynamodb",
+    "lambda",
+    "sns",
+    "sqs",
+    "apigateway",
+    "cloudwatch",
+    "iam",
+    "kms",
+    "sts",
+    "secretsmanager",
+    "ssm",
+    "logs",
+    "events"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}
