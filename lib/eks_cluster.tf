@@ -121,8 +121,9 @@ resource "aws_eks_cluster" "main" {
 # }
 
 resource "aws_iam_openid_connect_provider" "eks" {
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"]  # Default EKS thumbprint for LocalStack
+  client_id_list = ["sts.amazonaws.com"]
+  # Default EKS thumbprint for LocalStack
+  thumbprint_list = ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"]
   url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
 
   tags = {
