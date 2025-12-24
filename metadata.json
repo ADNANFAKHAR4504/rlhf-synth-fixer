@@ -6,7 +6,7 @@
   "po_id": "LS-292014",
   "team": "synth-2",
   "startedAt": "2025-08-20T05:58:41.242Z",
-  "subtask": "Serverless Architecture Implementation",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
     "General Infrastructure Tooling QA",
