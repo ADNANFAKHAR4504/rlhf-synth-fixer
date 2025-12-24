@@ -10,12 +10,17 @@ import { Route53Client, ListHostedZonesCommand } from "@aws-sdk/client-route-53"
 import { SecretsManagerClient, DescribeSecretCommand } from "@aws-sdk/client-secrets-manager";
 import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
 
-// Load deployment outputs
-const outputsPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
+// Load deployment outputs - check both possible paths
+const cfnOutputsPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
+const cdkOutputsPath = path.resolve(__dirname, "../cdk-outputs/flat-outputs.json");
+let outputsPath = cfnOutputsPath;
 let rawOutputs: any = {};
 
-if (fs.existsSync(outputsPath)) {
-  rawOutputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+if (fs.existsSync(cdkOutputsPath)) {
+  outputsPath = cdkOutputsPath;
+  rawOutputs = JSON.parse(fs.readFileSync(cdkOutputsPath, "utf8"));
+} else if (fs.existsSync(cfnOutputsPath)) {
+  rawOutputs = JSON.parse(fs.readFileSync(cfnOutputsPath, "utf8"));
 }
 
 // Helper function to extract value from Terraform output format
@@ -24,6 +29,13 @@ function getOutputValue(key: string): any {
   if (!output) return undefined;
   // Handle both flat format and Terraform output format
   return output.value !== undefined ? output.value : output;
+}
+
+// Helper function to get boolean output value with default
+function getBooleanOutputValue(key: string, defaultValue: boolean = false): boolean {
+  const value = getOutputValue(key);
+  if (value === undefined || value === null) return defaultValue;
+  return Boolean(value);
 }
 
 // Build outputs object with extracted values
@@ -39,10 +51,11 @@ const outputs = {
   secret_arn: getOutputValue("secret_arn"),
   primary_private_subnet_ids: getOutputValue("primary_private_subnet_ids"),
   secondary_private_subnet_ids: getOutputValue("secondary_private_subnet_ids"),
-  enable_ec2: getOutputValue("enable_ec2"),
-  enable_rds: getOutputValue("enable_rds"),
-  enable_cloudfront: getOutputValue("enable_cloudfront"),
-  enable_nat_gateway: getOutputValue("enable_nat_gateway"),
+  // Feature flags default to false if not present in outputs
+  enable_ec2: getBooleanOutputValue("enable_ec2", false),
+  enable_rds: getBooleanOutputValue("enable_rds", false),
+  enable_cloudfront: getBooleanOutputValue("enable_cloudfront", false),
+  enable_nat_gateway: getBooleanOutputValue("enable_nat_gateway", false),
 };
 
 // LocalStack configuration
