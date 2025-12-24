@@ -4,7 +4,7 @@
 A fintech startup needs to migrate their payment processing infrastructure from a single-region deployment to a multi-region setup for compliance and latency requirements. The existing infrastructure runs in us-east-1 and needs to be replicated to eu-west-1 while maintaining data consistency and security standards.
 
 ## Environment
-Multi-region AWS infrastructure spanning us-east-1 (primary) and eu-west-1 (secondary) for payment processing workloads. Uses RDS PostgreSQL with automated backups, Lambda functions for transaction processing, S3 for document storage, and API Gateway for REST endpoints. Requires Terraform 1.5+ with AWS provider 5.x. VPC in each region with 3 private subnets and 3 public subnets. Cross-region VPC peering for internal communication. KMS keys in each region for encryption at rest.
+Multi-region AWS infrastructure spanning us-east-1 primary and eu-west-1 secondary for payment processing workloads. Uses RDS PostgreSQL with automated backups, Lambda functions for transaction processing, S3 for document storage, and API Gateway for REST endpoints. Requires Terraform 1.5+ with AWS provider 5.x. VPC in each region with 3 private subnets and 3 public subnets. Cross-region VPC peering for internal communication. KMS keys in each region for encryption at rest.
 
 ## Problem Statement
 Create a Terraform configuration to migrate a payment processing system from single-region to multi-region deployment. The configuration must:
@@ -12,7 +12,7 @@ Create a Terraform configuration to migrate a payment processing system from sin
 1. Define provider configurations for both us-east-1 and eu-west-1 regions.
 2. Set up Terraform workspaces named 'primary' and 'secondary' for region management.
 3. Create S3 buckets in both regions with versioning and cross-region replication from primary to secondary.
-4. Deploy RDS PostgreSQL instances (db.t3.medium) in both regions with automated encrypted snapshot copying.
+4. Deploy RDS PostgreSQL instances with db.t3.medium instance type in both regions with automated encrypted snapshot copying.
 5. Configure Lambda functions that process payments in both regions with identical code but region-specific DynamoDB table endpoints.
 6. Establish API Gateway REST APIs in both regions with custom domain names.
 7. Implement Route 53 health checks and failover routing policies for the API endpoints.
