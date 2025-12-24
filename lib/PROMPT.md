@@ -40,24 +40,24 @@ Create an infrastructure compliance validation system using CloudFormation with 
 
 - All infrastructure defined using CloudFormation with YAML
 - Use AWS Config for continuous compliance evaluation
-- Use AWS Config Rules for compliance checks (both managed and custom)
+- Use AWS Config Rules for compliance checks including managed rules and custom rules
 - Use Lambda for custom compliance validation logic where needed
 - Use SNS for notifications and alerting
 - Use S3 for storing compliance reports and Config data
 - Use CloudWatch Logs for centralized logging
 - Use IAM roles with least-privilege permissions
 - Resource names must include environmentSuffix parameter for uniqueness
-- Follow naming convention: resource-type-${EnvironmentSuffix}
+- Follow naming convention: resource-type with EnvironmentSuffix appended
 - Deploy to us-east-1 region
 
 ### Constraints
 
 - All data must be encrypted at rest using AWS KMS
-- All resources must be destroyable (no Retain deletion policies)
+- All resources must be destroyable without Retain deletion policies
 - IAM roles must follow least-privilege principle
 - No hardcoded credentials or sensitive data
 - All Config rules must have appropriate evaluation frequency
-- System must be cost-effective (prefer serverless components)
+- System must be cost-effective and prefer serverless components
 - Include proper error handling and logging for all Lambda functions
 - CloudWatch alarms for system health monitoring
 
@@ -76,7 +76,7 @@ Create an infrastructure compliance validation system using CloudFormation with 
 
 - Complete CloudFormation YAML template implementing the compliance validation system
 - AWS Config with appropriate configuration recorder and delivery channel
-- Multiple Config rules for common compliance checks (encryption, public access, tagging, etc.)
+- Multiple Config rules for common compliance checks like encryption, public access, and tagging
 - Lambda functions for custom compliance validation logic
 - SNS topics and subscriptions for notifications
 - S3 bucket for Config data storage with proper lifecycle policies
