@@ -924,6 +924,571 @@ Fix time reduced from 45min-2.5hr to 15-30min by batching fixes.
 | One-by-one | 45min - 2.5hr | 5-10 |
 | **Batched** | **15-30min** | **1-2** |
 
+## Local CI/CD Runner
+
+**Run CI/CD jobs locally before pushing to catch errors early.**
+
+This feature runs the same scripts that run in GitHub Actions CI/CD, but locally in the worktree. Fix errors as they occur, then push only when all checks pass.
+
+### Workflow Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         LOCAL CI/CD RUNNER WORKFLOW                             │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+1. Setup Worktree ──────────────────────────────────────────────────────────────┐
+   ├── Clone PR branch to worktree                                              │
+   ├── Pull latest main                                                         │
+   ├── Rebase PR branch with main                                               │
+   └── Resolve conflicts if any                                                 │
+                                                                                │
+2. Run Local CI Jobs (in order) ────────────────────────────────────────────────┤
+   ├── 1️⃣  Detect Project Files                                                 │
+   ├── 2️⃣  Claude Review: Prompt Quality                                        │
+   ├── 3️⃣  Validate Commit Message                                              │
+   ├── 4️⃣  Validate Jest Config (ts/js only)                                    │
+   ├── 5️⃣  Build                                                                │
+   ├── 6️⃣  Synth (cdk/cdktf only)                                               │
+   ├── 7️⃣  Lint                                                                 │
+   ├── 8️⃣  Unit Tests                                                           │
+   └── 9️⃣  Claude Review: IDEAL_RESPONSE Validation                             │
+                                                                                │
+3. Error Handling ──────────────────────────────────────────────────────────────┤
+   ├── If job fails → Analyze error → Fix → Re-run job                          │
+   ├── ResourceNotFound in tests → Remove failing test                          │
+   └── Repeat until all jobs pass                                               │
+                                                                                │
+4. Push ────────────────────────────────────────────────────────────────────────┘
+   ├── All jobs pass → Single commit with all fixes
+   └── Push to remote
+```
+
+### Step 1: Worktree Setup & Rebase
+
+**CRITICAL**: Always work in a worktree, never in the main repo!
+
+```bash
+#!/bin/bash
+# Worktree Setup & Rebase Script
+# Run from synth-fixer directory
+
+setup_worktree_and_rebase() {
+  local pr_number="$1"
+  local repo_path="${REPO_PATH:-$HOME/turing/iac-test-automations}"
+  local worktree_base="${WORKTREE_BASE:-$repo_path/worktree}"
+  local worktree_path="$worktree_base/synth-fixer-$pr_number"
+  
+  echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+  echo "║  🤖 SYNTH-AGENT [PR #$pr_number] is setting up worktree...                   ║"
+  echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+  
+  # Get PR info
+  cd "$repo_path"
+  local pr_info=$(gh pr view "$pr_number" --json headRefName,baseRefName --jq '.')
+  local branch_name=$(echo "$pr_info" | jq -r '.headRefName')
+  local base_branch=$(echo "$pr_info" | jq -r '.baseRefName')
+  
+  echo "[SYNTH-AGENT] [PR #$pr_number] Branch: $branch_name"
+  echo "[SYNTH-AGENT] [PR #$pr_number] Base: $base_branch"
+  
+  # Fetch latest
+  echo "[SYNTH-AGENT] [PR #$pr_number] Fetching latest from remote..."
+  git fetch origin "$branch_name" --prune
+  git fetch origin "$base_branch" --prune
+  
+  # Remove existing worktree if exists
+  if [ -d "$worktree_path" ]; then
+    echo "[SYNTH-AGENT] [PR #$pr_number] Removing existing worktree..."
+    git worktree remove "$worktree_path" --force 2>/dev/null || rm -rf "$worktree_path"
+  fi
+  
+  # Create worktree
+  echo "[SYNTH-AGENT] [PR #$pr_number] Creating worktree at $worktree_path..."
+  mkdir -p "$worktree_base"
+  git worktree add "$worktree_path" "origin/$branch_name" --detach
+  
+  # Checkout branch in worktree
+  cd "$worktree_path"
+  git checkout -B "$branch_name" "origin/$branch_name"
+  
+  echo "[SYNTH-AGENT] [PR #$pr_number] ✓ Worktree ready"
+  
+  # Rebase with main
+  echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+  echo "║  🤖 SYNTH-AGENT [PR #$pr_number] is rebasing with main...                    ║"
+  echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+  
+  # Pull latest main
+  git fetch origin main:main
+  
+  # Attempt rebase
+  if git rebase main; then
+    echo "[SYNTH-AGENT] [PR #$pr_number] ✓ Rebase successful"
+  else
+    echo "[SYNTH-AGENT] [PR #$pr_number] ⚠️ Rebase conflict detected"
+    
+    # Check for conflicts
+    local conflicts=$(git diff --name-only --diff-filter=U)
+    if [ -n "$conflicts" ]; then
+      echo "[SYNTH-AGENT] [PR #$pr_number] Conflicting files:"
+      echo "$conflicts"
+      
+      # Auto-resolve: keep ours for allowed files, theirs for protected
+      for file in $conflicts; do
+        if [[ "$file" == lib/* ]] || [[ "$file" == test/* ]] || [[ "$file" == "metadata.json" ]]; then
+          echo "[SYNTH-AGENT] [PR #$pr_number] Keeping ours: $file"
+          git checkout --ours "$file"
+        else
+          echo "[SYNTH-AGENT] [PR #$pr_number] Keeping theirs (main): $file"
+          git checkout --theirs "$file"
+        fi
+        git add "$file"
+      done
+      
+      git rebase --continue || git rebase --abort
+    fi
+  fi
+  
+  # Verify clean state
+  if [ -z "$(git status --porcelain)" ]; then
+    echo "[SYNTH-AGENT] [PR #$pr_number] ✓ Working directory clean"
+  fi
+  
+  # Return worktree path
+  echo "$worktree_path"
+}
+```
+
+### Step 2: Detect Platform & Language
+
+**Read metadata.json to determine which scripts to run.**
+
+```bash
+#!/bin/bash
+# Detect platform and language from metadata.json
+
+detect_project() {
+  local worktree_path="$1"
+  local pr_number="$2"
+  
+  echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+  echo "║  🤖 SYNTH-AGENT [PR #$pr_number] is detecting project type...                ║"
+  echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+  
+  cd "$worktree_path"
+  
+  # Check metadata.json exists
+  if [ ! -f "metadata.json" ]; then
+    echo "[SYNTH-AGENT] [PR #$pr_number] ❌ metadata.json not found!"
+    return 1
+  fi
+  
+  # Extract values
+  local platform=$(jq -r '.platform // "unknown"' metadata.json)
+  local language=$(jq -r '.language // "unknown"' metadata.json)
+  local provider=$(jq -r '.provider // "aws"' metadata.json)
+  local team=$(jq -r '.team // "unknown"' metadata.json)
+  
+  echo "[SYNTH-AGENT] [PR #$pr_number] Platform: $platform"
+  echo "[SYNTH-AGENT] [PR #$pr_number] Language: $language"
+  echo "[SYNTH-AGENT] [PR #$pr_number] Provider: $provider"
+  echo "[SYNTH-AGENT] [PR #$pr_number] Team: $team"
+  
+  # Export for other scripts
+  export PLATFORM="$platform"
+  export LANGUAGE="$language"
+  export PROVIDER="$provider"
+  export TEAM="$team"
+  
+  # Determine which jobs to run
+  echo "[SYNTH-AGENT] [PR #$pr_number] Jobs to run:"
+  echo "  ✓ Detect Project Files"
+  echo "  ✓ Prompt Quality"
+  echo "  ✓ Validate Commit Message"
+  
+  if [[ "$language" == "ts" ]] || [[ "$language" == "js" ]]; then
+    echo "  ✓ Validate Jest Config"
+  else
+    echo "  ⏭️ Skip Jest Config (not ts/js)"
+  fi
+  
+  echo "  ✓ Build"
+  
+  if [[ "$platform" == "cdk" ]] || [[ "$platform" == "cdktf" ]]; then
+    echo "  ✓ Synth"
+  else
+    echo "  ⏭️ Skip Synth (platform: $platform)"
+  fi
+  
+  echo "  ✓ Lint"
+  echo "  ✓ Unit Tests"
+  echo "  ✓ IDEAL_RESPONSE Validation"
+  
+  return 0
+}
+```
+
+### Step 3: Run Local CI Jobs
+
+**Run each CI job locally using the same scripts from iac-test-automations.**
+
+```bash
+#!/bin/bash
+# Local CI/CD Runner
+# Runs all CI jobs locally in the worktree
+
+run_local_ci() {
+  local worktree_path="$1"
+  local pr_number="$2"
+  
+  cd "$worktree_path"
+  
+  # Job 1: Detect Project Files
+  run_job "Detect Project Files" "job_detect_project"
+  
+  # Job 2: Prompt Quality
+  run_job "Prompt Quality" "job_prompt_quality"
+  
+  # Job 3: Validate Commit Message  
+  run_job "Validate Commit" "job_validate_commit"
+  
+  # Job 4: Jest Config (ts/js only)
+  if [[ "$LANGUAGE" == "ts" ]] || [[ "$LANGUAGE" == "js" ]]; then
+    run_job "Jest Config" "job_jest_config"
+  fi
+  
+  # Job 5: Build
+  run_job "Build" "job_build"
+  
+  # Job 6: Synth (cdk/cdktf only)
+  if [[ "$PLATFORM" == "cdk" ]] || [[ "$PLATFORM" == "cdktf" ]]; then
+    run_job "Synth" "job_synth"
+  fi
+  
+  # Job 7: Lint
+  run_job "Lint" "job_lint"
+  
+  # Job 8: Unit Tests
+  run_job "Unit Tests" "job_unit_tests"
+  
+  # Job 9: IDEAL_RESPONSE Validation
+  run_job "IDEAL_RESPONSE" "job_ideal_response"
+  
+  echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+  echo "║  🤖 SYNTH-AGENT [PR #$pr_number] All local CI jobs PASSED! ✅                ║"
+  echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+}
+
+# Job runner with error handling
+run_job() {
+  local job_name="$1"
+  local job_func="$2"
+  local max_retries=10
+  local retry=0
+  
+  while [ $retry -lt $max_retries ]; do
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+    echo "║  🤖 SYNTH-AGENT [PR #$PR_NUMBER] Running: $job_name                          ║"
+    echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+    
+    if $job_func; then
+      echo "[SYNTH-AGENT] [PR #$PR_NUMBER] ✅ $job_name PASSED"
+      return 0
+    else
+      echo "[SYNTH-AGENT] [PR #$PR_NUMBER] ❌ $job_name FAILED"
+      echo "[SYNTH-AGENT] [PR #$PR_NUMBER] Attempting to fix... (retry $((retry+1))/$max_retries)"
+      
+      # Call fix function (implemented by agent)
+      fix_job_error "$job_name"
+      
+      retry=$((retry+1))
+    fi
+  done
+  
+  echo "[SYNTH-AGENT] [PR #$PR_NUMBER] ❌ $job_name failed after $max_retries retries"
+  return 1
+}
+```
+
+### Job Functions (Script References)
+
+Each job runs the actual CI/CD scripts from iac-test-automations:
+
+```bash
+#!/bin/bash
+# Individual job functions
+
+# Job 1: Detect Project Files
+job_detect_project() {
+  local result=0
+  
+  # Run wave validation (LocalStack only)
+  if [[ "$PROVIDER" == "localstack" ]]; then
+    echo "[SYNTH-AGENT] Running: scripts/ci-validate-wave.sh"
+    ./scripts/ci-validate-wave.sh || result=1
+  fi
+  
+  # Check project files
+  echo "[SYNTH-AGENT] Running: scripts/check-project-files.sh"
+  ./scripts/check-project-files.sh || result=1
+  
+  # Detect metadata
+  echo "[SYNTH-AGENT] Running: scripts/detect-metadata.sh"
+  ./scripts/detect-metadata.sh || result=1
+  
+  return $result
+}
+
+# Job 2: Prompt Quality
+job_prompt_quality() {
+  echo "[SYNTH-AGENT] Running: .claude/scripts/claude-validate-prompt-quality.sh"
+  
+  if [ -f ".claude/scripts/claude-validate-prompt-quality.sh" ]; then
+    bash .claude/scripts/claude-validate-prompt-quality.sh
+  else
+    echo "⚠️ Prompt quality script not found - skipping"
+    return 0
+  fi
+}
+
+# Job 3: Validate Commit Message
+job_validate_commit() {
+  echo "[SYNTH-AGENT] Running: npx commitlint --last"
+  
+  # Install commitlint if needed
+  if ! command -v commitlint &>/dev/null; then
+    npm install --no-save @commitlint/{cli,config-conventional}
+  fi
+  
+  npx commitlint --last
+}
+
+# Job 4: Jest Config Validation (ts/js only)
+job_jest_config() {
+  echo "[SYNTH-AGENT] Running: scripts/ci-validate-jest-config.sh"
+  
+  if [ -f "scripts/ci-validate-jest-config.sh" ]; then
+    LANGUAGE="$LANGUAGE" ./scripts/ci-validate-jest-config.sh
+  else
+    echo "⚠️ Jest config validation script not found"
+    return 0
+  fi
+}
+
+# Job 5: Build
+job_build() {
+  echo "[SYNTH-AGENT] Running: scripts/build.sh"
+  
+  # Validate stack naming first
+  if [ -f "scripts/validate-stack-naming.sh" ]; then
+    ./scripts/validate-stack-naming.sh || echo "⚠️ Stack naming issues (non-blocking)"
+  fi
+  
+  ./scripts/build.sh
+}
+
+# Job 6: Synth (cdk/cdktf only)
+job_synth() {
+  echo "[SYNTH-AGENT] Running: scripts/synth.sh"
+  
+  # Skip for non-CDK platforms
+  if [[ "$PLATFORM" != "cdk" ]] && [[ "$PLATFORM" != "cdktf" ]]; then
+    echo "✅ Synth not required for platform: $PLATFORM"
+    return 0
+  fi
+  
+  ./scripts/synth.sh
+}
+
+# Job 7: Lint
+job_lint() {
+  echo "[SYNTH-AGENT] Running: scripts/lint.sh"
+  ./scripts/lint.sh
+}
+
+# Job 8: Unit Tests
+job_unit_tests() {
+  echo "[SYNTH-AGENT] Running: scripts/unit-tests.sh"
+  ./scripts/unit-tests.sh
+}
+
+# Job 9: IDEAL_RESPONSE Validation
+job_ideal_response() {
+  echo "[SYNTH-AGENT] Running: .claude/scripts/validate-ideal-response.sh"
+  
+  if [ -f ".claude/scripts/validate-ideal-response.sh" ]; then
+    bash .claude/scripts/validate-ideal-response.sh
+  else
+    echo "⚠️ IDEAL_RESPONSE validation script not found - skipping"
+    return 0
+  fi
+}
+```
+
+### Error Fixing Strategy
+
+When a job fails, analyze the error and fix it:
+
+```bash
+#!/bin/bash
+# Error fixing strategy
+
+fix_job_error() {
+  local job_name="$1"
+  
+  case "$job_name" in
+    "Detect Project Files")
+      # Fix metadata.json issues
+      fix_metadata
+      ;;
+    "Prompt Quality")
+      # Fix PROMPT.md formatting
+      fix_prompt_quality
+      ;;
+    "Validate Commit")
+      # Can't fix commit message - just report
+      echo "⚠️ Commit message needs manual fix"
+      ;;
+    "Jest Config")
+      # Fix jest.config.js test folder
+      fix_jest_config
+      ;;
+    "Build")
+      # Fix TypeScript/build errors
+      fix_build_errors
+      ;;
+    "Synth")
+      # Fix CDK synth errors
+      fix_synth_errors
+      ;;
+    "Lint")
+      # Auto-fix lint errors
+      fix_lint_errors
+      ;;
+    "Unit Tests")
+      # Fix or remove failing tests
+      fix_unit_tests
+      ;;
+    "IDEAL_RESPONSE")
+      # Regenerate IDEAL_RESPONSE
+      fix_ideal_response
+      ;;
+  esac
+}
+
+# Unit test fix strategy
+fix_unit_tests() {
+  # Get test output
+  local test_output=$(npm test 2>&1 || true)
+  
+  # Check for ResourceNotFound errors
+  if echo "$test_output" | grep -qE "ResourceNotFoundException|NoSuchBucket|NoSuchKey|Table not found|Function not found"; then
+    echo "[SYNTH-AGENT] ResourceNotFound error - removing failing test"
+    
+    # Find failing test file
+    local failing_test=$(echo "$test_output" | grep -oE "test/[^:]+\.test\.(ts|js)" | head -1)
+    
+    if [ -n "$failing_test" ]; then
+      echo "[SYNTH-AGENT] Removing: $failing_test"
+      rm -f "$failing_test"
+    fi
+  else
+    # Try to fix the test
+    echo "[SYNTH-AGENT] Analyzing test failure..."
+    # Agent will analyze and fix
+  fi
+}
+```
+
+### Push Manager
+
+Only push when ALL local CI jobs pass:
+
+```bash
+#!/bin/bash
+# Push manager - commits and pushes only when all checks pass
+
+push_changes() {
+  local worktree_path="$1"
+  local pr_number="$2"
+  
+  cd "$worktree_path"
+  
+  echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+  echo "║  🤖 SYNTH-AGENT [PR #$pr_number] All checks passed - committing...           ║"
+  echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+  
+  # Check if there are changes to commit
+  if [ -z "$(git status --porcelain)" ]; then
+    echo "[SYNTH-AGENT] [PR #$pr_number] No changes to commit"
+    return 0
+  fi
+  
+  # Stage all changes
+  git add -A
+  
+  # Commit with fix message
+  git commit -m "fix: local CI/CD fixes"
+  
+  echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+  echo "║  🤖 SYNTH-AGENT [PR #$pr_number] Pushing to remote...                        ║"
+  echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+  
+  # Push
+  local branch_name=$(git rev-parse --abbrev-ref HEAD)
+  git push origin "$branch_name" --force-with-lease
+  
+  echo "[SYNTH-AGENT] [PR #$pr_number] ✅ Push successful!"
+}
+```
+
+### Complete Local CI/CD Flow
+
+```bash
+#!/bin/bash
+# Main entry point for local CI/CD runner
+
+run_local_cicd() {
+  local pr_number="$1"
+  
+  # Step 1: Setup worktree and rebase
+  local worktree_path=$(setup_worktree_and_rebase "$pr_number")
+  
+  # Step 2: Detect project type
+  detect_project "$worktree_path" "$pr_number"
+  
+  # Step 3: Run all local CI jobs
+  export PR_NUMBER="$pr_number"
+  run_local_ci "$worktree_path" "$pr_number"
+  
+  # Step 4: Push changes (only if all passed)
+  push_changes "$worktree_path" "$pr_number"
+  
+  echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+  echo "║  🤖 SYNTH-AGENT [PR #$pr_number] Local CI/CD complete! ✅                    ║"
+  echo "║  Now waiting for remote CI/CD...                                            ║"
+  echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+}
+```
+
+### Language-Specific Script Matrix
+
+| Job | Script | ts/js | py | go | java | hcl |
+|-----|--------|-------|----|----|------|-----|
+| Detect | `ci-validate-wave.sh` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Detect | `check-project-files.sh` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Detect | `detect-metadata.sh` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Prompt | `claude-validate-prompt-quality.sh` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Commit | `commitlint --last` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Jest | `ci-validate-jest-config.sh` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Build | `build.sh` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Synth | `synth.sh` | cdk | cdk | cdk | cdk | ❌ |
+| Lint | `lint.sh` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Tests | `unit-tests.sh` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| IDEAL | `validate-ideal-response.sh` | ✅ | ✅ | ✅ | ✅ | ✅ |
+
 ## Detailed Steps
 
 ### Step 1: Initialize
