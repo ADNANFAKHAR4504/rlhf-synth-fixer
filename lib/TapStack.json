@@ -27,11 +27,6 @@
             "Type": "String",
             "Default": "Engineering",
             "Description": "Cost center for billing allocation"
-        },
-        "LatestAmiId": {
-            "Type": "String",
-            "Default": "ami-0ff8a91507f77f867",
-            "Description": "AMI ID for EC2 instances (Amazon Linux 2 for LocalStack compatibility)"
         }
     },
     "Mappings": {
