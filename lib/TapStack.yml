@@ -29,8 +29,8 @@ Parameters:
 
   CreateVpcEndpoints:
     Type: String
-    Default: 'true'
-    Description: Create VPC endpoints for ECR, S3, CloudWatch (required for private subnet connectivity)
+    Default: 'false'
+    Description: Create VPC endpoints for ECR, S3, CloudWatch (required for private subnet connectivity). Disabled by default for LocalStack compatibility.
     AllowedValues:
       - 'true'
       - 'false'
