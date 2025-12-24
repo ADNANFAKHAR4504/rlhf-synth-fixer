@@ -21,5 +21,6 @@
     "SubnetGroups",
     "ParameterGroups",
     "CloudWatch"
-  ]
+  ],
+  "wave": "P1"
 }
