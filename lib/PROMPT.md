@@ -1,72 +1,58 @@
-As an expert in AWS CloudFormation and security architecture, your task is to generate a secure and compliant infrastructure definition for a financial services application using AWS CloudFormation in **YAML format**.
+Need to build a CloudFormation template for a financial services app. Using YAML format.
 
-###  Objective:
-Create a single, well-commented CloudFormation template (`infrastructure.yaml`) to define the **core infrastructure** for a **financial services application**. The stack must adhere to **financial-grade security**, **internal compliance rules**, and **AWS best practices**. It should be deployable in a testing AWS account and pass tools like **cfn-lint** or **cfn-nag**.
+The infrastructure needs to be secure and compliant - we're dealing with financial data so security is critical. Should be deployable to our test AWS account and pass cfn-lint and cfn-nag scans.
 
----
+Here's what needs to be included:
 
-### ️ Core Components and Constraints:
+## Networking Setup
 
-#### 1. **Networking (VPC & Subnets)**
-- Set up VPC with **2 public and 2 private subnets** across AZs.
-- Attach Internet Gateways only if needed (e.g., for front-end services).
-- Create NAT Gateways, route tables, and enable **VPC Flow Logs**.
+VPC with 2 public and 2 private subnets across different availability zones. Add Internet Gateways where needed for front-end services. Set up NAT Gateways for private subnet internet access and configure route tables. Enable VPC Flow Logs so we can monitor traffic patterns.
 
-#### 2. **IAM & Access Control**
-- Define IAM roles and policies with the **least privilege** principle.
-- Use inline or managed role policies as needed.
-- No hard-coded secrets in Lambda; use **AWS Secrets Manager**.
+## IAM and Access Control
 
-#### 3. **Storage (S3, RDS, DynamoDB, EBS)**
-- **S3**:
-  - Default encryption (SSE-KMS)
-  - Block all public access
-  - Enforce access via **CloudFront OAI**
-- **RDS** (PostgreSQL):
-  - Encrypted at rest using **KMS**
-  - Not publicly accessible
-- **DynamoDB**:
-  - Multi-AZ enabled
-  - Encrypted at rest
-- **EBS**:
-  - Encrypt all volumes by default
+Create IAM roles and policies following least privilege - only grant what's actually needed. For Lambda functions, don't hardcode any secrets. Use AWS Secrets Manager to handle credentials and sensitive config.
 
-#### 4. **Security Groups & Firewall Rules**
-- No open ports to the public
-- Specifically **close ports 22 (SSH)** and **3389 (RDP)**
+## Storage Components
 
-#### 5. **Lambda & Serverless**
-- Define Lambda functions using CloudFormation
-- Use environment variables for secrets (securely managed)
-- Apply basic security checks in template
+Need S3 buckets with KMS encryption turned on by default. Block all public access at the bucket level. CloudFront should be the only way to access S3 content, using Origin Access Identity.
 
-#### 6. **DNS, CDN, and Messaging**
-- **Route 53**: Use private hosted zones for internal DNS
-- **CloudFront**: Access to S3 only via **Origin Access Identity (OAI)**
-- **SNS Topics**: Attach policies that deny public access
+RDS PostgreSQL instance that's encrypted at rest with KMS. Keep it private - no public accessibility.
 
-#### 7. **Monitoring & Compliance**
-- Enable **AWS CloudTrail** in **all regions**
-- Enable **AWS Config** with compliance rules
-- Deploy **AWS WAF** for protection against web threats
+DynamoDB tables with multi-AZ enabled and encryption at rest.
 
----
+All EBS volumes should be encrypted by default.
 
-### ️ Tagging Requirements:
-- All resources must include:
-  - `Environment`: One of `dev`, `staging`, or `prod`
-  - `Project`
-  - `Owner`
+## Security Groups
 
----
+No open ports to the public internet. Make sure SSH (port 22) and RDP (port 3389) are specifically closed. Security groups should only allow traffic between our own resources where needed.
 
-###  Output Requirements:
-- A **single YAML file**: `infrastructure.yaml`
-- Modular sections (Networking, IAM, Storage, etc.)
-- **Inline comments** explaining major resource blocks
-- Must pass **security and syntax linting**
-- Ready for **testing environment deployment**
+## Lambda Functions
 
----
+Define the Lambda functions in CloudFormation. Use environment variables for configuration but keep secrets in Secrets Manager. The Lambda roles need permissions to access S3, DynamoDB, and read from Secrets Manager.
 
-Please generate the CloudFormation template accordingly.
+## DNS and CDN
+
+Route 53 private hosted zones for internal DNS resolution between services.
+
+CloudFront distribution in front of S3 - configure it to use Origin Access Identity so S3 isn't directly accessible.
+
+SNS topics for notifications with policies that deny public access.
+
+## Monitoring and Compliance
+
+CloudTrail enabled across all regions to track API calls.
+
+AWS Config with compliance rules to check resource configurations.
+
+WAF rules to protect against common web threats like SQL injection and XSS.
+
+## Tagging
+
+Every resource needs these tags:
+- Environment: dev, staging, or prod
+- Project: name of the project
+- Owner: team or person responsible
+
+## Deliverable
+
+Single YAML file called infrastructure.yaml. Organize it into logical sections (Networking, IAM, Storage, Lambda, etc). Add inline comments explaining what each major resource block does and why. Should be production-ready for our testing environment.
