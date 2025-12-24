@@ -1,15 +1,29 @@
-We are NovaCart, a fast-growing e-commerce startup where our customers' trust is our most valuable asset. So security is not a feature; it is the foundation of our platform. We need you, as our lead Infrastructure Security Engineer, to build the cornerstone of this trust.
+We're NovaCart, an e-commerce startup, and we need you to build our secure infrastructure foundation in CloudFormation YAML.
 
-Your mission is to create our "Secure Foundation" CloudFormation template secure_infrastructure.yaml. Our customers are counting on us to:
+Here's how our services need to work together:
 
-Safeguard their data: This means every S3 bucket must have versioning to prevent accidental data loss, and every RDS database must be encrypted at rest using KMS, making their information unreadable to anyone but us.
+### Customer Request Flow
 
-Ensure 24/7 availability: Our application must be resilient. You must launch our EC2 instances within a robust VPC that spans multiple availability zones, so a failure in one data center doesn't take our site offline for our customers.
+When customers hit our site, CloudFront serves static content from S3 while AWS WAF inspects every request for malicious patterns before allowing traffic through. The WAF protects CloudFront and blocks SQL injection, XSS attacks, and suspicious traffic.
 
-Threat Protection: The bad actors are constantly probing for weaknesses. We need an AWS WAF standing guard in front of our CloudFront distributions, actively blocking common web exploits before they can reach our applications.
+For dynamic content, API Gateway receives requests and validates them against strict JSON schemas before invoking Lambda functions. These Lambda functions connect to our RDS database in private subnets to fetch order data.
 
-Maintain a flawless audit trail: For our own accountability, comprehensive logging with CloudTrail is non-negotiable. We need to know who did what, and when, across our entire environment.
+### Application Architecture
 
-Operate on a "need-to-know" basis: Every IAM Role must have a strict permission boundary and follow the principle of least privilege. Our internal systems must be locked down, with security groups that only open the absolute minimum ports required (like SSH and HTTP) and API Gateway endpoints that rigorously validate all incoming requests.
+EC2 instances run in private subnets across multiple availability zones for high availability. They connect to RDS for database queries and read configuration files from S3. The instances use IAM roles with permission boundaries to authenticate to AWS services - they fetch database passwords from Secrets Manager and decrypt S3 objects using KMS.
 
-Build us a template that our developers can extend with confidence and our customers can trust implicitly.
+### Data Protection Layer
+
+A single KMS key encrypts everything - S3 bucket objects, RDS data at rest, CloudWatch log streams, and Secrets Manager values. When EC2 needs to read from S3, it calls KMS to decrypt the data. When CloudTrail writes audit logs to S3, it uses the same KMS key to encrypt them.
+
+### Audit and Monitoring
+
+CloudTrail tracks every API call across our infrastructure and sends logs to a dedicated S3 bucket with versioning enabled. At the same time, it streams events to CloudWatch Logs for real-time monitoring. Lambda sends failed invocations to an SQS dead letter queue for troubleshooting.
+
+CloudWatch monitors CPU metrics from EC2 and RDS, triggering alarms when thresholds breach.
+
+### Security Boundaries
+
+Security groups lock down network access - EC2 instances only accept SSH from our office IP and HTTP from within the VPC. The database security group only allows MySQL traffic from the VPC CIDR range, preventing external access. API Gateway enforces request validation, rejecting malformed payloads before they reach Lambda.
+
+Build this as a complete CloudFormation template with all resources connected properly.
