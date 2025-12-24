@@ -3,11 +3,15 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "291275",
+  "po_id": "LS-291275",
   "team": "synth-2",
   "startedAt": "2025-08-12T17:44:31.971Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
+  "migrated_from": {
+    "po_id": "291275",
+    "pr": "Pr1078"
+  },
   "subject_labels": [
     "Cloud Environment Setup"
   ],
