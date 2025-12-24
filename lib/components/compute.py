@@ -4,6 +4,7 @@ VPC, EC2, LB Component - Creates isolated networking infrastructure
 
 import os
 import json
+import re
 import ipaddress
 import pulumi
 import pulumi_aws as aws
@@ -248,7 +249,7 @@ class ComputeComponent(pulumi.ComponentResource):
                 parent=self),
         )
 
-        # Create instsances
+        # Create instances
         self.ec2_instances = []
 
         # Check if running in LocalStack by reading metadata.json
@@ -266,30 +267,32 @@ class ComputeComponent(pulumi.ComponentResource):
             # If we can't read metadata, check environment variable as fallback
             is_localstack = os.getenv('PROVIDER', '').lower() == 'localstack'
 
-        # LocalStack-compatible: Use static AMI ID instead of dynamic lookup
-        # In production AWS, this would use aws.ec2.get_ami() to find the latest Ubuntu AMI
-        # For LocalStack testing, we use a LocalStack-specific AMI ID
+        # Skip EC2 instance creation in LocalStack to avoid deployment hangs
+        # LocalStack's EC2 emulation doesn't fully support instance readiness checks
+        # which causes Pulumi deployments to hang indefinitely
         if is_localstack:
-            ubuntu_ami_id = os.getenv("LOCALSTACK_EC2_AMI_ID", "ami-df5de72bdb3b")
+            pulumi.log.info(
+                "Skipping EC2 instance creation in LocalStack environment. "
+                "LocalStack EC2 readiness checks are not fully supported and cause deployment hangs."
+            )
         else:
             # AWS AMI ID for Ubuntu (us-east-1)
             ubuntu_ami_id = "ami-0c55b159cbfafe1f0"
 
-        # Loop through 2 public subnets (max) and create EC2 instances
-        for i, subnet in enumerate(self.public_subnets):
-            instance = aws.ec2.Instance(
-                f"{name}-ec2-{i + 1}",
-                # Using static AMI ID for LocalStack/AWS compatibility
-                ami=ubuntu_ami_id,
-                instance_type="t2.micro",  # Use t2.micro for LocalStack compatibility
-                subnet_id=subnet.id,
-                associate_public_ip_address=True,
-                vpc_security_group_ids=[self.security_group.id],
-                tags={**tags, "Name": f"{environment}-ec2-{i + 1}"},
-                iam_instance_profile=instance_profile,
-                opts=pulumi.ResourceOptions(parent=self),
-            )
-            self.ec2_instances.append(instance)
+            # Loop through 2 public subnets (max) and create EC2 instances
+            for i, subnet in enumerate(self.public_subnets):
+                instance = aws.ec2.Instance(
+                    f"{name}-ec2-{i + 1}",
+                    ami=ubuntu_ami_id,
+                    instance_type="t2.micro",
+                    subnet_id=subnet.id,
+                    associate_public_ip_address=True,
+                    vpc_security_group_ids=[self.security_group.id],
+                    tags={**tags, "Name": f"{environment}-ec2-{i + 1}"},
+                    iam_instance_profile=instance_profile,
+                    opts=pulumi.ResourceOptions(parent=self),
+                )
+                self.ec2_instances.append(instance)
 
         self.alb = aws.lb.LoadBalancer(
             f"{name}-alb",

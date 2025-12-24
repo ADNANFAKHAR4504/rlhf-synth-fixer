@@ -530,14 +530,15 @@ class TestComponents(unittest.TestCase):
             instance_profile="test-profile",
         )
 
-        self.assertTrue(len(component.ec2_instances) > 0)
-        self.assertEqual(self.mock_aws.ec2.Instance.call_count, len(component.public_subnets))
+        # In LocalStack, EC2 instances are skipped to avoid deployment hangs
+        self.assertEqual(len(component.ec2_instances), 0)
+        self.assertEqual(self.mock_aws.ec2.Instance.call_count, 0)
 
     @patch.dict(os.environ, {"PROVIDER": ""})
     @patch('builtins.open', new_callable=mock_open, read_data='{"provider": "localstack"}')
     @patch('os.path.exists')
-    def test_compute_component_localstack_creates_instances(self, mock_exists, mock_file):
-        """Test compute component creates EC2 instances when running in LocalStack"""
+    def test_compute_component_localstack_skips_instances(self, mock_exists, mock_file):
+        """Test compute component skips EC2 instances when running in LocalStack"""
         from lib.components.compute import ComputeComponent
 
         mock_exists.return_value = True
@@ -592,9 +593,11 @@ class TestComponents(unittest.TestCase):
         self.assertIsNotNone(component.vpc)
         self.assertEqual(component.vpc.id, "vpc-123")
         self.assertTrue(len(component.public_subnets) > 0)
-        self.assertTrue(len(component.ec2_instances) > 0)
+        # EC2 instances should be skipped in LocalStack to avoid deployment hangs
+        self.assertEqual(len(component.ec2_instances), 0)
         self.assertIsNotNone(component.alb)
-        self.assertEqual(self.mock_aws.ec2.Instance.call_count, len(component.public_subnets))
+        # No EC2 instances should be created in LocalStack
+        self.assertEqual(self.mock_aws.ec2.Instance.call_count, 0)
 
 
 if __name__ == "__main__":
