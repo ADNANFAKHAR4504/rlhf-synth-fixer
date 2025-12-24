@@ -384,4 +384,15 @@ if [ "$FINAL_FAILED_COUNT" -gt 0 ]; then
     echo -e "${YELLOW}⚠️  CloudFormation deployment completed with $FINAL_FAILED_COUNT failed resources${NC}"
 else
     echo -e "${GREEN}🎉 CloudFormation deployment to LocalStack completed successfully!${NC}"
+
+# Apply LocalStack-specific fixes
+echo -e "${CYAN}🔧 Applying LocalStack post-deployment fixes...${NC}"
+if [ -f "../scripts/localstack-cloudformation-post-deploy-fix.sh" ]; then
+    cd ..
+    bash scripts/localstack-cloudformation-post-deploy-fix.sh
+elif [ -f "scripts/localstack-cloudformation-post-deploy-fix.sh" ]; then
+    bash scripts/localstack-cloudformation-post-deploy-fix.sh
+else
+    echo -e "${YELLOW}⚠️  Post-deploy fix script not found, skipping fixes${NC}"
+fi
 fi

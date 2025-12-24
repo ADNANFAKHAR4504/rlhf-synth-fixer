@@ -807,6 +807,15 @@ except Exception as e:
     fi
 
     save_outputs "$output_json"
+
+    # Apply LocalStack-specific fixes
+    print_status $CYAN "🔧 Applying LocalStack post-deployment fixes..."
+    if [ -f "$PROJECT_ROOT/scripts/localstack-cloudformation-post-deploy-fix.sh" ]; then
+        cd "$PROJECT_ROOT"
+        bash scripts/localstack-cloudformation-post-deploy-fix.sh
+    else
+        print_status $YELLOW "⚠️  Post-deploy fix script not found, skipping fixes"
+    fi
 }
 
 # Terraform deployment
