@@ -998,7 +998,7 @@
         "DBInstanceIdentifier": {"Fn::Sub": "postgres-${EnvironmentSuffix}"},
         "DBName": "appdb",
         "Engine": "postgres",
-        "EngineVersion": "16",
+        "EngineVersion": "16.3",
         "DBInstanceClass": {"Ref": "DBInstanceClass"},
         "AllocatedStorage": {
           "Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentName"}, "DBAllocatedStorage"]
@@ -1228,10 +1228,25 @@
   },
   
   "Outputs": {
-    "VPCId": {
+    "VPC": {
       "Description": "VPC ID for the infrastructure",
       "Value": {"Ref": "VPC"},
-      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}}
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-VPC"}}
+    },
+    "SecurityGroup": {
+      "Description": "ALB Security Group ID",
+      "Value": {"Ref": "ALBSecurityGroup"},
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-SecurityGroup"}}
+    },
+    "InternetGateway": {
+      "Description": "Internet Gateway ID",
+      "Value": {"Ref": "InternetGateway"},
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-InternetGateway"}}
+    },
+    "NatGateway": {
+      "Description": "NAT Gateway ID",
+      "Value": {"Ref": "NATGateway"},
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-NatGateway"}}
     },
     "ALBDNSName": {
       "Description": "Application Load Balancer DNS name",
