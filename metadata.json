@@ -6,11 +6,26 @@
   "po_id": "LS-291466",
   "team": "synth-2",
   "startedAt": "2025-08-17T19:45:19.468Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Security Configuration as Code"
   ],
-  "aws_services": [],
-  "wave": "P1"
+  "aws_services": [
+    "kms",
+    "ec2",
+    "s3",
+    "cloudtrail",
+    "cloudwatch",
+    "iam",
+    "config",
+    "securityhub",
+    "ssm",
+    "lambda"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "LS-291466",
+    "pr": "Pr1506"
+  }
 }

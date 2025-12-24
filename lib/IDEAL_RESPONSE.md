@@ -53,7 +53,7 @@ Parameters:
     NoEcho: true
     Default: "Tempp@55w0rd!"
 
-  # Make “already-enabled” services optional
+  # Make "already-enabled" services optional
   EnableSecurityHub:
     Type: String
     AllowedValues: ["true","false"]
@@ -62,6 +62,11 @@ Parameters:
     Type: String
     AllowedValues: ["true","false"]
     Default: "false"
+  EnableNatGateway:
+    Type: String
+    AllowedValues: ["true","false"]
+    Default: "false"
+    Description: Enable NAT Gateway for private subnet outbound access
 
   # Avoid SSM name collisions (override if it already exists in the account)
   SsmParamName:
@@ -75,6 +80,7 @@ Parameters:
 Conditions:
   CreateSecurityHub: !Equals [!Ref EnableSecurityHub, "true"]
   CreateAWSConfig:   !Equals [!Ref EnableAWSConfig,   "true"]
+  CreateNatGateway:  !Equals [!Ref EnableNatGateway,  "true"]
   HasCustomSsmName:  !Not [ !Equals [ !Ref SsmParamName, "" ] ]
 
 Resources:
@@ -208,12 +214,14 @@ Resources:
     Properties: { SubnetId: !Ref PublicSubnetB, RouteTableId: !Ref PublicRouteTable }
 
   NatEip:
+    Condition: CreateNatGateway
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
       Tags: [ { Key: Name, Value: !Sub "eip-nat-${ProjectName}-${EnvironmentSuffix}" } ]
 
   NatGateway:
+    Condition: CreateNatGateway
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NatEip.AllocationId
@@ -229,10 +237,12 @@ Resources:
     Properties: { VpcId: !Ref VPC, Tags: [ { Key: Name, Value: !Sub "rt-private-b-${ProjectName}-${EnvironmentSuffix}" } ] }
 
   PrivateRouteA:
+    Condition: CreateNatGateway
     Type: AWS::EC2::Route
     Properties: { RouteTableId: !Ref PrivateRouteTableA, DestinationCidrBlock: "0.0.0.0/0", NatGatewayId: !Ref NatGateway }
 
   PrivateRouteB:
+    Condition: CreateNatGateway
     Type: AWS::EC2::Route
     Properties: { RouteTableId: !Ref PrivateRouteTableB, DestinationCidrBlock: "0.0.0.0/0", NatGatewayId: !Ref NatGateway }
 

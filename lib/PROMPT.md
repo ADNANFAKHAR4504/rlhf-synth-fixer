@@ -1,18 +1,25 @@
-I need one CloudFormation template in YAML, nothing else. Please reply with a single fenced code block that contains the file lib/tapstack.yaml. No placeholders—use safe defaults—and aim for clean cfn-lint/CloudFormation validation.
+I need a CloudFormation YAML template for a secure web application infrastructure. Looking for a single template file at lib/tapstack.yaml with no placeholders - use safe defaults.
 
-I’m including the exact requirements block below. Don’t edit it; treat it as the source of truth.
+Here is what I need built:
 
-Environment: You are tasked with setting up a secure infrastructure for a web application using AWS CloudFormation. The environment requires a complex security configuration due to compliance requirements. Your tasks include: 1. Use AWS CloudFormation to define the security configuration; 2. Ensure all IAM roles have the least privilege necessary; 3. Enable logging for all AWS services used in the stack; 4. Create an S3 bucket with versioning and server-side encryption enabled; 5. Configure VPC with at least two public and two private subnets; 6. Ensure Security Groups allow only necessary inbound/outbound traffic; 7. Implement an AWS IAM Policy that restricts users from deleting CloudTrail logs; 8. Set up AWS Config to monitor changes in security settings; 9. Enable AWS Security Hub for the account to gather security insights; 10. Define a KMS key policy that grants access only to necessary services and roles; 11. Use CloudFormation Parameter Store to manage sensitive configuration values; 12. Include CloudWatch Alarms for monitoring unauthorized access attempts; 13. Ensure all Lambda functions have execution roles defined.\nExpected output: A YAML CloudFormation template implementing all of the above security configurations. The template should validate successfully with AWS CloudFormation, and all implemented features should positively affect the security posture of the environment. Include test cases to ensure compliance and the effectiveness of security settings. 
+VPC Setup: Create a VPC with two public subnets and two private subnets across availability zones. The public subnets connect to an Internet Gateway for external access. The private subnets route traffic through a NAT Gateway that sits in a public subnet.
 
-Constraints Items: Use AWS CloudFormation to define the security configuration. | Ensure all IAM roles have the least privilege necessary. | Enable logging for all AWS services used in the stack. | Create an S3 bucket with versioning and server-side encryption enabled. | Configure VPC with at least two public and two private subnets. | Ensure Security Groups allow only necessary inbound/outbound traffic. | Implement an AWS IAM Policy that restricts users from deleting CloudTrail logs. | Set up AWS Config to monitor changes in security settings. | Enable AWS Security Hub for the account to gather security insights. | Define a KMS key policy that grants access only to necessary services and roles. | Use CloudFormation Parameter Store to manage sensitive configuration values. | Include CloudWatch Alarms for monitoring unauthorized access attempts. | Ensure all Lambda functions have execution roles defined.
+Storage and Encryption: Create an S3 bucket with versioning enabled. The S3 bucket should be encrypted using a KMS key that I define in the same template. Add a bucket policy that enforces TLS connections.
 
-Proposed Statement: The infrastructure will be deployed in the us-west-2 region. All resources should follow the naming convention of <resource-type>-<project-name>-<environment>. Use AWS CloudFormation templates written in YAML format.
+Logging Pipeline: Set up CloudTrail to capture management and data events. CloudTrail writes logs to a dedicated S3 bucket and also sends events to a CloudWatch Logs group. Create an IAM role for CloudTrail with write access to the log group.
 
+Access Monitoring: Create a CloudWatch metric filter that scans the CloudTrail log group for unauthorized access attempts. Connect this filter to a CloudWatch Alarm that triggers when access denials are detected.
 
-A couple practical notes so the output is usable right away:
+VPC Flow Logs: Enable VPC Flow Logs that send traffic data to CloudWatch Logs for network monitoring.
 
-Put the usual top-level sections in the YAML: AWSTemplateFormatVersion, Description, Parameters, Conditions, Resources, and Outputs.
+Lambda Function: Include a sample Lambda function with an execution role. The Lambda role connects to SSM Parameter Store to retrieve configuration values. Create the Lambda log group explicitly.
 
-Keep IAM “least privilege,” avoid named IAM (no RoleName/UserName), and make the stack configurable via parameters like project/env, CIDRs, and toggles for Security Hub / AWS Config.
+Security Groups: Create a security group attached to the VPC that allows only HTTPS traffic on port 443 inbound and outbound.
 
-Please stick to one output: a single fenced YAML block that represents lib/tapstack.yaml.
+Optional Services: Make AWS Config and Security Hub deployable via parameter toggles since they may already be enabled in some accounts.
+
+IAM Requirements: Every IAM role should follow least privilege. Do not use named IAM resources like RoleName or UserName properties. The S3 bucket policy for CloudTrail logs should deny delete operations to prevent tampering.
+
+KMS Key Policy: The KMS key policy should grant the root account administrator access to manage the key and limit other principals to only the services that need encryption capabilities.
+
+The template should include Parameters for project name, environment, CIDRs, and service toggles. Include Conditions for the optional services. Output the VPC ID, subnet IDs, bucket names, and other key resource identifiers.
