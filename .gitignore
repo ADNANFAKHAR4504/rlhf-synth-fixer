@@ -8,10 +8,6 @@
 !/test/setup.js
 /lib/.terraform.lock.hcl
 
-# CloudFormation JSON artifacts (keep only YAML source)
-/lib/*.json
-lib/TapStack.json
-
 # Dependencies
 node_modules/
 
