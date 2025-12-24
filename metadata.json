@@ -4,11 +4,12 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "101912287",
-  "wave": "P0",
+  "wave": "P1",
   "team": "synth-1",
   "startedAt": "2025-12-24T10:00:43.371Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
+  "training_quality": 8,
   "subject_labels": [
     "Cloud Environment Setup"
   ],
