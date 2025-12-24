@@ -12,12 +12,9 @@ terraform {
     }
   }
 
-  backend "s3" {
-    bucket  = "iac-rlhf-tf-states"
-    key     = "global/291757/terraform.tfstate"
-    region  = "us-east-1"
-    encrypt = true
-  }
+  # Backend configured at runtime via -backend-config flags
+  # This allows for both AWS and LocalStack deployments
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources

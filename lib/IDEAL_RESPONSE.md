@@ -47,6 +47,8 @@ terraform {
     }
   }
 
+  # Backend configured at runtime via -backend-config flags
+  # This allows for both AWS and LocalStack deployments
   backend "s3" {}
 }
 
