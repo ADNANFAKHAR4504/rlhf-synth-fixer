@@ -35,10 +35,10 @@ let ec2Client: EC2Client;
 let region: string;
 
 function loadOutputs() {
-  const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-  
+  const p = path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json");
+
   if (!fs.existsSync(p)) {
-    throw new Error("Outputs file not found at cfn-outputs/all-outputs.json. Please run terraform apply first.");
+    throw new Error("Outputs file not found at cdk-outputs/flat-outputs.json. Please run terraform apply first.");
   }
   
   try {
@@ -61,7 +61,7 @@ function loadOutputs() {
     };
 
     if (missing.length) {
-      throw new Error(`Missing required outputs in cfn-outputs/all-outputs.json: ${missing.join(", ")}`);
+      throw new Error(`Missing required outputs in cdk-outputs/flat-outputs.json: ${missing.join(", ")}`);
     }
     return o;
   } catch (error) {
