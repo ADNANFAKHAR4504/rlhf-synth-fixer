@@ -1,0 +1,30 @@
+{
+  "po_id": "101912422",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T05:18:52Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "STS",
+    "ECS",
+    "RDS"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

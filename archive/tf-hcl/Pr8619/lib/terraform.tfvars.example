@@ -1,0 +1,37 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and customize values
+
+environment_suffix = "dev-12345"
+aws_region         = "us-east-1"
+
+# VPC Configuration
+vpc_cidr                = "10.0.0.0/16"
+availability_zones      = ["us-east-1a", "us-east-1b", "us-east-1c"]
+public_subnet_cidrs     = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+private_subnet_cidrs    = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+database_subnet_cidrs   = ["10.0.201.0/24", "10.0.202.0/24", "10.0.203.0/24"]
+
+# Database Configuration
+db_master_username = "admin"
+
+# ECS Configuration
+ecs_task_cpu       = 1024
+ecs_task_memory    = 2048
+ecs_desired_count  = 2
+container_image    = "your-ecr-repo/trading-app:latest"
+
+# ALB Configuration
+alb_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxx"
+
+# Route53 Configuration
+route53_zone_name           = "example.com"
+onpremises_endpoint         = "onprem.example.com"
+aws_weighted_routing_weight = 0  # Start with 0% to AWS
+
+# DMS Configuration
+dms_source_endpoint = "onprem-db.example.com"
+dms_source_db_name  = "trading_db"
+
+# Project Configuration
+project_name    = "trading-migration"
+migration_phase = "preparation"
