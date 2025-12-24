@@ -23,5 +23,12 @@
     "CloudWatch",
     "IAM",
     "KMS"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
 }
