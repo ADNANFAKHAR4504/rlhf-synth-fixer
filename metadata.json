@@ -6,7 +6,7 @@
   "po_id": "LS-274681",
   "team": "synth-2",
   "startedAt": "2025-07-27T05:50:29.853Z",
-  "subtask": "provisioning_infrastructure",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
     "General Infrastructure Tooling QA"
