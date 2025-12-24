@@ -96,7 +96,7 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
-    Default: 'true'
+    Default: 'false'
     Description: Enable Database Activity Streams (DAS). Set 'false' to skip custom resource.
 
   ActivityStreamMode:
