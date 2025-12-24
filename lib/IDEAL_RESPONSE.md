@@ -838,7 +838,7 @@ Here's a comprehensive CloudFormation template that meets all your requirements:
 - **WAF Protection**: AWS WAFv2 with managed rule sets for common attacks
 - **Database Security**: RDS in private subnet, not publicly accessible
 
-### 📊 **Monitoring & Logging**
+###  - STATS: **Monitoring & Logging**
 - **AWS Config**: Configuration recording and compliance rules
 - **CloudTrail**: Multi-region trail with log file validation
 - **CloudWatch**: Log groups for centralized logging
