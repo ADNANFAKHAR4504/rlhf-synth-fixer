@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291416",
+  "team": "synth-2",
+  "startedAt": "2025-08-04T09:08:02.763Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "DynamoDB",
+    "Lambda",
+    "ELB",
+    "IAM",
+    "CloudTrail",
+    "Config",
+    "Backup",
+    "SecretsManager",
+    "SQS"
+  ],
+  "wave": "P1"
+}
