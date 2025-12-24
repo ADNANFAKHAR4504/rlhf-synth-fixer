@@ -383,7 +383,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-db-${Environment}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.44'
       MasterUsername: admin
       MasterUserPassword: !Sub '{{resolve:ssm:${DBPasswordParameter}:1}}'
       AllocatedStorage: 20
