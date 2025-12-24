@@ -9,6 +9,25 @@ import fs from 'fs';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
+// LocalStack configuration
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+                     process.env.LOCALSTACK === 'true';
+const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+const region = process.env.AWS_REGION || 'us-east-1';
+
+// AWS SDK configuration for LocalStack
+const awsConfig = isLocalStack ? {
+  endpoint,
+  region,
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test'
+  }
+} : {
+  region
+};
+
 // Load outputs from CloudFormation deployment
 let outputs: any = {};
 try {
@@ -26,6 +45,19 @@ try {
     DynamoDBTableName: 'TapStackpr619-data-table',
     CloudWatchAlarmName: 'TapStackpr619-lambda-errors',
   };
+}
+
+// For LocalStack, construct the API Gateway URL from the REST API ID
+if (isLocalStack && outputs.ApiGatewayUrl) {
+  // Extract API ID from the URL if it's in AWS format
+  const apiIdMatch = outputs.ApiGatewayUrl.match(/https:\/\/([a-z0-9]+)\.execute-api/);
+  if (apiIdMatch) {
+    const apiId = apiIdMatch[1];
+    outputs.ApiGatewayUrl = `${endpoint}/restapis/${apiId}/${environmentSuffix}/_user_request_`;
+  } else {
+    // Fallback: use generic path if we can't extract API ID
+    outputs.ApiGatewayUrl = `${endpoint}/restapis/default/${environmentSuffix}/_user_request_`;
+  }
 }
 
 describe('Serverless Application Integration Tests', () => {
@@ -105,7 +137,7 @@ describe('Serverless Application Integration Tests', () => {
 
     beforeAll(() => {
       if (!skipCondition) {
-        dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
+        dynamoClient = new DynamoDBClient(awsConfig);
       }
     });
 
@@ -211,7 +243,7 @@ describe('Serverless Application Integration Tests', () => {
           },
         });
 
-        const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
+        const dynamoClient = new DynamoDBClient(awsConfig);
         const scanResult = await dynamoClient.send(scanCommand);
         expect(scanResult.Items?.[0]?.stage?.S).toBeDefined();
       }
@@ -296,7 +328,7 @@ describe('Serverless Application Integration Tests', () => {
         await new Promise(resolve => setTimeout(resolve, 3000));
 
         // 3. Verify data stored in DynamoDB
-        const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
+        const dynamoClient = new DynamoDBClient(awsConfig);
         const scanCommand = new ScanCommand({
           TableName: dynamoTableName,
           FilterExpression: 'id = :id',
