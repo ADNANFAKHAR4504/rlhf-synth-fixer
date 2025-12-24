@@ -1,0 +1,5 @@
+ignore_checks:
+  - E1001
+
+ignore_templates:
+  - flat-outputs.json
