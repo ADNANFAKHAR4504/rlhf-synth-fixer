@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291445",
+  "team": "synth-2",
+  "startedAt": "2025-08-15T07:11:03.975Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "Config",
+    "WAFv2"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291445",
+    "pr": "Pr1303"
+  }
+}
