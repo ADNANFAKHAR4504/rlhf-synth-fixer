@@ -50,6 +50,12 @@
       "Default": "true",
       "AllowedValues": ["true", "false"],
       "Description": "Enable EC2 instance (set to false for LocalStack)"
+    },
+    "UseLocalStack": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": ["true", "false"],
+      "Description": "Set to true when deploying to LocalStack (disables EC2 and RDS)"
     }
   },
   "Conditions": {
@@ -65,20 +71,50 @@
         }
       ]
     },
-    "CreateRDS": {
+    "IsLocalStack": {
       "Fn::Equals": [
         {
-          "Ref": "EnableRDS"
+          "Ref": "UseLocalStack"
         },
         "true"
       ]
     },
-    "CreateEC2": {
-      "Fn::Equals": [
+    "CreateRDS": {
+      "Fn::And": [
         {
-          "Ref": "EnableEC2"
+          "Fn::Equals": [
+            {
+              "Ref": "EnableRDS"
+            },
+            "true"
+          ]
         },
-        "true"
+        {
+          "Fn::Not": [
+            {
+              "Condition": "IsLocalStack"
+            }
+          ]
+        }
+      ]
+    },
+    "CreateEC2": {
+      "Fn::And": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "EnableEC2"
+            },
+            "true"
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Condition": "IsLocalStack"
+            }
+          ]
+        }
       ]
     }
   },

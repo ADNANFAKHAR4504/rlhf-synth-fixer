@@ -49,7 +49,8 @@ describe('TapStack CloudFormation Template', () => {
         'DBUser',
         'KeyPairName',
         'EnableRDS',
-        'EnableEC2'
+        'EnableEC2',
+        'UseLocalStack'
       ];
 
       expectedParameters.forEach(paramName => {
@@ -95,6 +96,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(enableEC2Param.AllowedValues).toContain('true');
       expect(enableEC2Param.AllowedValues).toContain('false');
     });
+
+    test('UseLocalStack parameter should disable EC2 and RDS', () => {
+      const useLocalStackParam = template.Parameters.UseLocalStack;
+      expect(useLocalStackParam.Type).toBe('String');
+      expect(useLocalStackParam.Default).toBe('false');
+      expect(useLocalStackParam.AllowedValues).toContain('true');
+      expect(useLocalStackParam.AllowedValues).toContain('false');
+    });
   });
 
   describe('Conditions', () => {
@@ -103,14 +112,19 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Conditions.HasKeyPair['Fn::Not']).toBeDefined();
     });
 
-    test('should have CreateRDS condition', () => {
-      expect(template.Conditions.CreateRDS).toBeDefined();
-      expect(template.Conditions.CreateRDS['Fn::Equals']).toBeDefined();
+    test('should have IsLocalStack condition', () => {
+      expect(template.Conditions.IsLocalStack).toBeDefined();
+      expect(template.Conditions.IsLocalStack['Fn::Equals']).toBeDefined();
     });
 
-    test('should have CreateEC2 condition', () => {
+    test('should have CreateRDS condition with LocalStack check', () => {
+      expect(template.Conditions.CreateRDS).toBeDefined();
+      expect(template.Conditions.CreateRDS['Fn::And']).toBeDefined();
+    });
+
+    test('should have CreateEC2 condition with LocalStack check', () => {
       expect(template.Conditions.CreateEC2).toBeDefined();
-      expect(template.Conditions.CreateEC2['Fn::Equals']).toBeDefined();
+      expect(template.Conditions.CreateEC2['Fn::And']).toBeDefined();
     });
   });
 
@@ -411,7 +425,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(7); // Updated count with EnableEC2
+      expect(parameterCount).toBe(8); // Updated count with EnableEC2 and UseLocalStack
     });
 
     test('should have correct number of outputs', () => {
