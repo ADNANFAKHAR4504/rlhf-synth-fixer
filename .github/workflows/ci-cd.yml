@@ -80,18 +80,25 @@ jobs:
         run: |
           changed_files=$(git diff --name-only origin/main...HEAD)
           archive_only=true
+          has_root_metadata=false
           while IFS= read -r file; do
-            if [[ ! "$file" =~ ^archive/ ]]; then
+            # Check if this is the root metadata.json
+            if [[ "$file" == "metadata.json" ]]; then
+              has_root_metadata=true
+            fi
+            # Allow archive/, .github/, and scripts/ folders for CI fixes
+            if [[ ! "$file" =~ ^(archive/|\.github/|scripts/) ]]; then
               archive_only=false
               break
             fi
           done <<< "$changed_files"
           echo "archive_only=$archive_only" >> $GITHUB_OUTPUT
+          echo "has_root_metadata=$has_root_metadata" >> $GITHUB_OUTPUT
           echo "Archive only PR: $archive_only"
+          echo "Has root metadata: $has_root_metadata"
 
       - name: Validate metadata.json
-        if: steps.check-archive-only.outputs.archive_only != 'true'
-        continue-on-error: true
+        if: steps.check-archive-only.outputs.has_root_metadata == 'true'
         uses: cardinalby/schema-validator-action@v3
         with:
           file: 'metadata.json'
