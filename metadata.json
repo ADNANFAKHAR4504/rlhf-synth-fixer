@@ -17,5 +17,9 @@
     "s3",
     "dynamodb"
   ],
+  "migrated_from": {
+    "po_id": "291245",
+    "pr": "Pr816"
+  },
   "wave": "P0"
 }

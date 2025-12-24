@@ -11,7 +11,7 @@ This module defines the AWS infrastructure stack including:
 """
 
 from typing import List, Dict, Any
-from cdktf import TerraformStack, TerraformOutput
+from cdktf import TerraformStack, TerraformOutput, Fn
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi, DataAwsAmiFilter
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import (
@@ -386,25 +386,30 @@ class TapStack(TerraformStack):
 
     def _create_outputs(self) -> None:
         """Create Terraform outputs for important resource identifiers."""
-        # VPC ID
-        TerraformOutput(self, "vpc_id", value=self.vpc.id, description="ID of the VPC")
+        # VPC ID - simple string output
+        TerraformOutput(
+            self,
+            "vpc_id",
+            value=self.vpc.id,
+            description="ID of the VPC",
+        )
 
-        # Subnet IDs
+        # Subnet IDs - using Fn.jsonencode for list compatibility
         TerraformOutput(
             self,
             "public_subnet_ids",
-            value=[subnet.id for subnet in self.public_subnets],
-            description="IDs of the public subnets",
+            value=Fn.jsonencode([subnet.id for subnet in self.public_subnets]),
+            description="IDs of the public subnets (JSON encoded)",
         )
 
         TerraformOutput(
             self,
             "private_subnet_ids",
-            value=[subnet.id for subnet in self.private_subnets],
-            description="IDs of the private subnets",
+            value=Fn.jsonencode([subnet.id for subnet in self.private_subnets]),
+            description="IDs of the private subnets (JSON encoded)",
         )
 
-        # NAT Gateway ID
+        # NAT Gateway ID - simple string output
         TerraformOutput(
             self,
             "nat_gateway_id",
@@ -429,7 +434,7 @@ class TapStack(TerraformStack):
                 value=self.private_instance.private_ip,
                 description="Private IP address of the private instance",
             )
-
+        
     @property
     def vpc_cidr(self) -> str:
         """Get VPC CIDR from configuration."""

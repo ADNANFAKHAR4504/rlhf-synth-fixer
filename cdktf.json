@@ -7,8 +7,5 @@
     "aws@~> 6.0"
   ],
   "terraformModules": [],
-  "context": {},
-  "hooks": {
-    "post-deploy": "python bin/collect-outputs.py"
-  }
+  "context": {}
 }
