@@ -17,7 +17,7 @@
     "AutoScaling",
     "IAM"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "trainr63",
     "pr": "Pr904"
