@@ -1,40 +1,43 @@
-You are an AWS CloudFormation expert tasked with designing a serverless infrastructure for a highly scalable web application. Generate a CloudFormation YAML template that implements the following architecture and meets all security and operational best practices:
+# Serverless Web App Infrastructure
 
-1. API Gateway:
-   • Provide HTTP endpoints for the web application.
-   • Enable detailed logging and send logs to CloudWatch Logs.
-   • Include necessary permissions for integration with Lambda functions.
+Need to build a production-ready serverless web application infrastructure using CloudFormation. The app needs to handle variable traffic and scale automatically.
 
-2. AWS Lambda:
-   • Implement backend processing logic using Lambda functions.
-   • Configure IAM roles with least-privilege access, granting only the permissions required to interact with other resources (S3, DynamoDB, CloudWatch).
-   • Support environment variables for multi-environment deployments (e.g., dev, staging, prod).
+## Architecture Requirements
 
-3. S3 Bucket:
-   • Use an S3 bucket for static content storage.
-   • Enable server-side encryption (SSE-S3).
-   • Ensure secure bucket policies (block public access).
+**API Layer**
+- API Gateway for HTTP endpoints
+- Enable detailed CloudWatch logging for debugging
+- Lambda integration permissions
 
-4. DynamoDB Table:
-   • Create a DynamoDB table for persistent storage.
-   • Use on-demand capacity mode to handle unpredictable workloads.
-   • Include IAM permissions for Lambda functions to read/write to the table.
+**Backend Processing**
+- Lambda functions for business logic
+- IAM roles scoped to exactly what's needed - S3 read/write, DynamoDB access, CloudWatch logs
+- Support environment variables (dev, staging, prod)
 
-5. CloudWatch Monitoring:
-   • Configure CloudWatch alarms for key metrics such as Lambda function error rates and duration.
-   • Ensure alarms notify appropriately if thresholds are breached.
+**Storage**
+- S3 bucket for static content - encrypted with SSE-S3
+- Block all public access (secure by default)
 
-6. Template Requirements:
-   • Include all necessary IAM roles, policies, and permissions.
-   • Use parameters for environment-specific configuration (e.g., environment name, memory size).
-   • Use outputs for key resources (e.g., API Gateway URL, DynamoDB table name).
-   • Ensure the template passes AWS CloudFormation validation and is ready for deployment.
+**Database**
+- DynamoDB table with on-demand capacity (traffic is unpredictable)
+- Lambda needs read/write permissions
 
-7. Operational Constraints:
-   • Do not use wildcard \* in IAM policies; follow least-privilege principle.
-   • All resources must follow AWS security best practices.
-   • Template should be fully deployable in a single stack.
+**Monitoring**
+- CloudWatch alarms on Lambda error rates and duration
+- Actual notifications when thresholds breach
 
-Expected Output:
-• A complete CloudFormation YAML template that implements the above architecture.
-• All resources must be interconnected correctly and ready for production-grade deployment.
+## Template Design
+
+The CloudFormation template should use:
+- Parameters for environment-specific config (env name, memory size, etc.)
+- Outputs for key resources (API Gateway URL, DynamoDB table name)
+- All IAM roles and policies included inline
+
+## Constraints
+
+- No wildcard IAM policies - everything must be scoped
+- Follow AWS security best practices
+- Single stack deployment (no nested stacks)
+- Must pass CloudFormation validation
+
+Should be production-grade and deployable as-is.
