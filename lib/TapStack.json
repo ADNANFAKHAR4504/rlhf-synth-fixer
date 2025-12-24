@@ -107,7 +107,7 @@
       "ConstraintDescription": "Must be a valid Aurora-compatible instance class (e.g., db.t4g.medium, db.r6g.large)."
     },
     "AmiId": {
-      "Type": "String",
+      "Type": "AWS::EC2::Image::Id",
       "Default": "ami-0c55b159cbfafe1f0",
       "Description": "The AMI ID for the EC2 instances (LocalStack-compatible)"
     },
@@ -138,13 +138,6 @@
       "MinValue": 1,
       "MaxValue": 65535,
       "Description": "Database port for MySQL access"
-    },
-    "MasterUserPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Default": "TempPassword123!",
-      "MinLength": 8,
-      "Description": "Master password for the database (LocalStack compatibility)"
     },
     "DeployEC2": {
       "Type": "String",
@@ -761,7 +754,9 @@
       "Type": "AWS::EC2::Instance",
       "Condition": "ShouldDeployEC2",
       "Properties": {
-        "ImageId": "ami-ff0fea8310f3",
+        "ImageId": {
+          "Ref": "AmiId"
+        },
         "InstanceType": {
           "Ref": "InstanceType"
         },
@@ -859,9 +854,7 @@
           "Fn::Sub": "${ProjectName}DB"
         },
         "MasterUsername": "admin",
-        "MasterUserPassword": {
-          "Ref": "MasterUserPassword"
-        },
+        "ManageMasterUserPassword": true,
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },
