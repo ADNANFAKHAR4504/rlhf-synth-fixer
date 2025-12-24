@@ -32,7 +32,6 @@ describe('TapStack CloudFormation Template', () => {
         'LambdaTimeout',
         'ErrorRateThreshold',
         'DurationThreshold',
-        'NotificationEmail',
         'EnvironmentSuffix',
       ];
 
@@ -61,10 +60,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.MaxValue).toBe(900);
     });
 
-    test('NotificationEmail parameter should have email validation', () => {
-      const param = template.Parameters.NotificationEmail;
-      expect(param.Type).toBe('String');
-      expect(param.AllowedPattern).toBe('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+    test('NotificationEmail parameter should not exist (LocalStack compatibility)', () => {
+      // NotificationEmail removed because SNS email subscriptions are not supported in LocalStack Community
+      expect(template.Parameters.NotificationEmail).toBeUndefined();
     });
 
     test('EnvironmentSuffix parameter should exist', () => {
@@ -88,14 +86,14 @@ describe('TapStack CloudFormation Template', () => {
         expect(props.TopicName).toEqual({
           'Fn::Sub': 'serverless-app-alarms-${EnvironmentSuffix}',
         });
-        expect(props.KmsMasterKeyId).toBe('alias/aws/sns');
+        // KMS encryption removed for LocalStack compatibility
+        expect(props.KmsMasterKeyId).toBeUndefined();
       });
 
-      test('should have AlarmNotificationSubscription', () => {
+      test('should not have AlarmNotificationSubscription (LocalStack compatibility)', () => {
+        // Email subscriptions not supported in LocalStack Community edition
         const resource = template.Resources.AlarmNotificationSubscription;
-        expect(resource).toBeDefined();
-        expect(resource.Type).toBe('AWS::SNS::Subscription');
-        expect(resource.Properties.Protocol).toBe('email');
+        expect(resource).toBeUndefined();
       });
     });
 
@@ -130,10 +128,10 @@ describe('TapStack CloudFormation Template', () => {
         expect(props.VersioningConfiguration.Status).toBe('Enabled');
       });
 
-      test('should have StaticContentBucketPolicy', () => {
+      test('should not have StaticContentBucketPolicy (LocalStack compatibility)', () => {
+        // Bucket policy removed for LocalStack compatibility
         const resource = template.Resources.StaticContentBucketPolicy;
-        expect(resource).toBeDefined();
-        expect(resource.Type).toBe('AWS::S3::BucketPolicy');
+        expect(resource).toBeUndefined();
       });
     });
 
@@ -162,17 +160,17 @@ describe('TapStack CloudFormation Template', () => {
         expect(props.GlobalSecondaryIndexes[0].IndexName).toBe('GSI1');
       });
 
-      test('ApplicationTable should have point-in-time recovery enabled', () => {
+      test('ApplicationTable should not have point-in-time recovery (LocalStack compatibility)', () => {
+        // PITR removed for LocalStack compatibility
         const props = template.Resources.ApplicationTable.Properties;
-        expect(
-          props.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled
-        ).toBe(true);
+        expect(props.PointInTimeRecoverySpecification).toBeUndefined();
       });
 
       test('ApplicationTable should have encryption enabled', () => {
         const props = template.Resources.ApplicationTable.Properties;
         expect(props.SSESpecification.SSEEnabled).toBe(true);
-        expect(props.SSESpecification.SSEType).toBe('KMS');
+        // LocalStack uses default encryption, not explicit KMS
+        // SSEType is optional and may be undefined for default encryption
       });
 
       test('ApplicationTable should have stream enabled', () => {
@@ -472,9 +470,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(encryption.SSEEnabled).toBe(true);
     });
 
-    test('SNS topic should use KMS encryption', () => {
+    test('SNS topic should not use KMS encryption (LocalStack compatibility)', () => {
+      // KMS encryption removed for LocalStack compatibility
       const topic = template.Resources.AlarmNotificationTopic;
-      expect(topic.Properties.KmsMasterKeyId).toBeDefined();
+      expect(topic.Properties.KmsMasterKeyId).toBeUndefined();
     });
 
     test('API Gateway should have throttling configured', () => {
@@ -533,11 +532,12 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      // Count all the resources we expect
-      // SNS: 2, S3: 2, DynamoDB: 1, CloudWatch: 2, IAM: 2, Lambda: 2,
-      // API Gateway: 10 (RestApi, Resources, Methods, Deployment, Stage, Account)
+      // LocalStack-compatible template has 25 resources
+      // (some resources removed: SNS subscription, S3 bucket policy, API Gateway account)
+      // SNS: 1, S3: 1, DynamoDB: 1, CloudWatch: 2, IAM: 2, Lambda: 2,
+      // API Gateway: 10 (RestApi, Resources, Methods, Deployment, Stage)
       // CloudWatch Alarms: 6
-      expect(resourceCount).toBeGreaterThan(25);
+      expect(resourceCount).toBe(25);
     });
 
     test('Lambda function should have inline code', () => {
