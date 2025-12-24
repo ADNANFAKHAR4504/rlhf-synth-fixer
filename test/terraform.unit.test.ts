@@ -134,7 +134,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("declares S3 bucket encryption", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_encryption_configuration"\s+"logs"/);
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"logs"/);
     });
 
     test("declares S3 bucket public access block", () => {
@@ -228,7 +228,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("auto scaling groups reference target groups", () => {
-      expect(stackContent).toMatch(/target_group_arns\s*=\s*\[aws_lb_target_group\.main\.arn\]/);
+      expect(stackContent).toMatch(/target_group_arns\s*=\s*\[aws_lb_target_group\.main\[0\]\.arn\]/);
     });
   });
 

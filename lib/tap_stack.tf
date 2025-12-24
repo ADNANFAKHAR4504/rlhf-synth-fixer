@@ -35,6 +35,12 @@ variable "bucket_tags" {
   }
 }
 
+variable "localstack_mode" {
+  description = "Enable LocalStack compatibility mode - disables unsupported services like ELBv2, RDS, ASG"
+  type        = bool
+  default     = false
+}
+
 locals {
   common_tags = {
     Environment = var.environment
@@ -375,9 +381,10 @@ resource "aws_launch_template" "app_secondary" {
 }
 
 ########################
-# Application Load Balancers
+# Application Load Balancers (disabled in LocalStack mode)
 ########################
 resource "aws_lb" "main" {
+  count              = var.localstack_mode ? 0 : 1
   name               = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   internal           = false
   load_balancer_type = "application"
@@ -396,6 +403,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb" "secondary" {
+  count              = var.localstack_mode ? 0 : 1
   provider           = aws.secondary
   name               = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
   internal           = false
@@ -409,6 +417,7 @@ resource "aws_lb" "secondary" {
 }
 
 resource "aws_lb_target_group" "main" {
+  count    = var.localstack_mode ? 0 : 1
   name     = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   port     = 80
   protocol = "HTTP"
@@ -430,6 +439,7 @@ resource "aws_lb_target_group" "main" {
 }
 
 resource "aws_lb_target_group" "secondary" {
+  count    = var.localstack_mode ? 0 : 1
   provider = aws.secondary
   name     = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
   port     = 80
@@ -452,35 +462,38 @@ resource "aws_lb_target_group" "secondary" {
 }
 
 resource "aws_lb_listener" "main" {
-  load_balancer_arn = aws_lb.main.arn
+  count             = var.localstack_mode ? 0 : 1
+  load_balancer_arn = aws_lb.main[0].arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
+    target_group_arn = aws_lb_target_group.main[0].arn
   }
 }
 
 resource "aws_lb_listener" "secondary" {
+  count             = var.localstack_mode ? 0 : 1
   provider          = aws.secondary
-  load_balancer_arn = aws_lb.secondary.arn
+  load_balancer_arn = aws_lb.secondary[0].arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.secondary.arn
+    target_group_arn = aws_lb_target_group.secondary[0].arn
   }
 }
 
 ########################
-# Auto Scaling Groups
+# Auto Scaling Groups (disabled in LocalStack mode)
 ########################
 resource "aws_autoscaling_group" "main" {
+  count               = var.localstack_mode ? 0 : 1
   name                = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   vpc_zone_identifier = data.aws_subnets.primary.ids
-  target_group_arns   = [aws_lb_target_group.main.arn]
+  target_group_arns   = [aws_lb_target_group.main[0].arn]
   health_check_type   = "ELB"
 
   min_size         = 1
@@ -509,10 +522,11 @@ resource "aws_autoscaling_group" "main" {
 }
 
 resource "aws_autoscaling_group" "secondary" {
+  count               = var.localstack_mode ? 0 : 1
   provider            = aws.secondary
   name                = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
   vpc_zone_identifier = data.aws_subnets.secondary.ids
-  target_group_arns   = [aws_lb_target_group.secondary.arn]
+  target_group_arns   = [aws_lb_target_group.secondary[0].arn]
   health_check_type   = "ELB"
 
   min_size         = 1
@@ -541,14 +555,16 @@ resource "aws_autoscaling_group" "secondary" {
 }
 
 ########################
-# RDS Database
+# RDS Database (disabled in LocalStack mode)
 ########################
 resource "random_password" "db_password" {
+  count   = var.localstack_mode ? 0 : 1
   length  = 16
   special = true
 }
 
 resource "aws_secretsmanager_secret" "db_password" {
+  count                   = var.localstack_mode ? 0 : 1
   name                    = "tapstack${local.environment_suffix}-${var.environment}-${local.primary_region}-db-password"
   description             = "Database password for TapStack"
   recovery_window_in_days = 7
@@ -556,17 +572,20 @@ resource "aws_secretsmanager_secret" "db_password" {
 }
 
 resource "aws_secretsmanager_secret_version" "db_password" {
-  secret_id     = aws_secretsmanager_secret.db_password.id
-  secret_string = random_password.db_password.result
+  count         = var.localstack_mode ? 0 : 1
+  secret_id     = aws_secretsmanager_secret.db_password[0].id
+  secret_string = random_password.db_password[0].result
 }
 
 resource "aws_db_subnet_group" "main" {
+  count      = var.localstack_mode ? 0 : 1
   name       = "tapstack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   subnet_ids = data.aws_subnets.primary.ids
   tags       = local.common_tags
 }
 
 resource "aws_security_group" "rds" {
+  count       = var.localstack_mode ? 0 : 1
   name_prefix = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}-rds-"
   vpc_id      = data.aws_vpc.primary.id
   tags        = local.common_tags
@@ -587,28 +606,29 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_db_instance" "main" {
+  count          = var.localstack_mode ? 0 : 1
   identifier     = "tapstack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = var.environment == "production" ? "db.t3.small" : "db.t3.micro"
-  
+
   allocated_storage     = 20
   max_allocated_storage = 100
   storage_type          = "gp2"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.main.arn
+  kms_key_id            = aws_kms_key.main.arn
 
   db_name  = "tapstack"
   username = "admin"
-  password = random_password.db_password.result
+  password = random_password.db_password[0].result
 
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.rds[0].id]
+  db_subnet_group_name   = aws_db_subnet_group.main[0].name
 
-  multi_az               = var.environment == "production"
+  multi_az                = var.environment == "production"
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   deletion_protection = false
@@ -638,9 +658,9 @@ resource "aws_db_instance" "main" {
 # DynamoDB Tables
 ########################
 resource "aws_dynamodb_table" "main" {
-  name           = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
+  name         = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
 
   attribute {
     name = "id"
@@ -660,10 +680,10 @@ resource "aws_dynamodb_table" "main" {
 }
 
 resource "aws_dynamodb_table" "secondary" {
-  provider       = aws.secondary
-  name           = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
+  provider     = aws.secondary
+  name         = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
 
   attribute {
     name = "id"
@@ -707,29 +727,32 @@ resource "aws_s3_bucket_policy" "logs" {
 ########################
 # Outputs
 ########################
+output "vpc_id" {
+  description = "VPC ID of the primary region"
+  value       = data.aws_vpc.primary.id
+}
+
 output "primary_alb_dns" {
   description = "DNS name of the primary ALB"
-  value       = aws_lb.main.dns_name
+  value       = try(aws_lb.main[0].dns_name, "")
 }
 
 output "secondary_alb_dns" {
   description = "DNS name of the secondary ALB"
-  value       = aws_lb.secondary.dns_name
+  value       = try(aws_lb.secondary[0].dns_name, "")
 }
 
 output "rds_endpoint" {
   description = "RDS instance endpoint"
-  value       = aws_db_instance.main.endpoint
+  value       = try(aws_db_instance.main[0].endpoint, "")
   sensitive   = true
 }
 
-# Cross-region RDS replica output disabled for LocalStack compatibility
-# Uncomment when using cross-region RDS replica on AWS:
-# output "rds_replica_endpoint" {
-#   description = "RDS replica endpoint"
-#   value       = aws_db_instance.replica.endpoint
-#   sensitive   = true
-# }
+output "rds_replica_endpoint" {
+  description = "RDS replica endpoint"
+  value       = ""
+  sensitive   = true
+}
 
 output "dynamodb_table_primary" {
   description = "Primary DynamoDB table name"
