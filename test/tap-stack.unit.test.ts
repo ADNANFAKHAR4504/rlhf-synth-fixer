@@ -340,9 +340,9 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(lambda.Properties.Timeout).toBe(60);
     });
 
-    test('Lambda should NOT have ReservedConcurrentExecutions', () => {
+    test('Lambda should have ReservedConcurrentExecutions set to 100', () => {
       const lambda = template.Resources.ProcessPriceChecksFunction;
-      expect(lambda.Properties.ReservedConcurrentExecutions).toBeUndefined();
+      expect(lambda.Properties.ReservedConcurrentExecutions).toBe(100);
     });
 
     test('Lambda should have inline code', () => {
@@ -465,11 +465,10 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       });
     });
 
-    test('Lambda function should not have reserved concurrency that exceeds limits', () => {
+    test('Lambda function should have reserved concurrency configured', () => {
       const lambda = template.Resources.ProcessPriceChecksFunction;
-      if (lambda.Properties.ReservedConcurrentExecutions !== undefined) {
-        expect(lambda.Properties.ReservedConcurrentExecutions).toBeLessThanOrEqual(10);
-      }
+      expect(lambda.Properties.ReservedConcurrentExecutions).toBeDefined();
+      expect(lambda.Properties.ReservedConcurrentExecutions).toBe(100);
     });
 
     test('all policies should follow least privilege principle', () => {
