@@ -32,5 +32,12 @@
   "migrated_from": {
     "po_id": "291757",
     "pr": "Pr380"
-  }
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
