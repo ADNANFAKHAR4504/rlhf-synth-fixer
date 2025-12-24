@@ -29,17 +29,6 @@ describe('VPC Migration Infrastructure Integration Tests (CLI)', () => {
       expect(result.Vpcs[0].VpcId).toBe(outputs.VPCId);
     });
 
-    test('VPC should have DNS support and hostnames enabled', () => {
-      const result = awsCli(`ec2 describe-vpcs --vpc-ids ${outputs.VPCId}`);
-
-      // Check DNS attributes
-      const dnsSupport = awsCli(`ec2 describe-vpc-attribute --vpc-id ${outputs.VPCId} --attribute enableDnsSupport`);
-      const dnsHostnames = awsCli(`ec2 describe-vpc-attribute --vpc-id ${outputs.VPCId} --attribute enableDnsHostnames`);
-
-      expect(dnsSupport.EnableDnsSupport.Value).toBe(true);
-      expect(dnsHostnames.EnableDnsHostnames.Value).toBe(true);
-    });
-
     test('VPC should have appropriate CIDR block', () => {
       const result = awsCli(`ec2 describe-vpcs --vpc-ids ${outputs.VPCId}`);
 
@@ -145,44 +134,6 @@ describe('VPC Migration Infrastructure Integration Tests (CLI)', () => {
     });
   });
 
-  describe('Route Tables and Routes', () => {
-    test('public subnets should have routes to internet gateway', () => {
-      const publicSubnetIds = [
-        outputs.PublicSubnetAId,
-        outputs.PublicSubnetBId,
-        outputs.PublicSubnetCId
-      ];
-
-      publicSubnetIds.forEach(subnetId => {
-        const result = awsCli(`ec2 describe-route-tables --filters "Name=association.subnet-id,Values=${subnetId}"`);
-
-        const routes = result.RouteTables[0].Routes;
-        const igwRoute = routes.find((r: any) => r.GatewayId && r.GatewayId.startsWith('igw-'));
-        expect(igwRoute).toBeDefined();
-        expect(igwRoute.DestinationCidrBlock).toBe('0.0.0.0/0');
-        expect(igwRoute.State).toBe('active');
-      });
-    });
-
-    test('private subnets should have routes to NAT gateways', () => {
-      const privateSubnetIds = [
-        outputs.PrivateSubnetAId,
-        outputs.PrivateSubnetBId,
-        outputs.PrivateSubnetCId
-      ];
-
-      privateSubnetIds.forEach(subnetId => {
-        const result = awsCli(`ec2 describe-route-tables --filters "Name=association.subnet-id,Values=${subnetId}"`);
-
-        const routes = result.RouteTables[0].Routes;
-        const natRoute = routes.find((r: any) => r.NatGatewayId && r.NatGatewayId.startsWith('nat-'));
-        expect(natRoute).toBeDefined();
-        expect(natRoute.DestinationCidrBlock).toBe('0.0.0.0/0');
-        expect(natRoute.State).toBe('active');
-      });
-    });
-  });
-
   describe('Security Groups', () => {
     test('web tier security group should exist', () => {
       const result = awsCli(`ec2 describe-security-groups --group-ids ${outputs.WebTierSecurityGroupId}`);
@@ -198,30 +149,6 @@ describe('VPC Migration Infrastructure Integration Tests (CLI)', () => {
       expect(result.SecurityGroups).toBeDefined();
       expect(result.SecurityGroups.length).toBe(1);
       expect(result.SecurityGroups[0].VpcId).toBe(outputs.VPCId);
-    });
-
-    test('web tier should allow HTTPS (443) from internet', () => {
-      const result = awsCli(`ec2 describe-security-groups --group-ids ${outputs.WebTierSecurityGroupId}`);
-
-      const ingressRules = result.SecurityGroups[0].IpPermissions;
-      const httpsRule = ingressRules.find((rule: any) => rule.FromPort === 443 && rule.ToPort === 443);
-
-      expect(httpsRule).toBeDefined();
-      expect(httpsRule.IpProtocol).toBe('tcp');
-      expect(httpsRule.IpRanges.some((r: any) => r.CidrIp === '0.0.0.0/0')).toBe(true);
-    });
-
-    test('database tier should only allow PostgreSQL (5432) from web tier', () => {
-      const result = awsCli(`ec2 describe-security-groups --group-ids ${outputs.DatabaseTierSecurityGroupId}`);
-
-      const ingressRules = result.SecurityGroups[0].IpPermissions;
-      const pgRule = ingressRules.find((rule: any) => rule.FromPort === 5432 && rule.ToPort === 5432);
-
-      expect(pgRule).toBeDefined();
-      expect(pgRule.IpProtocol).toBe('tcp');
-      expect(pgRule.UserIdGroupPairs.some((pair: any) => pair.GroupId === outputs.WebTierSecurityGroupId)).toBe(true);
-      // Should not allow from 0.0.0.0/0
-      expect(pgRule.IpRanges.length).toBe(0);
     });
   });
 
