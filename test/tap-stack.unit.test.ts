@@ -40,21 +40,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.AllowedPattern).toBe('[a-zA-Z][a-zA-Z0-9]*');
     });
 
-    test('should have DBPassword parameter', () => {
-      expect(template.Parameters.DBPassword).toBeDefined();
-      const param = template.Parameters.DBPassword;
-      expect(param.Type).toBe('String');
-      expect(param.NoEcho).toBe(true);
-      expect(param.Default).toBe('/myapp/database/password');
-    });
-
-    test('should have DBPasswordParameterName parameter', () => {
-      expect(template.Parameters.DBPasswordParameterName).toBeDefined();
-      const param = template.Parameters.DBPasswordParameterName;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('/myapp/database/password');
-      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9/_-]+$');
-    });
+    // DBPassword and DBPasswordParameterName parameters removed for LocalStack compatibility
+    // Password is now hardcoded in the RDS resource definition
 
     test('should have Environment parameter', () => {
       expect(template.Parameters.Environment).toBeDefined();
@@ -239,11 +226,11 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('SSM Parameter', () => {
-    test('should reference existing SSM parameter', () => {
-      // The template now references an existing SSM parameter instead of creating one
-      expect(template.Parameters.DBPassword.Type).toBe('String');
-      expect(template.Parameters.DBPassword.Default).toBe('/myapp/database/password');
+  describe('LocalStack Compatibility', () => {
+    test('should not have DBPassword parameter for LocalStack', () => {
+      // For LocalStack compatibility, DBPassword parameter is removed
+      // and password is hardcoded in the template
+      expect(template.Parameters.DBPassword).toBeUndefined();
     });
   });
 
@@ -283,11 +270,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.DeletionProtection).toBe(false);
     });
 
-    test('should use SSM parameter for database password', () => {
+    test('should use hardcoded password for LocalStack compatibility', () => {
       const rds = template.Resources.MyAppRDSInstance;
-      expect(rds.Properties.MasterUserPassword).toEqual({
-        'Fn::Sub': '{{resolve:ssm-secure:${DBPassword}}}'
-      });
+      // For LocalStack compatibility, password is hardcoded
+      // In production AWS, this would use SSM parameter resolution
+      expect(rds.Properties.MasterUserPassword).toBe('TestPassword123!');
     });
   });
 
@@ -463,12 +450,12 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6); // DBUsername, DBPassword, DBPasswordParameterName, AZ1, AZ2, Environment
+      expect(parameterCount).toBe(4); // DBUsername, AZ1, AZ2, Environment (DBPassword parameters removed for LocalStack)
     });
 
     test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(6); // PrimaryS3BucketName, AccessLogsS3BucketName, RDSInstanceEndpoint, VPCId, LambdaFunctionArn, DatabasePasswordParameterName
+      expect(outputCount).toBe(5); // PrimaryS3BucketName, AccessLogsS3BucketName, RDSInstanceEndpoint, VPCId, LambdaFunctionArn (DatabasePasswordParameterName removed for LocalStack)
     });
   });
 });
