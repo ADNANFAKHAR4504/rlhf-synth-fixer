@@ -11,6 +11,12 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": [],
-  "wave": "P1"
+  "aws_services": [
+    "S3",
+    "KMS",
+    "Lambda",
+    "API Gateway",
+    "IAM"
+  ],
+  "wave": "P0"
 }
