@@ -101,6 +101,12 @@ tasks-status.md
 worktree/
 bin/tfplan
 
+# Terraform state files
+*.tfstate
+*.tfstate.backup
+*.tfplan
+tfplan
+
 build
 .claude/tasks.csv
 .claude/tasks.csv.backup
