@@ -39,11 +39,6 @@
       "Default": "",
       "Description": "Name of an existing EC2 KeyPair (leave empty if no SSH access needed)"
     },
-    "LatestAmiId": {
-      "Type": "String",
-      "Default": "ami-12345678",
-      "Description": "Latest Amazon Linux 2 AMI ID (use ami-12345678 for LocalStack)"
-    },
     "EnableRDS": {
       "Type": "String",
       "Default": "true",
@@ -736,16 +731,9 @@
     },
     "EC2Instance": {
       "Type": "AWS::EC2::Instance",
-      "CreationPolicy": {
-        "ResourceSignal": {
-          "Timeout": "PT10M"
-        }
-      },
       "Properties": {
         "InstanceType": "t3.micro",
-        "ImageId": {
-          "Ref": "LatestAmiId"
-        },
+        "ImageId": "ami-0c55b159cbfafe1f0",
         "KeyName": {
           "Fn::If": [
             "HasKeyPair",
@@ -771,7 +759,7 @@
         "Monitoring": true,
         "UserData": {
           "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y postgresql amazon-cloudwatch-agent\necho 'Development environment setup complete' > /var/log/setup.log\necho 'Environment: ${EnvironmentSuffix}' >> /var/log/setup.log\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2Instance --region ${AWS::Region}\n"
+            "Fn::Sub": "#!/bin/bash\necho 'Development environment setup complete' > /var/log/setup.log\necho 'Environment: ${EnvironmentSuffix}' >> /var/log/setup.log\n"
           }
         },
         "Tags": [
