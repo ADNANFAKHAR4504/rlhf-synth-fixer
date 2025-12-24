@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912485",
+  "team": "synth",
+  "startedAt": "2025-11-18T08:52:54+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "IAM",
+    "CloudWatch Logs",
+    "KMS",
+    "X-Ray"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
