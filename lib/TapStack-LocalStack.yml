@@ -40,18 +40,31 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action:
-              - kms:Create*
-              - kms:Describe*
-              - kms:Enable*
-              - kms:List*
-              - kms:Put*
-              - kms:Update*
-              - kms:Revoke*
-              - kms:Disable*
-              - kms:Get*
-              - kms:Delete*
+              - kms:CreateAlias
+              - kms:CreateGrant
+              - kms:DescribeKey
+              - kms:EnableKey
+              - kms:EnableKeyRotation
+              - kms:ListAliases
+              - kms:ListGrants
+              - kms:ListKeyPolicies
+              - kms:ListKeys
+              - kms:PutKeyPolicy
+              - kms:UpdateAlias
+              - kms:UpdateKeyDescription
+              - kms:RevokeGrant
+              - kms:DisableKey
+              - kms:DisableKeyRotation
+              - kms:GetKeyPolicy
+              - kms:GetKeyRotationStatus
+              - kms:DeleteAlias
               - kms:ScheduleKeyDeletion
               - kms:CancelKeyDeletion
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlaintext
             Resource: '*'
           - Sid: Allow use of the key for S3
             Effect: Allow
