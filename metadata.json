@@ -7,7 +7,7 @@
   "team": "synth-2",
   "startedAt": "2025-08-08T05:26:20.746Z",
   "aws_services": ["VPC", "EC2", "ELB", "AutoScaling", "RDS", "IAM", "SecretsManager"],
-  "wave": "P1",
+  "wave": "P0",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": ["Cloud Environment Setup", "Web Application Deployment"],
   "provider": "localstack"
