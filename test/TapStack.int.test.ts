@@ -23,7 +23,7 @@ describe('Hub-and-Spoke CloudFormation Integration Tests', () => {
   const ec2Client = new EC2Client({ region });
   const cfnClient = new CloudFormationClient({ region });
   const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-  const candidateStackNames = [`TapStack-${envSuffix}`, `TapStack${envSuffix}`];
+  const candidateStackNames = [`localstack-stack-${envSuffix}`, `TapStack-${envSuffix}`, `TapStack${envSuffix}`];
   let stackName = '';
 
   beforeAll(async () => {
