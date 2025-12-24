@@ -13,7 +13,7 @@
     "Infrastructure Analysis/Monitoring",
     "General Infrastructure Tooling QA"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "training_quality": 9,
   "aws_services": [
     "ECS",
