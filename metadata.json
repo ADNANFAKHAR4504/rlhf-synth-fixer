@@ -17,7 +17,8 @@
     "S3",
     "IAM",
     "CloudWatch",
-    "SNS"
+    "SNS",
+    "S3 Access Point"
   ],
   "wave": "P0"
 }

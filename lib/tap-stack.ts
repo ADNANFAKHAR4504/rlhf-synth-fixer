@@ -5,7 +5,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as networkfirewall from 'aws-cdk-lib/aws-networkfirewall';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -111,32 +110,37 @@ export class TapStack extends cdk.Stack {
     // Grant EC2 role access to S3 bucket
     s3Bucket.grantReadWrite(ec2Role);
 
-    // Create S3 Access Point with ABAC tagging support
-    const s3AccessPoint = new s3.CfnAccessPoint(
-      this,
-      `S3AccessPoint-${environment}-${uniqueId}-${environmentSuffix}`,
-      {
-        bucket: s3Bucket.bucketName,
-        name: `s3ap-${environment.toLowerCase()}-${uniqueId}-${environmentSuffix}`,
-        policy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                AWS: ec2Role.roleArn,
-              },
-              Action: ['s3:GetObject', 's3:PutObject'],
-              Resource: `arn:aws:s3:${this.region}:${this.account}:accesspoint/s3ap-${environment.toLowerCase()}-${uniqueId}-${environmentSuffix}/object/*`,
-            },
-          ],
-        },
-      }
-    );
+    // Create S3 Access Point with ABAC tagging support (conditional for LocalStack)
+    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
+    let s3AccessPoint: s3.CfnAccessPoint | undefined;
 
-    // Tag the S3 Access Point
-    cdk.Tags.of(s3AccessPoint).add('Environment', environment);
-    cdk.Tags.of(s3AccessPoint).add('AccessLevel', 'ReadWrite');
+    if (!isLocalStack) {
+      s3AccessPoint = new s3.CfnAccessPoint(
+        this,
+        `S3AccessPoint-${environment}-${uniqueId}-${environmentSuffix}`,
+        {
+          bucket: s3Bucket.bucketName,
+          name: `s3ap-${environment.toLowerCase()}-${uniqueId}-${environmentSuffix}`,
+          policy: {
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  AWS: ec2Role.roleArn,
+                },
+                Action: ['s3:GetObject', 's3:PutObject'],
+                Resource: `arn:aws:s3:${this.region}:${this.account}:accesspoint/s3ap-${environment.toLowerCase()}-${uniqueId}-${environmentSuffix}/object/*`,
+              },
+            ],
+          },
+        }
+      );
+
+      // Tag the S3 Access Point
+      cdk.Tags.of(s3AccessPoint).add('Environment', environment);
+      cdk.Tags.of(s3AccessPoint).add('AccessLevel', 'ReadWrite');
+    }
 
     // Latest Amazon Linux 2 AMI
     const amazonLinuxAmi = new ec2.AmazonLinuxImage({
@@ -188,80 +192,8 @@ export class TapStack extends cdk.Stack {
     // Tag the SNS topic
     cdk.Tags.of(alarmTopic).add('Environment', environment);
 
-    // Create Network Firewall Rule Group
-    const firewallRuleGroup = new networkfirewall.CfnRuleGroup(
-      this,
-      `NFWRuleGroup-${environment}-${uniqueId}-${environmentSuffix}`,
-      {
-        ruleGroupName: `NFWRuleGroup-${environment}-${uniqueId}-${environmentSuffix}`,
-        type: 'STATEFUL',
-        capacity: 100,
-        ruleGroup: {
-          rulesSource: {
-            statefulRules: [
-              {
-                action: 'ALERT',
-                header: {
-                  protocol: 'HTTP',
-                  source: 'ANY',
-                  sourcePort: 'ANY',
-                  destination: 'ANY',
-                  destinationPort: '80',
-                  direction: 'FORWARD',
-                },
-                ruleOptions: [
-                  {
-                    keyword: 'sid',
-                    settings: ['100001'],
-                  },
-                ],
-              },
-            ],
-          },
-        },
-      }
-    );
-
-    // Tag the Network Firewall Rule Group
-    cdk.Tags.of(firewallRuleGroup).add('Environment', environment);
-
-    // Create Network Firewall Policy
-    const firewallPolicy = new networkfirewall.CfnFirewallPolicy(
-      this,
-      `NFWPolicy-${environment}-${uniqueId}-${environmentSuffix}`,
-      {
-        firewallPolicyName: `NFWPolicy-${environment}-${uniqueId}-${environmentSuffix}`,
-        firewallPolicy: {
-          statelessDefaultActions: ['aws:forward_to_sfe'],
-          statelessFragmentDefaultActions: ['aws:forward_to_sfe'],
-          statefulRuleGroupReferences: [
-            {
-              resourceArn: firewallRuleGroup.attrRuleGroupArn,
-            },
-          ],
-        },
-      }
-    );
-
-    // Tag the Network Firewall Policy
-    cdk.Tags.of(firewallPolicy).add('Environment', environment);
-
-    // Create Network Firewall
-    const firewall = new networkfirewall.CfnFirewall(
-      this,
-      `NFW-${environment}-${uniqueId}-${environmentSuffix}`,
-      {
-        firewallName: `NFW-${environment}-${uniqueId}-${environmentSuffix}`,
-        firewallPolicyArn: firewallPolicy.attrFirewallPolicyArn,
-        vpcId: vpc.vpcId,
-        subnetMappings: vpc.publicSubnets.map(subnet => ({
-          subnetId: subnet.subnetId,
-        })),
-      }
-    );
-
-    // Tag the Network Firewall
-    cdk.Tags.of(firewall).add('Environment', environment);
+    // Note: Network Firewall is not supported in LocalStack Community Edition
+    // It has been removed to ensure LocalStack compatibility
 
     // Create CloudWatch alarm for CPU utilization
     const cpuAlarm = new cloudwatch.Alarm(
@@ -324,8 +256,8 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'S3AccessPointArn', {
-      value: s3AccessPoint.attrArn,
-      description: 'S3 Access Point ARN',
+      value: s3AccessPoint ? s3AccessPoint.attrArn : 'unknown',
+      description: 'S3 Access Point ARN (not supported in LocalStack)',
       exportName: `S3AccessPointArn-${environment}-${uniqueId}-${environmentSuffix}`,
     });
   }
