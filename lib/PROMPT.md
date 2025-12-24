@@ -12,13 +12,13 @@ We need to build a production-ready AWS environment that can handle high traffic
 - **Private Network Access**: Set up NAT Gateways in each private subnet with dedicated Elastic IPs for secure outbound connectivity
 
 ### Compute Layer
-- **EC2 Instances**: Deploy instances in private subnets using a specific AMI ID (to be provided)
+- **EC2 Instances**: Deploy instances in private subnets using a specific AMI ID 
 - **Instance Types**: Use the latest generation instance types for optimal performance and cost efficiency
 - **Auto Scaling**: Implement CPU-based auto scaling policies to handle traffic spikes and maintain performance
 - **Load Distribution**: Configure an Application Load Balancer to distribute incoming traffic across healthy instances
 
 ### Security Implementation
-- **Security Groups**: Define comprehensive security group rules allowing HTTP (80) and HTTPS (443) traffic to public-facing resources
+- **Security Groups**: Define comprehensive security group rules allowing HTTP and HTTPS traffic to public-facing resources
 - **Network ACLs**: Implement network-level access controls for additional security layers
 - **Private Subnet Isolation**: Ensure private subnets cannot be directly accessed from the internet
 
