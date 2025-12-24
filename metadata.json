@@ -11,8 +11,18 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": [],
-  "wave": "P1",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "S3",
+    "RDS",
+    "CloudTrail",
+    "Config",
+    "CloudWatch",
+    "WAFv2"
+  ],
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291639",
     "pr": "Pr1055"

@@ -1,48 +1,43 @@
-# AWS CloudFormation Template Requirements
-Create a secure and scalable AWS CloudFormation template (JSON format) to automate the deployment of a production-ready cloud environment. The template's goal is to provision all required AWS resources with robust security, compliance, and operational best practices, ensuring all infrastructure is protected, monitored, and efficiently managed.
+# Production AWS Infrastructure with Security Controls
 
-# Environment Setup
+I need a CloudFormation template in JSON format that sets up a secure production environment with proper security, compliance, and monitoring. This needs to be production-ready with all the security best practices baked in.
 
-- Define IAM roles and policies with least privilege
-- Enforce Multi-Factor Authentication (MFA) for all IAM users
-- Use AWS Config and AWS Config Rules to monitor compliance and track configuration changes
-- Create a VPC with both public and private subnets (use 10.0.0.0/16, 10.0.1.0/24 for public, 10.0.2.0/24 for private)
-- Secure traffic using Security Groups with least privilege (restrict SSH to specific IPs)
-- Deploy AWS WAF to protect web applications from exploits
-- Use encrypted EBS volumes for all EC2 instances
-- Ensure RDS databases are not publicly accessible
-- Enable logging and monitoring with CloudWatch and CloudTrail
-- Set up AWS Shield for DDoS protection on critical resources
-- Encrypt all in-transit data with SSL/TLS
-- Apply AWS tag policies and naming conventions for resource management
+## What I Need
 
-# Constraints
+Build a VPC with 10.0.0.0/16 CIDR that has public subnet 10.0.1.0/24 and private subnet 10.0.2.0/24. The VPC needs an Internet Gateway attached to it so public resources can reach the internet.
 
-- IAM roles and policies must be tightly scoped to least privilege
-- Use AWS Config rules to monitor compliance
-- Implement VPC with public and private subnets for enhanced security
-- Security Groups must manage traffic in a least privilege manner and restrict SSH to specific IPs
-- MFA must be enabled for all IAM users
-- Deploy AWS WAF for web protection
-- EBS volumes for EC2 must be encrypted
-- RDS must not be publicly accessible
-- Enable CloudWatch and CloudTrail for logging and monitoring
-- Use AWS Shield for DDoS protection
-- Encrypt all in-transit data with SSL/TLS
-- Tag all resources following AWS best practices
-- Track configuration changes with AWS Config and Config Rules
-- Template must pass AWS CloudFormation validation and cfn-lint
-- Do not hardcode region; use environment variable or parameter
-- Use dynamic references over parameters for secrets (e.g., passwords)
-- Do not use 'Fn::Sub' unless variables are required
-- Do not include additional properties not allowed by resource types (e.g., 'BackupPolicy' for DynamoDB is not valid)
-- 'IsLogging' is a required property for AWS::CloudTrail::Trail
+Set up security groups that only allow what's necessary - HTTPS/HTTP from anywhere but restrict SSH to specific IPs only. The web security group should allow inbound 443, 80, and SSH from a specific CIDR. Database security group should only accept MySQL traffic from the web security group.
 
-# Output Expectations
+Deploy an RDS MySQL database in the private subnet that's only accessible from the web security group. The database needs encryption at rest and should NOT be publicly accessible. Set up automated backups with 7-day retention.
 
-- A single, production-ready CloudFormation JSON template implementing all requirements above
-- The template must:
-  - Deploy all specified AWS resources without error
-  - Use descriptive logical resource names
-  - Follow AWS best practices and security guidelines
-  - Pass AWS CloudFormation validation and cfn-lint checks
+Create IAM roles for EC2 instances that can write logs to CloudWatch. The roles need CloudWatch agent permissions plus basic log streaming. Make an instance profile that EC2 can use.
+
+Enable AWS Config with a configuration recorder that tracks all resource changes. Config needs an S3 bucket to store snapshots and a delivery channel to ship data there. Add a Config rule that checks if MFA is enabled for IAM console access.
+
+Set up CloudTrail that logs all API calls to an S3 bucket. CloudTrail needs log file validation enabled and should be multi-region. The S3 bucket needs proper policies so CloudTrail can write to it.
+
+Create CloudWatch log groups where EC2 instances send their logs. Set retention to 30 days.
+
+Add AWS WAF with managed rule sets - use the Common Rule Set and Known Bad Inputs Rule Set to protect against web exploits.
+
+## Technical Requirements
+
+All S3 buckets need encryption enabled and must block all public access. Use bucket policies that only allow the specific AWS services to write.
+
+The RDS database needs a subnet group with at least 2 subnets. Use db.t3.micro instance class with encrypted storage.
+
+IAM roles should follow least privilege - only grant what's absolutely needed. The Config role needs permissions to put objects in S3 and describe configurations.
+
+Tag everything with Environment parameter so we can track resources easily.
+
+CloudTrail must have IsLogging property set to true and enable log file validation.
+
+Don't hardcode the region - use AWS pseudo parameters. For database passwords, just use a parameter since this is for testing but mark it as NoEcho.
+
+The template needs to pass cfn-lint validation without errors. Don't use Fn::Sub unless you actually need variable substitution.
+
+For WAF, only create it in real AWS regions - add a condition that checks if region is not-localstack since LocalStack doesn't support WAFv2.
+
+## Final Output
+
+Give me a complete CloudFormation JSON template that provisions all these resources with proper dependencies. Include outputs for VPC ID, subnet IDs, security group IDs, database endpoint, and WAF ARN. Make sure all the integrations work - Config writing to its bucket, CloudTrail writing to its bucket, EC2 roles able to send logs to CloudWatch, database only accessible through security groups, etc.
