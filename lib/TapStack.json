@@ -488,8 +488,6 @@
         "S3BucketNotificationConfig": {
             "Type": "Custom::S3BucketNotification",
             "DependsOn": [
-                "ProcessingBucket",
-                "ProcessingFunction",
                 "LambdaInvokePermission"
             ],
             "Properties": {
