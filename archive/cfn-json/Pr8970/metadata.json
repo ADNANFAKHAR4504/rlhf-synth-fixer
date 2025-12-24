@@ -11,6 +11,22 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": [],
-  "wave": "P0"
+  "aws_services": [
+    "CloudFront",
+    "CloudTrail",
+    "Config",
+    "EC2",
+    "IAM",
+    "KMS",
+    "S3",
+    "VPC"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
