@@ -9,32 +9,42 @@ Basically, I need a YAML CloudFormation template that sets up secure storage for
 ## The requirements I have to meet
 
 **Storage security:**
-- All S3 buckets need encryption turned on (AES-256)
-- Use KMS for managing the encryption keys
-- Make sure nothing is accidentally public
+- S3 buckets encrypted with customer-managed KMS keys that automatically rotate every year
+- KMS key policies integrated with IAM roles to control who can decrypt the data
+- Block all public access at the bucket level - no exceptions
 
 **Access control:**
-- IAM roles that only give people the permissions they actually need
-- Anyone handling sensitive data needs to use MFA
-- Keep policies tight but not so tight they break things
+- IAM roles granting only specific S3 actions like GetObject and PutObject - no wildcards
+- Policies requiring MFA authentication before users can access sensitive S3 buckets
+- IAM roles connected to the KMS keys so encrypted data can actually be read
 
 **Monitoring:**
-- CloudTrail should log when people access our S3 buckets
-- Need this for audits and to see what's happening
+- CloudTrail logging all S3 data events and writing to a separate audit bucket
+- CloudTrail integrated with KMS so the audit logs themselves are encrypted
+- Need audit trail for compliance reviews and incident investigation
 
 **Cost savings:**
-- Move old data (30+ days) to Glacier automatically
-- Still need to be able to get to it when needed
+- Lifecycle policies transitioning S3 objects to Glacier after 30 days
+- Lifecycle rules that preserve encryption during transition to cheaper storage
+- Old data stays encrypted in Glacier and accessible with same IAM permissions
 
 ## What I'm looking for
 
 Just a straightforward CloudFormation template in YAML that:
 - Actually works when I deploy it
-- Has the basic sections (parameters, resources, outputs)
+- Has parameters for environment names and resources with outputs for stack references
 - Includes comments so I can understand what's happening
-- Can be used in different environments (dev, test, prod)
+- Can be deployed across dev, test, and prod with different parameter values
 
 I'm not looking for anything overly complex - just want to get the security right and make sure it's maintainable. The template will get tested before we use it for real, so it needs to actually deploy without errors.
+
+## Service integration specifics
+
+What I really need to understand is how these pieces connect:
+- How the KMS key grants decrypt permissions to the IAM role
+- How S3 bucket policies enforce the MFA requirement when IAM roles try to access objects
+- How CloudTrail sends its logs to S3 while using a different KMS key for audit separation
+- How lifecycle policies move data between storage classes without breaking encryption
 
 ## A few other things
 
