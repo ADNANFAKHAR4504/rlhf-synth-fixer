@@ -8,8 +8,22 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
+// LocalStack configuration
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+const endpoint = isLocalStack ? 'http://localhost:4566' : undefined;
+
 // Configure AWS SDK
-AWS.config.update({ region: 'us-east-1' });
+const awsConfig: AWS.ConfigurationOptions = {
+  region: 'us-east-1',
+  ...(isLocalStack && {
+    endpoint,
+    s3ForcePathStyle: true,
+    accessKeyId: 'test',
+    secretAccessKey: 'test',
+  }),
+};
+AWS.config.update(awsConfig);
 
 // AWS Service Clients
 const s3 = new AWS.S3();

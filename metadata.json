@@ -3,15 +3,15 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "trainr924",
+  "po_id": "LS-trainr924",
   "team": "synth-2",
   "startedAt": "2025-08-21T19:24:00Z",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
   "subject_labels": [
-    "Security Configuration",
-    "Access Control",
+    "Cloud Environment Setup",
     "General Infrastructure Tooling QA",
-    "Network Configuration"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "S3",
@@ -24,10 +24,9 @@
     "API Gateway",
     "SNS"
   ],
-  "provider": "localstack",
   "wave": "P0",
   "migrated_from": {
-    "po_id": "barun-turing",
+    "po_id": "trainr924",
     "pr": "Pr1986"
   }
 }
