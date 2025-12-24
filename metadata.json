@@ -6,11 +6,19 @@
   "po_id": "LS-291420",
   "team": "synth-2",
   "startedAt": "2025-08-05T13:54:00.753Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "S3",
+    "CloudWatch",
+    "SNS"
+  ],
   "wave": "P1"
 }
