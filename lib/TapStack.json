@@ -284,7 +284,7 @@
         "FunctionName": {
           "Fn::Sub": "ProcessPriceChecks-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
