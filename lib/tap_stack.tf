@@ -154,7 +154,7 @@ resource "aws_s3_bucket_ownership_controls" "frontend_bucket_ownership" {
 
 # S3 bucket for Lambda deployment packages
 resource "aws_s3_bucket" "lambda_bucket" {
-  bucket = "tap-lambda-artifacts-bucket-${data.aws_caller_identity.current.account_id}"
+  bucket        = "tap-lambda-artifacts-bucket-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
 
   tags = {
@@ -202,13 +202,13 @@ resource "aws_s3_object" "lambda_zip_object" {
 
 # IAM Role for Lambda execution
 resource "aws_iam_role" "lambda_exec_role" {
-  name               = var.iam_role_name
+  name = var.iam_role_name
   assume_role_policy = jsonencode({
-    Version   = "2012-10-17"
+    Version = "2012-10-17"
     Statement = [
       {
-        Action    = "sts:AssumeRole"
-        Effect    = "Allow"
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
         Principal = {
           Service = "lambda.amazonaws.com"
         }
@@ -219,12 +219,12 @@ resource "aws_iam_role" "lambda_exec_role" {
 
 # IAM Policy for Lambda execution
 resource "aws_iam_policy" "lambda_exec_policy" {
-  name   = var.iam_policy_name
+  name = var.iam_policy_name
   policy = jsonencode({
-    Version   = "2012-10-17"
+    Version = "2012-10-17"
     Statement = [
       {
-        Action   = [
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
@@ -233,7 +233,7 @@ resource "aws_iam_policy" "lambda_exec_policy" {
         Resource = "arn:aws:logs:*:*:*"
       },
       {
-        Action   = [
+        Action = [
           "dynamodb:GetItem",
           "dynamodb:PutItem",
           "dynamodb:UpdateItem",
@@ -254,9 +254,9 @@ resource "aws_iam_role_policy_attachment" "lambda_exec_policy_attachment" {
 
 # DynamoDB Table
 resource "aws_dynamodb_table" "tap_table" {
-  name           = var.dynamodb_table_name
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
+  name         = var.dynamodb_table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
 
   attribute {
     name = "id"
@@ -448,8 +448,8 @@ resource "aws_s3_bucket_policy" "frontend_bucket_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowCloudFrontServicePrincipal"
-        Effect    = "Allow"
+        Sid    = "AllowCloudFrontServicePrincipal"
+        Effect = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }
