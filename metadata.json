@@ -19,5 +19,6 @@
   "migrated_from": {
     "po_id": "291211",
     "pr": "Pr1096"
-  }
+  },
+  "training_quality": 10
 }
