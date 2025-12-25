@@ -20,7 +20,7 @@
     "CloudWatch",
     "DynamoDB"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291526",
     "pr": "Pr1616"
