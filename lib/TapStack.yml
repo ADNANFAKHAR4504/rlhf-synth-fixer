@@ -172,6 +172,7 @@ Resources:
           STAGE: !Ref Environment
           DYNAMODB_TABLE_NAME: !Ref DataTable
           LOG_LEVEL: !Ref LogLevel
+          # LOCALSTACK_HOSTNAME is automatically set by LocalStack, no need to add it here
       # Inline Lambda function code
       Code:
         ZipFile: |
@@ -186,9 +187,28 @@ Resources:
           logger = logging.getLogger()
           logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
-          # Initialize DynamoDB client
-          dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+          # Initialize DynamoDB client with LocalStack support
+          def get_dynamodb_resource():
+              """Get DynamoDB resource with LocalStack endpoint if needed"""
+              localstack_hostname = os.environ.get('LOCALSTACK_HOSTNAME')
+
+              if localstack_hostname:
+                  # Running in LocalStack
+                  endpoint_url = f'http://{localstack_hostname}:4566'
+                  logger.info(f"Using LocalStack DynamoDB endpoint: {endpoint_url}")
+                  return boto3.resource(
+                      'dynamodb',
+                      endpoint_url=endpoint_url,
+                      region_name='us-east-1',
+                      aws_access_key_id='test',
+                      aws_secret_access_key='test'
+                  )
+              else:
+                  # Running in real AWS
+                  return boto3.resource('dynamodb', region_name='us-east-1')
+
           table_name = os.environ['DYNAMODB_TABLE_NAME']
+          dynamodb = get_dynamodb_resource()
           table = dynamodb.Table(table_name)
 
           def lambda_handler(event, context):
