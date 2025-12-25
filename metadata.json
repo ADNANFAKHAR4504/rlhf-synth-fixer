@@ -22,7 +22,5 @@
   ],
   "provider": "localstack",
   "wave": "P1",
-  "training_quality": 8,
-  "code_validated": true,
-  "platform_validated": true
+  "training_quality": 8
 }
