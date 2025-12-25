@@ -45,8 +45,8 @@ Create a serverless payment webhook processing system using **CloudFormation wit
 - Use **IAM** for execution role with specific permissions to DynamoDB table ARN and CloudWatch Logs
 - Use **CloudWatch Logs** with 30-day retention and KMS encryption
 - Use **KMS** for encrypting Lambda environment variables and CloudWatch logs
-- Resource names must include **environmentSuffix** parameter for uniqueness
-- Follow naming convention: resource-type with EnvironmentSuffix
+- All infrastructure names must include **environmentSuffix** parameter for uniqueness
+- Follow naming convention: infrastructure-type with EnvironmentSuffix
 - Deploy to **us-east-1** region
 
 ### Deployment Requirements - CRITICAL
@@ -76,7 +76,7 @@ All resources must be configured for easy teardown after testing:
 - **Performance**: System handles 100 concurrent webhook requests without throttling
 - **Reliability**: Point-in-time recovery enabled on DynamoDB for data protection
 - **Security**: All data encrypted at rest and in transit, IAM least privilege enforced
-- **Resource Naming**: All resources include EnvironmentSuffix for deployment isolation
+- **Naming Convention**: All infrastructure includes EnvironmentSuffix for deployment isolation
 - **Observability**: CloudWatch Logs capture all Lambda executions, X-Ray tracing enabled
 - **Compliance**: 30-day log retention meets audit requirements, KMS encryption enabled
 - **Cost Optimization**: ARM architecture and on-demand billing minimize operational costs
