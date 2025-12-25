@@ -544,7 +544,10 @@ Resources:
       AutoScalingGroupName: !Sub 'blue-${Environment}-migration-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !If [IsLocalStackCondition, '$Latest', !GetAtt LaunchTemplate.LatestVersionNumber]
+        Version: !If
+          - IsLocalStackCondition
+          - '1'
+          - !GetAtt LaunchTemplate.LatestVersionNumber
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
@@ -566,7 +569,10 @@ Resources:
       AutoScalingGroupName: !Sub 'green-${Environment}-migration-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !If [IsLocalStackCondition, '$Latest', !GetAtt LaunchTemplate.LatestVersionNumber]
+        Version: !If
+          - IsLocalStackCondition
+          - '1'
+          - !GetAtt LaunchTemplate.LatestVersionNumber
       MinSize: 0
       MaxSize: 6
       DesiredCapacity: 0
@@ -711,11 +717,41 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-ALB-DNS'
 
+  LoadBalancerArn:
+    Description: 'Application Load Balancer ARN'
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-ARN'
+
   DatabaseEndpoint:
     Description: 'RDS Database Endpoint'
     Value: !GetAtt Database.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-DB-Endpoint'
+
+  DatabasePort:
+    Description: 'RDS Database Port'
+    Value: !GetAtt Database.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-Port'
+
+  CodeDeployBucketName:
+    Description: 'S3 Bucket for CodeDeploy artifacts'
+    Value: !Ref CodeDeployS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeDeploy-Bucket'
+
+  BlueAutoScalingGroupName:
+    Description: 'Blue Auto Scaling Group Name'
+    Value: !Ref BlueAutoScalingGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Blue-ASG-Name'
+
+  GreenAutoScalingGroupName:
+    Description: 'Green Auto Scaling Group Name'
+    Value: !Ref GreenAutoScalingGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Green-ASG-Name'
 
   CodePipelineName:
     Condition: DeployCodePipeline
@@ -735,3 +771,27 @@ Outputs:
     Value: !Ref GreenTargetGroup
     Export:
       Name: !Sub '${AWS::StackName}-Green-TG-ARN'
+
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-Public-Subnet-1'
+
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-Public-Subnet-2'
+
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-Subnet-1'
+
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-Subnet-2'
