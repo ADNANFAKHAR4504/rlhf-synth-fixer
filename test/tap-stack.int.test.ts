@@ -161,8 +161,9 @@ describe('TapStack Integration Tests', () => {
       }
       if (outputs.databaseEndpoint) {
         // Accept both AWS RDS format and LocalStack format
+        // LocalStack may use localhost.localstack.cloud directly without prefix
         expect(outputs.databaseEndpoint).toMatch(
-          /.*\.(rds\.amazonaws\.com|localhost\.localstack\.cloud):\d+$/
+          /(.*\.rds\.amazonaws\.com|(.*\.)?localhost\.localstack\.cloud):\d+$/
         );
       }
     });
