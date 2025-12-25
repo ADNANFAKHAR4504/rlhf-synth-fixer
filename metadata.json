@@ -10,9 +10,7 @@
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup",
-    "General Infrastructure Tooling QA",
-    "Security Configuration as Code",
-    "Web Application Deployment"
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "EC2",
