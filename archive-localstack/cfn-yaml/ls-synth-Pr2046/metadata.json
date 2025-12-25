@@ -1,33 +1,19 @@
 {
-  "taskId": "trainr949",
-  "problemId": "Multi-Environment-Consistency-Replication_CloudFormation_YAML_r8h3g2hf5qz6",
   "platform": "cfn",
   "language": "yaml",
   "complexity": "hard",
-  "difficulty": "hard",
-  "subtask": "General Infrastructure Provisioning",
-  "region": "us-east-1",
-  "description": "CloudFormation template to ensure multi-environment consistency and replication between Development and Production environments",
-  "constraints": [
-    "Use AWS CloudFormation YAML format to define the infrastructure",
-    "Create two distinct environments: Development and Production",
-    "Both environments should have VPCs with identical CIDR blocks for consistency",
-    "Provision one EC2 instance in each environment with identical instance types t2.micro",
-    "Ensure each environment has an S3 bucket with versioning enabled",
-    "Use environment-specific parameter overrides for resource names to avoid conflicts",
-    "Implement IAM roles in both environments with least privilege access to S3 buckets",
-    "Ensure S3 buckets are set to deny public access globally in both environments",
-    "Utilize CloudFormation Outputs to export VPC IDs for cross-stack referencing",
-    "Implement VPC Endpoints for S3 to restrict data traffic within the AWS network"
-  ],
+  "turn_type": "single",
+  "po_id": "LS-trainr949",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
   "subject_labels": [
+    "Cloud Environment Setup",
     "General Infrastructure Tooling QA",
-    "Web Application Deployment",
-    "Security Configuration",
-    "Network Configuration",
-    "Access Control"
+    "Security Configuration as Code",
+    "Web Application Deployment"
   ],
-  "training_quality": 8,
   "aws_services": [
     "EC2",
     "S3",
@@ -35,15 +21,6 @@
     "VPC",
     "CloudFormation"
   ],
-  "turn_type": "single",
-  "po_id": "trainr949",
-  "team": "synth-2",
-  "startedAt": "2025-08-22T00:00:00Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "iamarpit-turing",
-  "dockerS3Location": "",
-  "wave": "P1"
+  "wave": "P0",
+  "training_quality": 8
 }
