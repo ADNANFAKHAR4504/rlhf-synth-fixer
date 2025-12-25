@@ -123,12 +123,13 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref IgwR1
 
-  PrivateRouteR1:
-    Type: AWS::EC2::Route
+  NatEipR1:
+    Type: AWS::EC2::EIP
     Properties:
-      RouteTableId: !Ref PrivateRouteTableR1
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref IgwR1
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-NAT-EIP-R1-${Region1}
 
   PublicSubnet1AssocR1:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -280,3 +281,15 @@ Outputs:
     Value: !GetAtt Ec2InstanceRole.Arn
     Export:
       Name: !Sub "${ProjectName}-Ec2InstanceRoleArn"
+
+  NatEipR1PublicIp:
+    Description: The public IP address of the NAT EIP for Region 1
+    Value: !Ref NatEipR1
+    Export:
+      Name: !Sub "${ProjectName}-NatEipR1PublicIp"
+
+  NatEipR1AllocationId:
+    Description: The allocation ID of the NAT EIP for Region 1
+    Value: !GetAtt NatEipR1.AllocationId
+    Export:
+      Name: !Sub "${ProjectName}-NatEipR1AllocationId"
