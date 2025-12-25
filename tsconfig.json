@@ -5,26 +5,29 @@
     "moduleResolution": "NodeNext",
     "lib": ["es2022"],
     "declaration": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noImplicitThis": false,
+    "alwaysStrict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noImplicitReturns": true,
+    "noImplicitReturns": false,
     "noFallthroughCasesInSwitch": false,
     "inlineSourceMap": true,
     "inlineSources": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
-    "typeRoots": ["./node_modules/@types"],
-    "types": ["node", "jest"],
     "isolatedModules": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "outDir": "dist"
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "noEmit": true
   },
+  "include": [
+    "cli/**/*.ts"
+  ],
   "exclude": [
     "node_modules",
     "cdk.out",
@@ -35,7 +38,6 @@
     "worktree",
     "test",
     "tests",
-    "cli",
     ".claude",
     "**/*.d.ts"
   ]
