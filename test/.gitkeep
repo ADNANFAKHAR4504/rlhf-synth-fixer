@@ -1,0 +1,2 @@
+# This is a CloudFormation YAML template task
+# No TypeScript/Jest tests are applicable for pure CFN templates
