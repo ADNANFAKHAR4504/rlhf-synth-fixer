@@ -10,7 +10,7 @@ The EC2 instances in private subnets access the internet through NAT Gateways fo
 
 CloudWatch Alarms monitor CPU utilization on EC2 instances and trigger autoscaling actions. Additional alarms track RDS connection counts and ALB response times, sending notifications when thresholds are breached.
 
-For security, the VPC has public subnets for the ALB and NAT Gateway, and private subnets for EC2 instances and RDS. A VPN Gateway connects to our office network allowing secure admin access. IAM roles grant EC2 instances minimal permissions to access only Secrets Manager, CloudWatch, and the backup S3 bucket.
+For security, the VPC has public subnets for the ALB and NAT Gateway, and private subnets for EC2 instances and RDS. A VPN Gateway connects to our office network allowing secure admin access. IAM roles follow least-privilege principles, granting EC2 instances access only to Secrets Manager for credentials, CloudWatch for logging, and the specific backup S3 bucket.
 
 Some EC2 instances get Elastic IPs for stable outbound connections to partner APIs that whitelist by IP.
 
