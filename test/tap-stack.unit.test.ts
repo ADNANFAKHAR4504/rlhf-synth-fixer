@@ -1,473 +1,513 @@
-import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
+import fs from 'fs';
+import path from 'path';
 
-// LocalStack detection for conditional tests
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack', () => {
-  let app: cdk.App;
-  let stack: TapStack;
-  let template: Template;
+describe('TapStack CloudFormation Template', () => {
+  let template: any;
 
-  beforeEach(() => {
-    app = new cdk.App();
-    const environmentSuffix = 'test';
-    stack = new TapStack(app, 'TestTapStack', {
-      environmentSuffix,
-      env: {
-        account: '123456789012',
-        region: 'us-east-1'
-      }
-    });
-    template = Template.fromStack(stack);
+  beforeAll(() => {
+    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
+    // Otherwise, ensure the template is in JSON format.
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent);
   });
 
-  describe('VPC Configuration', () => {
-    test('should create VPC with correct CIDR block', () => {
-      template.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16',
-        EnableDnsHostnames: true,
-        EnableDnsSupport: true
-      });
+  describe('Template Structure', () => {
+    test('should have valid CloudFormation format version', () => {
+      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should create VPC with correct name', () => {
-      template.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([
-          Match.objectLike({ Key: 'Name', Value: Match.stringLikeRegexp('secure-vpc-test') })
-        ])
-      });
+    test('should have a description', () => {
+      expect(template.Description).toBeDefined();
+      expect(template.Description).toBe(
+        'TAP Stack - Secure Serverless API with AWS WAF and Lambda'
+      );
     });
 
-    test('should create exactly 2 public subnets', () => {
-      template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
-      
-      const subnets = template.findResources('AWS::EC2::Subnet', {
-        Properties: {
-          MapPublicIpOnLaunch: true
-        }
-      });
-      expect(Object.keys(subnets).length).toBe(2);
+    test('should have metadata section', () => {
+      expect(template.Metadata).toBeDefined();
+      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
 
-    test('should create exactly 2 private subnets', () => {
-      const subnets = template.findResources('AWS::EC2::Subnet', {
-        Properties: {
-          MapPublicIpOnLaunch: false
-        }
-      });
-      expect(Object.keys(subnets).length).toBe(2);
+    test('should have parameter groups in metadata', () => {
+      const parameterGroups =
+        template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups;
+      expect(parameterGroups).toHaveLength(3);
+      expect(parameterGroups[0].Label.default).toBe(
+        'Environment Configuration'
+      );
+      expect(parameterGroups[1].Label.default).toBe('Security Configuration');
+      expect(parameterGroups[2].Label.default).toBe('Logging Configuration');
     });
 
-    test('should create Internet Gateway', () => {
-      template.resourceCountIs('AWS::EC2::InternetGateway', 1);
-    });
-
-    test('should create NAT Gateway', () => {
-      template.resourceCountIs('AWS::EC2::NatGateway', 1);
-    });
-
-    test('should create Elastic IP for NAT Gateway', () => {
-      template.hasResourceProperties('AWS::EC2::EIP', {
-        Domain: 'vpc'
-      });
+    test('should have conditions section', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.HasSecretsManager).toBeDefined();
+      expect(template.Conditions.HasSecretsManager['Fn::Not']).toBeDefined();
+      expect(
+        template.Conditions.HasSecretsManager['Fn::Not'][0]['Fn::Equals']
+      ).toBeDefined();
     });
   });
 
-  describe('VPC Flow Logs', () => {
-    test('should create VPC Flow Logs', () => {
-      template.hasResourceProperties('AWS::EC2::FlowLog', {
-        ResourceType: 'VPC',
-        TrafficType: 'ALL',
-        LogDestinationType: 'cloud-watch-logs'
+  describe('Parameters', () => {
+    test('should have all required parameters', () => {
+      const expectedParameters = [
+        'EnvironmentSuffix',
+        'StageName',
+        'SecretsManagerSecretArn',
+        'LogRetentionInDays',
+      ];
+
+      expectedParameters.forEach(paramName => {
+        expect(template.Parameters[paramName]).toBeDefined();
       });
     });
 
-    test('should create CloudWatch Log Group for Flow Logs', () => {
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/vpc/flowlogs/test',
-        RetentionInDays: 7
-      });
+    test('EnvironmentSuffix parameter should have correct properties', () => {
+      const envSuffixParam = template.Parameters.EnvironmentSuffix;
+      expect(envSuffixParam.Type).toBe('String');
+      expect(envSuffixParam.Default).toBe('dev');
+      expect(envSuffixParam.Description).toBe(
+        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+      );
+      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+      expect(envSuffixParam.ConstraintDescription).toBe(
+        'Must contain only alphanumeric characters'
+      );
     });
 
-    test('should create IAM role for VPC Flow Logs', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'vpc-flow-log-role-test',
-        AssumeRolePolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: {
-                Service: 'vpc-flow-logs.amazonaws.com'
-              }
-            })
-          ])
-        }
-      });
+    test('StageName parameter should have correct properties', () => {
+      const stageParam = template.Parameters.StageName;
+      expect(stageParam.Type).toBe('String');
+      expect(stageParam.Default).toBe('prod');
+      expect(stageParam.Description).toBe('API Gateway stage name');
+      expect(stageParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+      expect(stageParam.ConstraintDescription).toBe(
+        'Must contain only alphanumeric characters'
+      );
+    });
+
+    test('SecretsManagerSecretArn parameter should have correct properties', () => {
+      const secretParam = template.Parameters.SecretsManagerSecretArn;
+      expect(secretParam.Type).toBe('String');
+      expect(secretParam.Default).toBe('');
+      expect(secretParam.Description).toBe(
+        'ARN of the Secrets Manager secret containing environment variables (optional)'
+      );
+      expect(secretParam.AllowedPattern).toBe('^(arn:aws:secretsmanager:.*|)$');
+      expect(secretParam.ConstraintDescription).toBe(
+        'Must be a valid Secrets Manager ARN or empty string'
+      );
+    });
+
+    test('LogRetentionInDays parameter should have correct properties', () => {
+      const logParam = template.Parameters.LogRetentionInDays;
+      expect(logParam.Type).toBe('Number');
+      expect(logParam.Default).toBe(14);
+      expect(logParam.Description).toBe(
+        'CloudWatch Logs retention period in days'
+      );
+      expect(logParam.AllowedValues).toContain(1);
+      expect(logParam.AllowedValues).toContain(14);
+      expect(logParam.AllowedValues).toContain(365);
     });
   });
 
-  // Network Firewall tests - skip in LocalStack (not supported in Community)
-  (isLocalStack ? describe.skip : describe)('Network Firewall', () => {
-    test('should create Network Firewall', () => {
-      template.hasResourceProperties('AWS::NetworkFirewall::Firewall', {
-        FirewallName: 'security-firewall-test',
-        Description: 'Network firewall for VPC protection'
+  describe('Resources', () => {
+    test('should have all required resources', () => {
+      const expectedResources = [
+        'LambdaExecutionRole',
+        'LambdaLogGroup',
+        'TapStackFunction',
+        'LambdaInvokePermission',
+        'TapStackApi',
+        'ApiResource',
+        'ApiMethod',
+        'ApiDeployment',
+        'ApiStage',
+        'ApiLogGroup',
+        'ApiGatewayAccount',
+        'ApiGatewayCloudWatchRole',
+        'WebACL',
+        'WebACLAssociation',
+      ];
+
+      expectedResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
       });
     });
 
-    test('should create Network Firewall Rule Group', () => {
-      template.hasResourceProperties('AWS::NetworkFirewall::RuleGroup', {
-        RuleGroupName: 'threat-protection-test',
-        Type: 'STATEFUL',
-        Capacity: 100
+    describe('Lambda Function Resources', () => {
+      test('LambdaExecutionRole should have correct properties', () => {
+        const role = template.Resources.LambdaExecutionRole;
+        expect(role.Type).toBe('AWS::IAM::Role');
+        expect(role.Properties.RoleName).toEqual({
+          'Fn::Sub': 'TapStack-LambdaRole-${EnvironmentSuffix}',
+        });
+        expect(role.Properties.ManagedPolicyArns).toContain(
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        );
+      });
+
+      test('TapStackFunction should have correct properties', () => {
+        const func = template.Resources.TapStackFunction;
+        expect(func.Type).toBe('AWS::Lambda::Function');
+        expect(func.Properties.FunctionName).toEqual({
+          'Fn::Sub': 'TapStack-Function-${EnvironmentSuffix}',
+        });
+        expect(func.Properties.Runtime).toBe('python3.9');
+        expect(func.Properties.Handler).toBe('index.lambda_handler');
+        expect(func.Properties.Timeout).toBe(30);
+        expect(func.Properties.MemorySize).toBe(128);
+      });
+
+      test('LambdaLogGroup should have correct properties', () => {
+        const logGroup = template.Resources.LambdaLogGroup;
+        expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+        expect(logGroup.Properties.LogGroupName).toEqual({
+          'Fn::Sub': '/aws/lambda/TapStack-Function-${EnvironmentSuffix}',
+        });
+        expect(logGroup.Properties.RetentionInDays).toEqual({
+          Ref: 'LogRetentionInDays',
+        });
       });
     });
 
-    test('should create Network Firewall Policy', () => {
-      template.hasResourceProperties('AWS::NetworkFirewall::FirewallPolicy', {
-        FirewallPolicyName: 'security-policy-test',
-        Description: 'Network firewall policy for threat protection'
+    describe('API Gateway Resources', () => {
+      test('TapStackApi should have correct properties', () => {
+        const api = template.Resources.TapStackApi;
+        expect(api.Type).toBe('AWS::ApiGateway::RestApi');
+        expect(api.Properties.Name).toEqual({
+          'Fn::Sub': 'TapStack-API-${EnvironmentSuffix}',
+        });
+        expect(api.Properties.EndpointConfiguration.Types).toContain(
+          'REGIONAL'
+        );
+      });
+
+      test('ApiResource should have correct properties', () => {
+        const resource = template.Resources.ApiResource;
+        expect(resource.Type).toBe('AWS::ApiGateway::Resource');
+        expect(resource.Properties.PathPart).toBe('api');
+        expect(resource.Properties.RestApiId).toEqual({
+          Ref: 'TapStackApi',
+        });
+      });
+
+      test('ApiMethod should have correct properties', () => {
+        const method = template.Resources.ApiMethod;
+        expect(method.Type).toBe('AWS::ApiGateway::Method');
+        expect(method.Properties.HttpMethod).toBe('GET');
+        expect(method.Properties.AuthorizationType).toBe('NONE');
+        expect(method.Properties.Integration.Type).toBe('AWS_PROXY');
+      });
+
+      test('ApiStage should have correct properties', () => {
+        const stage = template.Resources.ApiStage;
+        expect(stage.Type).toBe('AWS::ApiGateway::Stage');
+        expect(stage.Properties.StageName).toEqual({
+          Ref: 'StageName',
+        });
+        expect(stage.Properties.MethodSettings[0].LoggingLevel).toBe('INFO');
+        expect(stage.Properties.MethodSettings[0].DataTraceEnabled).toBe(true);
+        expect(stage.Properties.MethodSettings[0].MetricsEnabled).toBe(true);
       });
     });
 
-    test('should configure stateful rules for threat protection', () => {
-      template.hasResourceProperties('AWS::NetworkFirewall::RuleGroup', {
-        RuleGroup: {
-          RulesSource: {
-            StatefulRules: Match.arrayWith([
-              Match.objectLike({
-                Action: 'DROP',
-                Header: {
-                  Protocol: 'TCP'
-                }
-              })
-            ])
-          },
-          StatefulRuleOptions: {
-            RuleOrder: 'DEFAULT_ACTION_ORDER'
+    describe('WAF Resources', () => {
+      test('WebACL should have correct properties', () => {
+        const webACL = template.Resources.WebACL;
+        expect(webACL.Type).toBe('AWS::WAFv2::WebACL');
+        expect(webACL.Properties.Scope).toBe('REGIONAL');
+        expect(webACL.Properties.DefaultAction.Allow).toBeDefined();
+        expect(webACL.Properties.Rules).toHaveLength(2);
+      });
+
+      test('WebACL should have rate limiting rule', () => {
+        const webACL = template.Resources.WebACL;
+        const rateLimitRule = webACL.Properties.Rules.find(
+          (rule: any) => rule.Name === 'RateLimitRule'
+        );
+        expect(rateLimitRule).toBeDefined();
+        expect(rateLimitRule.Statement.RateBasedStatement.Limit).toBe(2000);
+        expect(rateLimitRule.Action.Block).toBeDefined();
+      });
+
+      test('WebACL should have common rule set', () => {
+        const webACL = template.Resources.WebACL;
+        const commonRule = webACL.Properties.Rules.find(
+          (rule: any) => rule.Name === 'CommonRuleSet'
+        );
+        expect(commonRule).toBeDefined();
+        expect(commonRule.Statement.ManagedRuleGroupStatement.Name).toBe(
+          'AWSManagedRulesCommonRuleSet'
+        );
+      });
+
+      test('WebACLAssociation should have correct properties', () => {
+        const association = template.Resources.WebACLAssociation;
+        expect(association.Type).toBe('AWS::WAFv2::WebACLAssociation');
+        expect(association.Properties.ResourceArn).toEqual({
+          'Fn::Sub':
+            'arn:aws:apigateway:${AWS::Region}::/restapis/${TapStackApi}/stages/${StageName}',
+        });
+      });
+    });
+
+    describe('Resource Tagging', () => {
+      test('all resources should have consistent tags', () => {
+        const taggedResources = [
+          'LambdaExecutionRole',
+          'LambdaLogGroup',
+          'TapStackFunction',
+          'TapStackApi',
+          'ApiStage',
+          'ApiLogGroup',
+          'ApiGatewayCloudWatchRole',
+          'WebACL',
+        ];
+
+        taggedResources.forEach(resourceName => {
+          const resource = template.Resources[resourceName];
+          if (resource.Properties.Tags) {
+            const environmentTag = resource.Properties.Tags.find(
+              (tag: any) => tag.Key === 'Environment'
+            );
+            const projectTag = resource.Properties.Tags.find(
+              (tag: any) => tag.Key === 'Project'
+            );
+
+            expect(environmentTag).toBeDefined();
+            expect(environmentTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+            expect(projectTag).toBeDefined();
+            expect(projectTag.Value).toBe('TapStack');
           }
-        }
+        });
       });
     });
   });
 
-  // VPC Lattice tests - skip in LocalStack (not supported in Community)
-  (isLocalStack ? describe.skip : describe)('VPC Lattice', () => {
-    test('should create VPC Lattice Service Network', () => {
-      template.hasResourceProperties('AWS::VpcLattice::ServiceNetwork', {
-        Name: 'secure-service-network-test',
-        AuthType: 'AWS_IAM'
+  describe('Outputs', () => {
+    test('should have all required outputs', () => {
+      const expectedOutputs = [
+        'ApiInvokeUrl',
+        'WebACLArn',
+        'LambdaFunctionArn',
+        'ApiGatewayRestApiId',
+        'StackName',
+        'EnvironmentSuffix',
+      ];
+
+      expectedOutputs.forEach(outputName => {
+        expect(template.Outputs[outputName]).toBeDefined();
       });
     });
 
-    test('should create VPC Lattice Service Network VPC Association', () => {
-      template.hasResource('AWS::VpcLattice::ServiceNetworkVpcAssociation', {});
-    });
-
-    test('should create IAM role for VPC Lattice', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'vpc-lattice-role-test',
-        AssumeRolePolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: {
-                Service: 'vpc-lattice.amazonaws.com'
-              }
-            })
-          ])
-        }
+    test('ApiInvokeUrl output should be correct', () => {
+      const output = template.Outputs.ApiInvokeUrl;
+      expect(output.Description).toBe('API Gateway invoke URL');
+      expect(output.Value).toEqual({
+        'Fn::Sub':
+          'https://${TapStackApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}',
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-ApiInvokeUrl',
       });
     });
 
-    test('should have correct VPC Lattice permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Action: Match.arrayWith([
-                'vpc-lattice:ListServices',
-                'vpc-lattice:GetService',
-                'vpc-lattice:CreateServiceNetworkVpcAssociation',
-                'vpc-lattice:GetServiceNetworkVpcAssociation'
-              ])
-            })
-          ])
-        }
+    test('WebACLArn output should be correct', () => {
+      const output = template.Outputs.WebACLArn;
+      expect(output.Description).toBe('WAF Web ACL ARN');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['WebACL', 'Arn'],
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-WebACLArn',
+      });
+    });
+
+    test('LambdaFunctionArn output should be correct', () => {
+      const output = template.Outputs.LambdaFunctionArn;
+      expect(output.Description).toBe('Lambda function ARN');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['TapStackFunction', 'Arn'],
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-LambdaFunctionArn',
+      });
+    });
+
+    test('ApiGatewayRestApiId output should be correct', () => {
+      const output = template.Outputs.ApiGatewayRestApiId;
+      expect(output.Description).toBe('API Gateway REST API ID');
+      expect(output.Value).toEqual({ Ref: 'TapStackApi' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-ApiGatewayRestApiId',
+      });
+    });
+
+    test('StackName output should be correct', () => {
+      const output = template.Outputs.StackName;
+      expect(output.Description).toBe('Name of this CloudFormation stack');
+      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-StackName',
+      });
+    });
+
+    test('EnvironmentSuffix output should be correct', () => {
+      const output = template.Outputs.EnvironmentSuffix;
+      expect(output.Description).toBe(
+        'Environment suffix used for this deployment'
+      );
+      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
       });
     });
   });
 
-  describe('Security Groups', () => {
-    test('should create Web Tier Security Group', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for web tier with least privilege access',
-        GroupName: 'web-tier-sg-test'
+  describe('Template Validation', () => {
+    test('should have valid JSON structure', () => {
+      expect(template).toBeDefined();
+      expect(typeof template).toBe('object');
+    });
+
+    test('should not have any undefined or null required sections', () => {
+      expect(template.AWSTemplateFormatVersion).not.toBeNull();
+      expect(template.Description).not.toBeNull();
+      expect(template.Parameters).not.toBeNull();
+      expect(template.Conditions).not.toBeNull();
+      expect(template.Resources).not.toBeNull();
+      expect(template.Outputs).not.toBeNull();
+    });
+
+    test('should have correct number of resources', () => {
+      const resourceCount = Object.keys(template.Resources).length;
+      expect(resourceCount).toBe(14); // All serverless stack resources
+    });
+
+    test('should have correct number of parameters', () => {
+      const parameterCount = Object.keys(template.Parameters).length;
+      expect(parameterCount).toBe(4); // All required parameters
+    });
+
+    test('should have correct number of outputs', () => {
+      const outputCount = Object.keys(template.Outputs).length;
+      expect(outputCount).toBe(6); // All serverless stack outputs
+    });
+  });
+
+  describe('Resource Naming Convention', () => {
+    test('resources should follow naming convention with environment suffix', () => {
+      const resourcesWithEnvSuffix = [
+        {
+          name: 'LambdaExecutionRole',
+          property: 'RoleName',
+          expected: 'TapStack-LambdaRole-${EnvironmentSuffix}',
+        },
+        {
+          name: 'TapStackFunction',
+          property: 'FunctionName',
+          expected: 'TapStack-Function-${EnvironmentSuffix}',
+        },
+        {
+          name: 'TapStackApi',
+          property: 'Name',
+          expected: 'TapStack-API-${EnvironmentSuffix}',
+        },
+        {
+          name: 'WebACL',
+          property: 'Name',
+          expected: 'TapStack-WebACL-${EnvironmentSuffix}',
+        },
+      ];
+
+      resourcesWithEnvSuffix.forEach(({ name, property, expected }) => {
+        const resource = template.Resources[name];
+        expect(resource.Properties[property]).toEqual({
+          'Fn::Sub': expected,
+        });
       });
     });
 
-    test('should create App Tier Security Group', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for application tier',
-        GroupName: 'app-tier-sg-test'
+    test('export names should follow naming convention', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export.Name).toEqual({
+          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+        });
+      });
+    });
+  });
+
+  describe('Security Configuration', () => {
+    test('Lambda function should have environment variables for secrets', () => {
+      const func = template.Resources.TapStackFunction;
+      expect(func.Properties.Environment.Variables.SECRET_ARN).toEqual({
+        Ref: 'SecretsManagerSecretArn',
+      });
+      expect(func.Properties.Environment.Variables.ENVIRONMENT).toEqual({
+        Ref: 'EnvironmentSuffix',
       });
     });
 
-    test('Web Tier SG should allow HTTPS inbound', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        SecurityGroupIngress: Match.arrayWith([
-          Match.objectLike({
-            IpProtocol: 'tcp',
-            FromPort: 443,
-            ToPort: 443,
-            CidrIp: '0.0.0.0/0'
-          })
-        ])
-      });
+    test('Lambda execution role should have conditional Secrets Manager permissions', () => {
+      const role = template.Resources.LambdaExecutionRole;
+
+      // The Policies property is now conditional using CloudFormation !If
+      expect(role.Properties.Policies).toBeDefined();
+
+      // Check that it's a CloudFormation !If condition
+      expect(role.Properties.Policies['Fn::If']).toBeDefined();
+      expect(role.Properties.Policies['Fn::If'][0]).toBe('HasSecretsManager');
+
+      // Check the policy structure when condition is true
+      const policiesWhenTrue = role.Properties.Policies['Fn::If'][1];
+      expect(Array.isArray(policiesWhenTrue)).toBe(true);
+      expect(policiesWhenTrue[0].PolicyName).toBe('SecretsManagerAccess');
+      expect(policiesWhenTrue[0].PolicyDocument.Statement[0].Action).toContain(
+        'secretsmanager:GetSecretValue'
+      );
+
+      // Check that when condition is false, it returns AWS::NoValue
+      const policiesWhenFalse = role.Properties.Policies['Fn::If'][2];
+      expect(policiesWhenFalse).toEqual({ Ref: 'AWS::NoValue' });
     });
 
-    test('Web Tier SG should allow HTTP inbound for health checks', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        SecurityGroupIngress: Match.arrayWith([
-          Match.objectLike({
-            IpProtocol: 'tcp',
-            FromPort: 80,
-            ToPort: 80,
-            CidrIp: '0.0.0.0/0'
-          })
-        ])
+    test('WAF should be properly associated with API Gateway', () => {
+      const association = template.Resources.WebACLAssociation;
+      expect(association.Properties.WebACLArn).toEqual({
+        'Fn::GetAtt': ['WebACL', 'Arn'],
       });
     });
+  });
 
-    test('App Tier SG should only allow traffic from Web Tier', () => {
-      template.hasResource('AWS::EC2::SecurityGroupIngress', {
-        Properties: {
-          Description: 'Allow traffic from web tier',
-          FromPort: 8080,
-          ToPort: 8080,
-          IpProtocol: 'tcp'
+  describe('Cleanup and Retention Policies', () => {
+    test('resources should not have retention policies that prevent cleanup', () => {
+      Object.keys(template.Resources).forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        // Check that no resource has Retain deletion policy
+        if (resource.DeletionPolicy) {
+          expect(resource.DeletionPolicy).not.toBe('Retain');
+        }
+        // Check that no resource has Retain update replace policy
+        if (resource.UpdateReplacePolicy) {
+          expect(resource.UpdateReplacePolicy).not.toBe('Retain');
         }
       });
     });
 
-    test('Both security groups should restrict outbound to HTTPS only', () => {
-      const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
-      
-      Object.values(securityGroups).forEach(sg => {
-        if (sg.Properties?.SecurityGroupEgress) {
-          expect(sg.Properties.SecurityGroupEgress).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({
-                IpProtocol: 'tcp',
-                FromPort: 443,
-                ToPort: 443
-              })
-            ])
-          );
-        }
-      });
-    });
-  });
-
-  describe('Tagging', () => {
-    test('should tag all resources with Environment: Production', () => {
-      const resources = template.findResources('AWS::EC2::VPC');
-      Object.values(resources).forEach(resource => {
-        expect(resource.Properties?.Tags).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              Key: 'Environment',
-              Value: 'Production'
-            })
-          ])
-        );
-      });
-    });
-
-    test('should tag networking resources with Component: Networking', () => {
-      const vpcResources = template.findResources('AWS::EC2::VPC');
-      Object.values(vpcResources).forEach(resource => {
-        expect(resource.Properties?.Tags).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              Key: 'Component',
-              Value: 'Networking'
-            })
-          ])
-        );
-      });
-    });
-
-    test('should tag security resources with Component: Security', () => {
-      const sgResources = template.findResources('AWS::EC2::SecurityGroup');
-      Object.values(sgResources).forEach(resource => {
-        expect(resource.Properties?.Tags).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              Key: 'Component',
-              Value: 'Security'
-            })
-          ])
-        );
-      });
-    });
-  });
-
-  describe('Stack Outputs', () => {
-    test('should output VPC ID', () => {
-      const outputs = template.findOutputs('*');
-      const vpcIdOutput = Object.entries(outputs).find(([key, value]) => 
-        value.Description === 'VPC ID'
-      );
-      expect(vpcIdOutput).toBeDefined();
-    });
-
-    test('should output VPC CIDR', () => {
-      const outputs = template.findOutputs('*');
-      const vpcCidrOutput = Object.entries(outputs).find(([key, value]) => 
-        value.Description === 'VPC CIDR Block'
-      );
-      expect(vpcCidrOutput).toBeDefined();
-    });
-
-    test('should output Public Subnet IDs', () => {
-      const outputs = template.findOutputs('*');
-      const publicSubnetOutput = Object.entries(outputs).find(([key, value]) => 
-        value.Description === 'Public Subnet IDs'
-      );
-      expect(publicSubnetOutput).toBeDefined();
-    });
-
-    test('should output Private Subnet IDs', () => {
-      const outputs = template.findOutputs('*');
-      const privateSubnetOutput = Object.entries(outputs).find(([key, value]) => 
-        value.Description === 'Private Subnet IDs'
-      );
-      expect(privateSubnetOutput).toBeDefined();
-    });
-
-    test('should output Network Firewall ARN', () => {
-      const outputs = template.findOutputs('*');
-      const firewallOutput = Object.entries(outputs).find(([key, value]) => 
-        value.Description === 'Network Firewall ARN'
-      );
-      expect(firewallOutput).toBeDefined();
-    });
-
-    test('should output Service Network ID', () => {
-      const outputs = template.findOutputs('*');
-      const serviceNetworkOutput = Object.entries(outputs).find(([key, value]) => 
-        value.Description === 'VPC Lattice Service Network ID'
-      );
-      expect(serviceNetworkOutput).toBeDefined();
-    });
-
-    test('should output Web Tier Security Group ID', () => {
-      const outputs = template.findOutputs('*');
-      const webTierSgOutput = Object.entries(outputs).find(([key, value]) => 
-        value.Description === 'Web Tier Security Group ID'
-      );
-      expect(webTierSgOutput).toBeDefined();
-    });
-  });
-
-  describe('IAM Least Privilege', () => {
-    test('VPC Flow Logs role should have minimal permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Action: Match.arrayWith([
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams'
-              ])
-            })
-          ])
-        }
-      });
-    });
-
-    test('VPC Lattice role should have minimal permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Action: Match.arrayWith([
-                'vpc-lattice:ListServices',
-                'vpc-lattice:GetService',
-                'vpc-lattice:CreateServiceNetworkVpcAssociation',
-                'vpc-lattice:GetServiceNetworkVpcAssociation'
-              ]),
-              Resource: '*'
-            })
-          ])
-        }
-      });
-    });
-  });
-
-  describe('Resource Naming', () => {
-    test('all named resources should include environment suffix', () => {
-      // Check VPC name
-      template.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([
-          Match.objectLike({ 
-            Key: 'Name', 
-            Value: Match.stringLikeRegexp('.*test.*') 
-          })
-        ])
-      });
-
-      // Check IAM roles
-      template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: Match.stringLikeRegexp('.*test.*')
-      });
-
-      // Check Security Groups
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupName: Match.stringLikeRegexp('.*test.*')
-      });
-
-      // Check Network Firewall
-      template.hasResourceProperties('AWS::NetworkFirewall::Firewall', {
-        FirewallName: Match.stringLikeRegexp('.*test.*')
-      });
-
-      // Check VPC Lattice Service Network
-      template.hasResourceProperties('AWS::VpcLattice::ServiceNetwork', {
-        Name: Match.stringLikeRegexp('.*test.*')
-      });
-    });
-  });
-
-  describe('Best Practices', () => {
-    test('should not have hardcoded credentials', () => {
-      const jsonString = JSON.stringify(template.toJSON());
-      expect(jsonString).not.toMatch(/AWS_ACCESS_KEY_ID/);
-      expect(jsonString).not.toMatch(/AWS_SECRET_ACCESS_KEY/);
-      expect(jsonString).not.toMatch(/password/i);
-      expect(jsonString).not.toMatch(/secret/i);
-    });
-
-    test('should have removal policy set for stateful resources', () => {
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        RetentionInDays: 7
-      });
-    });
-
-    test('should enable DNS hostnames and support in VPC', () => {
-      template.hasResourceProperties('AWS::EC2::VPC', {
-        EnableDnsHostnames: true,
-        EnableDnsSupport: true
+    test('log groups should have configurable retention', () => {
+      const logGroups = ['LambdaLogGroup', 'ApiLogGroup'];
+      logGroups.forEach(logGroupName => {
+        const logGroup = template.Resources[logGroupName];
+        expect(logGroup.Properties.RetentionInDays).toEqual({
+          Ref: 'LogRetentionInDays',
+        });
       });
     });
   });

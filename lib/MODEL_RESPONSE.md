@@ -1,384 +1,298 @@
-I'll help you create a secure VPC infrastructure using CDK TypeScript. Here's a comprehensive solution that includes all the requested features:
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure serverless deployment with API Gateway, Lambda, WAF, and Secrets Manager integration'
 
-## lib/tap-stack.ts
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name for resource tagging
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+  
+  StageName:
+    Type: String
+    Default: v1
+    Description: API Gateway stage name
+  
+  SecretsManagerArn:
+    Type: String
+    Description: ARN of the Secrets Manager secret containing environment variables
+  
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    Description: CloudWatch log retention period in days
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+  
+  ProjectName:
+    Type: String
+    Default: serverless-api
+    Description: Project name for resource naming and tagging
 
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import { VpcStack } from './vpc-stack';
-import { SecurityStack } from './security-stack';
+Resources:
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${Environment}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref SecretsManagerArn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
 
-interface TapStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
-}
-
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
-
-    // Get environment suffix from props, context, or use 'dev' as default
-    const environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
-
-    // Create VPC stack
-    const vpcStack = new VpcStack(this, 'VpcStack', {
-      environmentSuffix,
-    });
-
-    // Create security stack that depends on VPC
-    new SecurityStack(this, 'SecurityStack', {
-      environmentSuffix,
-      vpc: vpcStack.vpc,
-    });
-  }
-}
-```
-
-## lib/vpc-stack.ts
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import { Construct } from 'constructs';
-
-interface VpcStackProps {
-  environmentSuffix: string;
-}
-
-export class VpcStack extends Construct {
-  public readonly vpc: ec2.Vpc;
-  public readonly flowLogRole: iam.Role;
-
-  constructor(scope: Construct, id: string, props: VpcStackProps) {
-    super(scope, id);
-
-    // Create VPC with specified CIDR
-    this.vpc = new ec2.Vpc(this, 'SecureVpc', {
-      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      maxAzs: 2,
-      subnetConfiguration: [
-        {
-          name: 'public',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
-      ],
-      natGateways: 1, // Use single NAT Gateway to reduce costs while maintaining functionality
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-    });
-
-    // Create IAM role for VPC Flow Logs with least privilege
-    this.flowLogRole = new iam.Role(this, 'VpcFlowLogRole', {
-      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      description: 'IAM role for VPC Flow Logs with least privilege access',
-    });
-
-    // Add minimal policy for VPC Flow Logs
-    this.flowLogRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'logs:CreateLogGroup',
-          'logs:CreateLogStream',
-          'logs:PutLogEvents',
-          'logs:DescribeLogGroups',
-          'logs:DescribeLogStreams',
-        ],
-        resources: ['arn:aws:logs:*:*:*'],
-      })
-    );
-
-    // Create CloudWatch Log Group for VPC Flow Logs
-    const vpcFlowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
-      logGroupName: `/vpc/flowlogs/${props.environmentSuffix}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    // Enable VPC Flow Logs
-    new ec2.FlowLog(this, 'VpcFlowLog', {
-      resourceType: ec2.FlowLogResourceType.fromVpc(this.vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(
-        vpcFlowLogGroup,
-        this.flowLogRole
-      ),
-      trafficType: ec2.FlowLogTrafficType.ALL,
-    });
-
-    // Tag all resources
-    cdk.Tags.of(this).add('Environment', 'Production');
-    cdk.Tags.of(this).add('Component', 'Networking');
-  }
-}
-```
-
-## lib/security-stack.ts
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as networkfirewall from 'aws-cdk-lib/aws-networkfirewall';
-import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import { Construct } from 'constructs';
-
-interface SecurityStackProps {
-  environmentSuffix: string;
-  vpc: ec2.Vpc;
-}
-
-export class SecurityStack extends Construct {
-  constructor(scope: Construct, id: string, props: SecurityStackProps) {
-    super(scope, id);
-
-    // Create Network Firewall Rule Group with managed rules
-    const firewallRuleGroup = new networkfirewall.CfnRuleGroup(
-      this,
-      'ThreatProtectionRuleGroup',
-      {
-        capacity: 100,
-        ruleGroupName: `threat-protection-${props.environmentSuffix}`,
-        type: 'STATEFUL',
-        description: 'Managed rule group for threat protection',
-        ruleGroup: {
-          statefulRuleOptions: {
-            ruleOrder: 'STRICT_ORDER',
-          },
-          rulesSource: {
-            statefulRules: [
-              {
-                action: 'DROP',
-                header: {
-                  destination: 'ANY',
-                  destinationPort: 'ANY',
-                  direction: 'ANY',
-                  protocol: 'TCP',
-                  source: 'ANY',
-                  sourcePort: 'ANY',
-                },
-                ruleOptions: [
-                  {
-                    keyword: 'msg',
-                    settings: ['"Block malicious traffic"'],
+  # Lambda Function
+  ApiLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${Environment}-api-handler'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          SECRETS_ARN: !Ref SecretsManagerArn
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          
+          def handler(event, context):
+              # Get secrets from Secrets Manager
+              secrets_client = boto3.client('secretsmanager')
+              try:
+                  response = secrets_client.get_secret_value(
+                      SecretId=os.environ['SECRETS_ARN']
+                  )
+                  secrets = json.loads(response['SecretString'])
+              except Exception as e:
+                  print(f"Error retrieving secrets: {str(e)}")
+                  secrets = {}
+              
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*'
                   },
-                  {
-                    keyword: 'sid',
-                    settings: ['1001'],
-                  },
-                ],
-              },
-            ],
-          },
-        },
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
-    );
+                  'body': json.dumps({
+                      'message': 'Hello from secure serverless API!',
+                      'environment': os.environ.get('ENVIRONMENT', 'unknown'),
+                      'secretsLoaded': len(secrets) > 0
+                  })
+              }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
 
-    // Create Network Firewall Policy
-    const firewallPolicy = new networkfirewall.CfnFirewallPolicy(
-      this,
-      'NetworkFirewallPolicy',
-      {
-        firewallPolicyName: `security-policy-${props.environmentSuffix}`,
-        firewallPolicy: {
-          statefulRuleGroupReferences: [
-            {
-              resourceArn: firewallRuleGroup.attrRuleGroupArn,
-            },
-          ],
-          statelessDefaultActions: ['aws:forward_to_sfe'],
-          statelessFragmentDefaultActions: ['aws:forward_to_sfe'],
-        },
-        description: 'Network firewall policy for threat protection',
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
-    );
+  # Lambda CloudWatch Log Group
+  ApiLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ApiLambdaFunction}'
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
 
-    // Create Network Firewall
-    const networkFirewall = new networkfirewall.CfnFirewall(
-      this,
-      'NetworkFirewall',
-      {
-        firewallName: `security-firewall-${props.environmentSuffix}`,
-        firewallPolicyArn: firewallPolicy.attrFirewallPolicyArn,
-        vpcId: props.vpc.vpcId,
-        subnetMappings: props.vpc.publicSubnets.map(subnet => ({
-          subnetId: subnet.subnetId,
-        })),
-        description: 'Network firewall for VPC protection',
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
-    );
+  # API Gateway REST API
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-api'
+      Description: Secure serverless API
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
 
-    // Create IAM role for VPC Lattice with least privilege
-    const latticeServiceRole = new iam.Role(this, 'VpcLatticeServiceRole', {
-      assumedBy: new iam.ServicePrincipal('vpc-lattice.amazonaws.com'),
-      description: 'IAM role for VPC Lattice service network',
-    });
+  # API Gateway Resource
+  ApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: api
 
-    // Add minimal policy for VPC Lattice
-    latticeServiceRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'vpc-lattice:ListServices',
-          'vpc-lattice:GetService',
-          'vpc-lattice:CreateServiceNetworkVpcAssociation',
-          'vpc-lattice:GetServiceNetworkVpcAssociation',
-        ],
-        resources: ['*'],
-      })
-    );
+  # API Gateway Method
+  ApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations'
 
-    // Create VPC Lattice Service Network
-    const serviceNetwork = new vpclattice.CfnServiceNetwork(
-      this,
-      'SecureServiceNetwork',
-      {
-        name: `secure-service-network-${props.environmentSuffix}`,
-        authType: 'AWS_IAM',
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-          {
-            key: 'Component',
-            value: 'ServiceMesh',
-          },
-        ],
-      }
-    );
+  # Lambda Permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${ApiGatewayRestApi}/*/GET/api'
 
-    // Associate VPC with Service Network
-    new vpclattice.CfnServiceNetworkVpcAssociation(
-      this,
-      'ServiceNetworkVpcAssociation',
-      {
-        serviceNetworkIdentifier: serviceNetwork.attrId,
-        vpcIdentifier: props.vpc.vpcId,
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
-    );
+  # API Gateway Deployment
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiGatewayMethod
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      Description: !Sub 'Deployment for ${Environment} environment'
 
-    // Create Security Groups for different tiers
-    const webTierSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'WebTierSecurityGroup',
-      {
-        vpc: props.vpc,
-        description: 'Security group for web tier with least privilege access',
-        allowAllOutbound: false,
-      }
-    );
+  # API Gateway Stage
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      DeploymentId: !Ref ApiGatewayDeployment
+      StageName: !Ref StageName
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
 
-    // Allow HTTPS inbound from anywhere
-    webTierSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow HTTPS traffic'
-    );
+  # API Gateway CloudWatch Log Group
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${ProjectName}-${Environment}'
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
 
-    // Allow HTTP inbound from anywhere (for ALB health checks)
-    webTierSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow HTTP traffic'
-    );
+  # WAF Web ACL
+  WebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-waf'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ProjectName}-${Environment}-CommonRuleSet'
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ProjectName}-${Environment}-KnownBadInputs'
+        - Name: RateLimitRule
+          Priority: 3
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ProjectName}-${Environment}-RateLimit'
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${ProjectName}-${Environment}-WebACL'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
 
-    // Allow outbound HTTPS for API calls
-    webTierSecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow outbound HTTPS'
-    );
+  # WAF Association with API Gateway Stage
+  WebAclAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Sub '${ApiGatewayRestApi}/stages/${StageName}'
+      WebACLArn: !GetAtt WebAcl.Arn
 
-    const appTierSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'AppTierSecurityGroup',
-      {
-        vpc: props.vpc,
-        description: 'Security group for application tier',
-        allowAllOutbound: false,
-      }
-    );
+Outputs:
+  ApiInvokeUrl:
+    Description: API Gateway invoke URL
+    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/api'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiInvokeUrl'
 
-    // Allow inbound from web tier only
-    appTierSecurityGroup.addIngressRule(
-      webTierSecurityGroup,
-      ec2.Port.tcp(8080),
-      'Allow traffic from web tier'
-    );
+  WebAclArn:
+    Description: WAF Web ACL ARN
+    Value: !GetAtt WebAcl.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WebAclArn'
 
-    // Allow outbound HTTPS for API calls
-    appTierSecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow outbound HTTPS'
-    );
+  LambdaFunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt ApiLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
 
-    // Tag all security resources
-    cdk.Tags.of(this).add('Environment', 'Production');
-    cdk.Tags.of(this).add('Component', 'Security');
-
-    // Output important resource identifiers
-    new cdk.CfnOutput(this, 'NetworkFirewallArn', {
-      value: networkFirewall.attrFirewallArn,
-      description: 'Network Firewall ARN',
-    });
-
-    new cdk.CfnOutput(this, 'ServiceNetworkId', {
-      value: serviceNetwork.attrId,
-      description: 'VPC Lattice Service Network ID',
-    });
-
-    new cdk.CfnOutput(this, 'WebTierSecurityGroupId', {
-      value: webTierSecurityGroup.securityGroupId,
-      description: 'Web Tier Security Group ID',
-    });
-  }
-}
+  ApiGatewayId:
+    Description: API Gateway REST API ID
+    Value: !Ref ApiGatewayRestApi
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayId'
 ```
-
-This infrastructure code provides:
-
-1. **Secure VPC Architecture**: VPC with 10.0.0.0/16 CIDR, public and private subnets across 2 AZs
-2. **Network Security**: AWS Network Firewall with managed rule groups for threat protection
-3. **Service Mesh**: VPC Lattice service network for secure service-to-service communication
-4. **Monitoring**: VPC Flow Logs enabled with CloudWatch integration
-5. **Security Groups**: Tiered security groups with least privilege access
-6. **IAM Roles**: Properly scoped IAM roles following least privilege principles
-7. **Production Tagging**: All resources tagged with 'Environment: Production'
-8. **Cost Optimization**: Single NAT Gateway to reduce costs while maintaining functionality
-
-The code is modular, follows AWS best practices, and includes the latest security features you requested.

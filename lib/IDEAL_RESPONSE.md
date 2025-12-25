@@ -1,399 +1,390 @@
-I'll help you create a secure VPC infrastructure using CDK TypeScript. Here's a comprehensive solution that includes all the requested features:
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TAP Stack - Secure Serverless API with AWS WAF and Lambda'
 
-## lib/tap-stack.ts
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+          - StageName
+      - Label:
+          default: 'Security Configuration'
+        Parameters:
+          - SecretsManagerSecretArn
+      - Label:
+          default: 'Logging Configuration'
+        Parameters:
+          - LogRetentionInDays
 
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import { VpcStack } from './vpc-stack';
-import { SecurityStack } from './security-stack';
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
 
-interface TapStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
-}
+  StageName:
+    Type: String
+    Default: 'prod'
+    Description: 'API Gateway stage name'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
 
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+  SecretsManagerSecretArn:
+    Type: String
+    Default: ''
+    Description: 'ARN of the Secrets Manager secret containing environment variables (optional)'
+    AllowedPattern: '^(arn:aws:secretsmanager:.*|)$'
+    ConstraintDescription: 'Must be a valid Secrets Manager ARN or empty string'
 
-    // Get environment suffix from props, context, or use 'dev' as default
-    const environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
+  LogRetentionInDays:
+    Type: Number
+    Default: 14
+    Description: 'CloudWatch Logs retention period in days'
+    AllowedValues:
+      [
+        1,
+        3,
+        5,
+        7,
+        14,
+        30,
+        60,
+        90,
+        120,
+        150,
+        180,
+        365,
+        400,
+        545,
+        731,
+        1827,
+        3653,
+      ]
 
-    // Create VPC stack
-    const vpcStack = new VpcStack(this, 'VpcStack', {
-      environmentSuffix,
-    });
+Conditions:
+  HasSecretsManager: !Not [!Equals [!Ref SecretsManagerSecretArn, '']]
 
-    // Create security stack that depends on VPC
-    new SecurityStack(this, 'SecurityStack', {
-      environmentSuffix,
-      vpc: vpcStack.vpc,
-    });
-  }
-}
+Resources:
+  # IAM Role for Lambda Function
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'TapStack-LambdaRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies: !If
+        - HasSecretsManager
+        - - PolicyName: SecretsManagerAccess
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - secretsmanager:GetSecretValue
+                  Resource: !Ref SecretsManagerSecretArn
+        - !Ref AWS::NoValue
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: TapStack
+
+  # CloudWatch Log Group for Lambda
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/TapStack-Function-${EnvironmentSuffix}'
+      RetentionInDays: !Ref LogRetentionInDays
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: TapStack
+
+  # Lambda Function
+  TapStackFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'TapStack-Function-${EnvironmentSuffix}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          def lambda_handler(event, context):
+              try:
+                  # Get secret ARN from environment variable
+                  secret_arn = os.environ.get('SECRET_ARN', '').strip()
+                  secret_count = 0
+                  
+                  if secret_arn:
+                      try:
+                          # Initialize secrets client only if we have a secret ARN
+                          secrets_client = boto3.client('secretsmanager')
+                          response = secrets_client.get_secret_value(SecretId=secret_arn)
+                          secret_data = json.loads(response['SecretString'])
+                          secret_count = len(secret_data)
+                          print(f"Successfully loaded {secret_count} environment variables from Secrets Manager")
+                      except Exception as secret_error:
+                          print(f"Warning: Could not load secrets from {secret_arn}: {str(secret_error)}")
+                          secret_count = 0
+                  else:
+                      print("No Secrets Manager ARN provided, skipping secret loading")
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'message': 'Hello from TapStack!',
+                          'environment': os.environ.get('ENVIRONMENT', 'unknown'),
+                          'secrets_loaded': secret_count,
+                          'has_secrets_manager': bool(secret_arn)
+                      })
+                  }
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'error': 'Internal server error'
+                      })
+                  }
+      Environment:
+        Variables:
+          SECRET_ARN: !Ref SecretsManagerSecretArn
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Timeout: 30
+      MemorySize: 128
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: TapStack
+
+  # Lambda Permission for API Gateway
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TapStackFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TapStackApi}/*/*'
+
+  # API Gateway Rest API
+  TapStackApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'TapStack-API-${EnvironmentSuffix}'
+      Description: 'TapStack Serverless API'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: TapStack
+
+  # API Gateway Resource
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref TapStackApi
+      ParentId: !GetAtt TapStackApi.RootResourceId
+      PathPart: 'api'
+
+  # API Gateway Method
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref TapStackApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TapStackFunction.Arn}/invocations'
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiMethod
+    Properties:
+      RestApiId: !Ref TapStackApi
+      Description: 'TapStack API Deployment'
+
+  # API Gateway Stage
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref TapStackApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: !Ref StageName
+      Description: !Sub 'TapStack API ${StageName} Stage'
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: TapStack
+
+  # CloudWatch Log Group for API Gateway
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/TapStack-API-${EnvironmentSuffix}'
+      RetentionInDays: !Ref LogRetentionInDays
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: TapStack
+
+  # API Gateway Account Configuration for CloudWatch Logs
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+
+  # IAM Role for API Gateway CloudWatch Logs
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: TapStack
+
+  # WAF Web ACL
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub 'TapStack-WebACL-${EnvironmentSuffix}'
+      Description: 'WAF for TapStack API'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Name: RateLimitRule
+          Priority: 1
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitRule
+        - Name: CommonRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSet
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub 'TapStack-WebACL-${EnvironmentSuffix}'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: TapStack
+
+  # WAF Association with API Gateway Stage
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    DependsOn:
+      - ApiStage
+      - ApiGatewayAccount
+    Properties:
+      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${TapStackApi}/stages/${StageName}'
+      WebACLArn: !GetAtt WebACL.Arn
+
+Outputs:
+  ApiInvokeUrl:
+    Description: 'API Gateway invoke URL'
+    Value: !Sub 'https://${TapStackApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiInvokeUrl'
+
+  WebACLArn:
+    Description: 'WAF Web ACL ARN'
+    Value: !GetAtt WebACL.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WebACLArn'
+
+  LambdaFunctionArn:
+    Description: 'Lambda function ARN'
+    Value: !GetAtt TapStackFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
+
+  ApiGatewayRestApiId:
+    Description: 'API Gateway REST API ID'
+    Value: !Ref TapStackApi
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayRestApiId'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
 ```
-
-## lib/vpc-stack.ts
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import { Construct } from 'constructs';
-
-interface VpcStackProps {
-  environmentSuffix: string;
-}
-
-export class VpcStack extends Construct {
-  public readonly vpc: ec2.Vpc;
-  public readonly flowLogRole: iam.Role;
-
-  constructor(scope: Construct, id: string, props: VpcStackProps) {
-    super(scope, id);
-
-    // Create VPC with specified CIDR
-    this.vpc = new ec2.Vpc(this, 'SecureVpc', {
-      vpcName: `secure-vpc-${props.environmentSuffix}`,
-      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      maxAzs: 2,
-      subnetConfiguration: [
-        {
-          name: 'public',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
-      ],
-      natGateways: 1, // Use single NAT Gateway to reduce costs while maintaining functionality
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-    });
-
-    // Create IAM role for VPC Flow Logs with least privilege
-    this.flowLogRole = new iam.Role(this, 'VpcFlowLogRole', {
-      roleName: `vpc-flow-log-role-${props.environmentSuffix}`,
-      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      description: 'IAM role for VPC Flow Logs with least privilege access',
-    });
-
-    // Add minimal policy for VPC Flow Logs
-    this.flowLogRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'logs:CreateLogGroup',
-          'logs:CreateLogStream',
-          'logs:PutLogEvents',
-          'logs:DescribeLogGroups',
-          'logs:DescribeLogStreams',
-        ],
-        resources: ['arn:aws:logs:*:*:*'],
-      })
-    );
-
-    // Create CloudWatch Log Group for VPC Flow Logs
-    const vpcFlowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
-      logGroupName: `/vpc/flowlogs/${props.environmentSuffix}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    // Enable VPC Flow Logs
-    new ec2.FlowLog(this, 'VpcFlowLog', {
-      resourceType: ec2.FlowLogResourceType.fromVpc(this.vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(
-        vpcFlowLogGroup,
-        this.flowLogRole
-      ),
-      trafficType: ec2.FlowLogTrafficType.ALL,
-    });
-
-    // Tag all resources
-    cdk.Tags.of(this).add('Environment', 'Production');
-    cdk.Tags.of(this).add('Component', 'Networking');
-
-    // Output VPC and subnet information
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: this.vpc.vpcId,
-      description: 'VPC ID',
-    });
-
-    new cdk.CfnOutput(this, 'VpcCidr', {
-      value: this.vpc.vpcCidrBlock,
-      description: 'VPC CIDR Block',
-    });
-
-    new cdk.CfnOutput(this, 'PublicSubnetIds', {
-      value: this.vpc.publicSubnets.map(s => s.subnetId).join(','),
-      description: 'Public Subnet IDs',
-    });
-
-    new cdk.CfnOutput(this, 'PrivateSubnetIds', {
-      value: this.vpc.privateSubnets.map(s => s.subnetId).join(','),
-      description: 'Private Subnet IDs',
-    });
-  }
-}
-```
-
-## lib/security-stack.ts
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as networkfirewall from 'aws-cdk-lib/aws-networkfirewall';
-import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import { Construct } from 'constructs';
-
-interface SecurityStackProps {
-  environmentSuffix: string;
-  vpc: ec2.Vpc;
-}
-
-export class SecurityStack extends Construct {
-  constructor(scope: Construct, id: string, props: SecurityStackProps) {
-    super(scope, id);
-
-    // Create Network Firewall Rule Group with managed rules
-    const firewallRuleGroup = new networkfirewall.CfnRuleGroup(
-      this,
-      'ThreatProtectionRuleGroup',
-      {
-        capacity: 100,
-        ruleGroupName: `threat-protection-${props.environmentSuffix}`,
-        type: 'STATEFUL',
-        description: 'Managed rule group for threat protection',
-        ruleGroup: {
-          statefulRuleOptions: {
-            ruleOrder: 'DEFAULT_ACTION_ORDER',
-          },
-          rulesSource: {
-            statefulRules: [
-              {
-                action: 'DROP',
-                header: {
-                  destination: 'ANY',
-                  destinationPort: 'ANY',
-                  direction: 'ANY',
-                  protocol: 'TCP',
-                  source: 'ANY',
-                  sourcePort: 'ANY',
-                },
-                ruleOptions: [
-                  {
-                    keyword: 'msg',
-                    settings: ['"Block malicious traffic"'],
-                  },
-                  {
-                    keyword: 'sid',
-                    settings: ['1001'],
-                  },
-                ],
-              },
-            ],
-          },
-        },
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
-    );
-
-    // Create Network Firewall Policy
-    const firewallPolicy = new networkfirewall.CfnFirewallPolicy(
-      this,
-      'NetworkFirewallPolicy',
-      {
-        firewallPolicyName: `security-policy-${props.environmentSuffix}`,
-        firewallPolicy: {
-          statefulRuleGroupReferences: [
-            {
-              resourceArn: firewallRuleGroup.attrRuleGroupArn,
-            },
-          ],
-          statelessDefaultActions: ['aws:forward_to_sfe'],
-          statelessFragmentDefaultActions: ['aws:forward_to_sfe'],
-        },
-        description: 'Network firewall policy for threat protection',
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
-    );
-
-    // Create Network Firewall
-    const networkFirewall = new networkfirewall.CfnFirewall(
-      this,
-      'NetworkFirewall',
-      {
-        firewallName: `security-firewall-${props.environmentSuffix}`,
-        firewallPolicyArn: firewallPolicy.attrFirewallPolicyArn,
-        vpcId: props.vpc.vpcId,
-        subnetMappings: props.vpc.publicSubnets.map(subnet => ({
-          subnetId: subnet.subnetId,
-        })),
-        description: 'Network firewall for VPC protection',
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
-    );
-
-    // Create IAM role for VPC Lattice with least privilege
-    const latticeServiceRole = new iam.Role(this, 'VpcLatticeServiceRole', {
-      roleName: `vpc-lattice-role-${props.environmentSuffix}`,
-      assumedBy: new iam.ServicePrincipal('vpc-lattice.amazonaws.com'),
-      description: 'IAM role for VPC Lattice service network',
-    });
-
-    // Add minimal policy for VPC Lattice
-    latticeServiceRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'vpc-lattice:ListServices',
-          'vpc-lattice:GetService',
-          'vpc-lattice:CreateServiceNetworkVpcAssociation',
-          'vpc-lattice:GetServiceNetworkVpcAssociation',
-        ],
-        resources: ['*'],
-      })
-    );
-
-    // Create VPC Lattice Service Network
-    const serviceNetwork = new vpclattice.CfnServiceNetwork(
-      this,
-      'SecureServiceNetwork',
-      {
-        name: `secure-service-network-${props.environmentSuffix}`,
-        authType: 'AWS_IAM',
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-          {
-            key: 'Component',
-            value: 'ServiceMesh',
-          },
-        ],
-      }
-    );
-
-    // Associate VPC with Service Network
-    new vpclattice.CfnServiceNetworkVpcAssociation(
-      this,
-      'ServiceNetworkVpcAssociation',
-      {
-        serviceNetworkIdentifier: serviceNetwork.attrId,
-        vpcIdentifier: props.vpc.vpcId,
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
-    );
-
-    // Create Security Groups for different tiers
-    const webTierSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'WebTierSecurityGroup',
-      {
-        vpc: props.vpc,
-        securityGroupName: `web-tier-sg-${props.environmentSuffix}`,
-        description: 'Security group for web tier with least privilege access',
-        allowAllOutbound: false,
-      }
-    );
-
-    // Allow HTTPS inbound from anywhere
-    webTierSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow HTTPS traffic'
-    );
-
-    // Allow HTTP inbound from anywhere (for ALB health checks)
-    webTierSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow HTTP traffic'
-    );
-
-    // Allow outbound HTTPS for API calls
-    webTierSecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow outbound HTTPS'
-    );
-
-    const appTierSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'AppTierSecurityGroup',
-      {
-        vpc: props.vpc,
-        securityGroupName: `app-tier-sg-${props.environmentSuffix}`,
-        description: 'Security group for application tier',
-        allowAllOutbound: false,
-      }
-    );
-
-    // Allow inbound from web tier only
-    appTierSecurityGroup.addIngressRule(
-      webTierSecurityGroup,
-      ec2.Port.tcp(8080),
-      'Allow traffic from web tier'
-    );
-
-    // Allow outbound HTTPS for API calls
-    appTierSecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow outbound HTTPS'
-    );
-
-    // Tag all security resources
-    cdk.Tags.of(this).add('Environment', 'Production');
-    cdk.Tags.of(this).add('Component', 'Security');
-
-    // Output important resource identifiers
-    new cdk.CfnOutput(this, 'NetworkFirewallArn', {
-      value: networkFirewall.attrFirewallArn,
-      description: 'Network Firewall ARN',
-    });
-
-    new cdk.CfnOutput(this, 'ServiceNetworkId', {
-      value: serviceNetwork.attrId,
-      description: 'VPC Lattice Service Network ID',
-    });
-
-    new cdk.CfnOutput(this, 'WebTierSecurityGroupId', {
-      value: webTierSecurityGroup.securityGroupId,
-      description: 'Web Tier Security Group ID',
-    });
-  }
-}
-```
-
-This infrastructure provides a production-ready, secure VPC setup with modern AWS security features including Network Firewall for threat protection and VPC Lattice for secure service-to-service communication. The solution follows AWS best practices for security, high availability, and cost optimization.

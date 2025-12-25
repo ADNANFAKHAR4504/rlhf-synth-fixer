@@ -1,19 +1,9 @@
-Need to build secure AWS infrastructure using CDK TypeScript with network security monitoring and threat protection.
+We need a CloudFormation YAML template for a secure serverless deployment in us-west-2.
 
-Set up a VPC with the following components that work together:
+Use API Gateway as the entry point, but don’t configure a custom domain or TLS cert (those are external dependencies we want to skip). Stick with the default execute-api hostname. Protect the API with AWS WAF attached to the API stage. Wire the routes to Lambda functions, which should load sensitive environment variables from AWS Secrets Manager. Make sure CloudWatch logging is enabled. Tag everything consistently.
 
-1. VPC with CIDR 10.0.0.0/16 containing public and private subnets across 2 AZs
-2. Internet Gateway connects to public subnets for outbound traffic
-3. NAT Gateway in public subnets routes private subnet traffic to internet
-4. VPC Flow Logs stream network traffic to CloudWatch Logs using an IAM role for write access
-5. AWS Network Firewall deployed in public subnets inspects all traffic flowing through the VPC
-6. VPC Lattice service network connects to the VPC for secure service-to-service communication
-7. Security groups control traffic between web tier and application tier using least-privilege rules
+Include parameters for things like secret ARNs, stage name, log retention, and similar settings so the template can be reused across environments. Provide outputs for the API invoke URL and the Web ACL ARN.
 
-The architecture needs proper connectivity:
-- Network Firewall intercepts traffic at the VPC level before it reaches resources
-- VPC Flow Logs capture all traffic for security monitoring via CloudWatch
-- Security groups enforce segmentation between web tier and app tier
-- VPC Lattice enables service mesh connectivity across the VPC
+The final deliverable is a single CloudFormation YAML template that passes validation and deploys without issues.
 
-Use proper IAM roles with minimal permissions - no wildcards. Tag everything with Environment: Production.
+Important: return only the code of the template, nothing else.
