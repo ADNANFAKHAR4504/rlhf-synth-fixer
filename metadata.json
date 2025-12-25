@@ -5,7 +5,6 @@
   "turn_type": "single",
   "po_id": "LS-trainr868",
   "team": "synth-2",
-  "wave": "P0",
   "startedAt": "2025-08-15T12:07:30+05:30",
   "subtask": "Application Deployment",
   "provider": "localstack",
@@ -24,6 +23,7 @@
     "IAM",
     "AutoScaling"
   ],
+  "wave": "P0",
   "migrated_from": {
     "po_id": "trainr868",
     "pr": "Pr1299"

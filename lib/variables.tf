@@ -109,3 +109,9 @@ variable "enable_config" {
   type        = bool
   default     = false
 }
+
+variable "enable_cloudwatch_alarms" {
+  description = "Enable CloudWatch alarms. Set to false for LocalStack Community Edition (known serialization issue)"
+  type        = bool
+  default     = false
+}

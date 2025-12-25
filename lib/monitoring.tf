@@ -14,7 +14,9 @@ resource "aws_cloudwatch_log_group" "alb" {
 }
 
 # CloudWatch Alarms for Auto Scaling
+# Note: CloudWatch alarms disabled by default for LocalStack Community (serialization issue)
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
+  count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.name_prefix}-high-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -34,6 +36,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "low_cpu" {
+  count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.name_prefix}-low-cpu"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
@@ -54,6 +57,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 
 # RDS CloudWatch Alarms
 resource "aws_cloudwatch_metric_alarm" "database_cpu" {
+  count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.name_prefix}-database-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -72,6 +76,7 @@ resource "aws_cloudwatch_metric_alarm" "database_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "database_connections" {
+  count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.name_prefix}-database-connections"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -91,6 +96,7 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
 
 # ALB CloudWatch Alarms
 resource "aws_cloudwatch_metric_alarm" "alb_target_response_time" {
+  count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.name_prefix}-alb-response-time"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
