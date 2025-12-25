@@ -186,11 +186,11 @@ Resources:
                 - 's3:GetBucketLocation'
                 - 's3:GetBucketVersioning'
                 - 's3:GetBucketPolicy'
-                - 's3:GetBucketEncryption'
+                - 's3:GetEncryptionConfiguration'
                 - 's3:GetBucketLogging'
                 - 's3:GetBucketNotification'
-                - 's3:GetObjectLockConfiguration'
-                - 's3:GetPublicAccessBlock'
+                - 's3:GetBucketObjectLockConfiguration'
+                - 's3:GetBucketPublicAccessBlock'
               Resource:
                 - !Sub "${SecureS3Bucket.Arn}/*"
                 - !GetAtt SecureS3Bucket.Arn
