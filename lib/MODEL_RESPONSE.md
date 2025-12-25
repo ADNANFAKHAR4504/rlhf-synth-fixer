@@ -511,7 +511,7 @@ Resources:
             </head>
             <body>
                 <div class="container">
-                    <h1 class="header">🚀 Secure Web Application Infrastructure</h1>
+                    <h1 class="header"> Secure Web Application Infrastructure</h1>
                     <div class="info">
                         <p><strong>Environment:</strong> ${Environment}</p>
                         <p><strong>Instance ID:</strong> <span id="instance-id">Loading...</span></p>

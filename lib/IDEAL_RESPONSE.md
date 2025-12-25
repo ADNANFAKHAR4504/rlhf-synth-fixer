@@ -370,13 +370,13 @@ Resources:
             <body>
                 <div class="container">
                     <div class="header">
-                        <h1>🚀 Secure Web Application Infrastructure</h1>
+                        <h1> Secure Web Application Infrastructure</h1>
                         <p class="highlight">High Availability • Auto Scaling • Production Ready</p>
                     </div>
                     
                     <div class="info-grid">
                         <div class="info-card">
-                            <h3>🌍 Environment Details</h3>
+                            <h3> Environment Details</h3>
                             <p><strong>Environment:</strong> <span class="highlight">${Environment}</span></p>
                             <p><strong>Stack:</strong> ${AWS::StackName}</p>
                             <p><strong>Region:</strong> ${AWS::Region}</p>
