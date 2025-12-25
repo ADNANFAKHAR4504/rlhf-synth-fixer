@@ -18,10 +18,10 @@ Create a secure, multi-tier VPC infrastructure using **CloudFormation with JSON*
    - Public and private subnets in each AZ
    - Separate subnet tiers for web, application, and database layers
    - Internet Gateway for public subnet connectivity
-   - NAT Gateway(s) in public subnets for private subnet internet access
+   - NAT Gateways in public subnets for private subnet internet access
 
 2. **Network Segmentation for PCI-DSS**
-   - Distinct subnets for each tier: web (DMZ), application, and database
+   - Distinct subnets for each tier: web DMZ, application, and database
    - Network ACLs for subnet-level traffic control
    - Proper routing tables for public and private subnets with correct associations
    - Isolation between production and non-production environments through network design
@@ -53,11 +53,11 @@ Create a secure, multi-tier VPC infrastructure using **CloudFormation with JSON*
 - CloudFormation template must be properly parameterized for flexibility
 - Include comprehensive outputs for all critical resource IDs
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - CRITICAL
 
 - **environmentSuffix Requirement**: All resource names must include an environmentSuffix parameter to ensure uniqueness across multiple deployments. This is mandatory for testing and multi-environment support.
 - **Destroyability Requirement**: All resources must use Delete or no RemovalPolicy. Do not use Retain policies. Resources must be completely removable during stack deletion.
-- **No Account-Level Resources**: Be cautious with services that have account-level limitations or require special handling.
+- **No Account-Level Services**: Be cautious with services that have account-level limitations or require special handling.
 
 ### Constraints
 
@@ -76,14 +76,14 @@ Create a secure, multi-tier VPC infrastructure using **CloudFormation with JSON*
 - **Security**: Network segmentation meets PCI-DSS requirements, security groups follow least privilege, network ACLs provide subnet-level protection
 - **Compliance**: VPC Flow Logs enabled and capturing all traffic, clear isolation between tiers, audit trail available
 - **High Availability**: Resources deployed across multiple AZs, no single points of failure in network design
-- **Resource Naming**: All resources include environmentSuffix for uniqueness and testing
+- **Infrastructure Naming**: All infrastructure components include environmentSuffix for uniqueness and testing
 - **Code Quality**: Valid CloudFormation JSON syntax, well-structured template, comprehensive parameters and outputs
 - **Destroyability**: Stack can be completely deleted without retained resources
 
 ## What to deliver
 
-- Complete CloudFormation template in JSON format (lib/TapStack.json)
-- VPC with Internet Gateway and NAT Gateway(s)
+- Complete CloudFormation template in JSON format at lib/TapStack.json
+- VPC with Internet Gateway and NAT Gateways
 - Public and private subnets across multiple AZs for web, application, and database tiers
 - Route tables with proper associations
 - Network ACLs for subnet-level security
