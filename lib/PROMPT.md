@@ -11,33 +11,41 @@ Looking for a YAML CloudFormation template that sets up:
 - Want to use parameters so I can override resource names
 - Should use Dev/Prod prefixes to keep things organized
 
-**Networking stuff**
+**Networking architecture with service connectivity**
 - Each environment gets its own VPC with 10.0.0.0/16 (same CIDR for consistency)
 - Public and private subnets in each VPC
-- Internet gateway and NAT gateway for connectivity
+- Internet gateway connected to public subnets for outbound connectivity
+- NAT gateway in public subnet that routes traffic from private subnets to internet
+- Route tables that connect private subnets through NAT gateway and public subnets through internet gateway
 
-**Compute**
+**Compute with network integration**
 - One t2.micro EC2 instance per environment
-- Put them in private subnets for security
-- Same config for both environments
+- EC2 instances deployed in private subnets and routed through NAT gateway
+- Instances attached to IAM instance profiles for S3 access
+- Security groups controlling traffic between EC2 and VPC endpoints
 
-**Storage**
+**Storage with VPC endpoint access**
 - S3 bucket for each environment with versioning turned on
-- Make sure buckets aren't publicly accessible
-- Different bucket names so they don't conflict
+- EC2 instances connect to S3 through VPC endpoints (traffic stays in AWS network)
+- Buckets aren't publicly accessible, only accessible via IAM roles from EC2
+- Different bucket names so they don't conflict across environments
 
-**Security/IAM**
-- IAM roles that only have access to their own environment's S3 bucket
-- Separate roles for Dev vs Prod
-- Instance profiles for the EC2 instances
+**Security/IAM integration**
+- IAM roles attached to EC2 instances via instance profiles
+- Roles scoped to only access their own environment's S3 bucket (Dev role can't access Prod bucket)
+- EC2 instances use these roles to authenticate S3 requests through VPC endpoint
+- Separate roles for Dev vs Prod with resource-level permissions
 
-**VPC Endpoints**
-- S3 VPC endpoints so traffic stays inside AWS network
-- Need them for both environments
+**VPC Endpoints for private connectivity**
+- S3 VPC endpoints attached to private subnets where EC2 runs
+- Endpoint policies allowing access from IAM roles only
+- Traffic from EC2 to S3 flows through VPC endpoint without internet gateway
 
-**Outputs**
-- Export the VPC IDs so I can reference them from other stacks
-- Output the main resource IDs I'll need
+**Outputs and cross-stack references**
+- Export the VPC IDs so other stacks can reference them
+- Output the S3 bucket names for application configuration
+- Export security group IDs for cross-stack EC2 deployments
+- Output IAM role ARNs for additional service integrations
 
 ## Recent AWS stuff to include
 
