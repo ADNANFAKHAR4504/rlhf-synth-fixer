@@ -6,10 +6,10 @@
   "po_id": "LS-3174",
   "team": "synth-2",
   "startedAt": "2025-12-25T00:00:00Z",
-  "subtask": "Cloud Environment Setup",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "DynamoDB",
@@ -17,16 +17,8 @@
     "API Gateway",
     "CloudWatch",
     "IAM",
-    "Systems Manager",
-    "X-Ray",
-    "Application Auto Scaling"
+    "Systems Manager"
   ],
   "wave": "P1",
-  "training_quality": 8,
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "barun-turing",
-  "dockerS3Location": ""
+  "training_quality": 8
 }
