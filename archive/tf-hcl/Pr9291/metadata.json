@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "ls-Pr1204",
+  "team": "synth-2",
+  "startedAt": "2025-12-25T05:34:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "EventBridge",
+    "IAM",
+    "CloudTrail"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "Pr1204",
+    "pr": "Pr1204"
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

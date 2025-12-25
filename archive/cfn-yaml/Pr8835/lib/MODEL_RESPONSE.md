@@ -1,0 +1,720 @@
+# Infrastructure Analysis and QA System for CloudFormation
+
+This solution provides a complete infrastructure analysis and QA system for auditing existing CloudFormation stacks. The system uses Lambda functions to analyze stacks on a scheduled basis, generates detailed reports, and sends notifications when issues are found.
+
+## Architecture Overview
+
+The system consists of:
+- Lambda function for stack analysis with Python runtime
+- S3 bucket for storing analysis reports
+- EventBridge rule for scheduled triggers
+- SNS topic for notifications
+- CloudWatch alarms for monitoring
+- IAM roles with least-privilege permissions
+
+## File: lib/TapStack.yml
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Infrastructure Analysis and QA System for auditing CloudFormation stacks
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for resource names to ensure uniqueness
+    Default: dev
+    AllowedPattern: ^[a-z0-9-]+$
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
+  NotificationEmail:
+    Type: String
+    Description: Email address for critical findings notifications
+    AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+    ConstraintDescription: Must be a valid email address
+
+  AnalysisSchedule:
+    Type: String
+    Description: Schedule expression for automated stack analysis
+    Default: rate(1 day)
+
+  ReportRetentionDays:
+    Type: Number
+    Description: Number of days to retain analysis reports in S3
+    Default: 90
+    MinValue: 1
+    MaxValue: 365
+
+Resources:
+  # S3 Bucket for storing analysis reports
+  AnalysisReportsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub stack-analysis-reports-${EnvironmentSuffix}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldReports
+            Status: Enabled
+            ExpirationInDays: !Ref ReportRetentionDays
+            NoncurrentVersionExpirationInDays: 7
+      Tags:
+        - Key: Name
+          Value: !Sub stack-analysis-reports-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: Infrastructure Analysis Reports
+
+  # S3 Bucket Policy to enforce secure transport
+  AnalysisReportsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AnalysisReportsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt AnalysisReportsBucket.Arn
+              - !Sub ${AnalysisReportsBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  # SNS Topic for notifications
+  AnalysisNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub stack-analysis-notifications-${EnvironmentSuffix}
+      DisplayName: CloudFormation Stack Analysis Notifications
+      Subscription:
+        - Endpoint: !Ref NotificationEmail
+          Protocol: email
+      Tags:
+        - Key: Name
+          Value: !Sub stack-analysis-notifications-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Role for Lambda function
+  AnalysisLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub stack-analysis-lambda-role-${EnvironmentSuffix}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CloudFormationReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ListStacks
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:DescribeStackResource
+                  - cloudformation:GetTemplate
+                  - cloudformation:ListStackResources
+                Resource: '*'
+                Sid: AllowCloudFormationReadOperations
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub ${AnalysisReportsBucket.Arn}/*
+                Sid: AllowS3ReportUpload
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref AnalysisNotificationTopic
+                Sid: AllowSNSPublish
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    cloudwatch:namespace: StackAnalysis
+                Sid: AllowCloudWatchMetrics
+      Tags:
+        - Key: Name
+          Value: !Sub stack-analysis-lambda-role-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda function for stack analysis
+  StackAnalysisFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub stack-analysis-function-${EnvironmentSuffix}
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt AnalysisLambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          REPORT_BUCKET: !Ref AnalysisReportsBucket
+          SNS_TOPIC_ARN: !Ref AnalysisNotificationTopic
+          ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          from typing import Dict, List, Any
+
+          cfn_client = boto3.client('cloudformation')
+          s3_client = boto3.client('s3')
+          sns_client = boto3.client('sns')
+          cloudwatch_client = boto3.client('cloudwatch')
+
+          REPORT_BUCKET = os.environ['REPORT_BUCKET']
+          SNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']
+          ENVIRONMENT_SUFFIX = os.environ['ENVIRONMENT_SUFFIX']
+
+          def lambda_handler(event, context):
+              """
+              Main handler for CloudFormation stack analysis.
+              Analyzes stacks, generates reports, and sends notifications.
+              """
+              try:
+                  print("Starting CloudFormation stack analysis...")
+
+                  # List all active stacks
+                  stacks = list_active_stacks()
+                  print(f"Found {len(stacks)} active stacks to analyze")
+
+                  # Analyze each stack
+                  all_findings = []
+                  critical_count = 0
+
+                  for stack in stacks:
+                      stack_name = stack['StackName']
+                      print(f"Analyzing stack: {stack_name}")
+
+                      findings = analyze_stack(stack_name)
+                      all_findings.extend(findings)
+
+                      # Count critical findings
+                      critical_count += sum(1 for f in findings if f['severity'] == 'CRITICAL')
+
+                  # Generate and store report
+                  report = generate_report(all_findings, len(stacks))
+                  report_key = store_report(report)
+
+                  # Publish metrics
+                  publish_metrics(len(stacks), len(all_findings), critical_count)
+
+                  # Send notification if critical findings exist
+                  if critical_count > 0:
+                      send_notification(critical_count, report_key)
+
+                  print(f"Analysis complete. Total findings: {len(all_findings)}, Critical: {critical_count}")
+
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'stacks_analyzed': len(stacks),
+                          'total_findings': len(all_findings),
+                          'critical_findings': critical_count,
+                          'report_location': f"s3://{REPORT_BUCKET}/{report_key}"
+                      })
+                  }
+
+              except Exception as e:
+                  print(f"Error during analysis: {str(e)}")
+                  raise
+
+          def list_active_stacks() -> List[Dict[str, Any]]:
+              """List all active CloudFormation stacks."""
+              stacks = []
+              paginator = cfn_client.get_paginator('list_stacks')
+
+              for page in paginator.paginate(
+                  StackStatusFilter=[
+                      'CREATE_COMPLETE',
+                      'UPDATE_COMPLETE',
+                      'UPDATE_ROLLBACK_COMPLETE'
+                  ]
+              ):
+                  stacks.extend(page['StackSummaries'])
+
+              return stacks
+
+          def analyze_stack(stack_name: str) -> List[Dict[str, Any]]:
+              """Analyze a single CloudFormation stack for issues."""
+              findings = []
+
+              try:
+                  # Describe stack details
+                  stack_response = cfn_client.describe_stacks(StackName=stack_name)
+                  stack = stack_response['Stacks'][0]
+
+                  # Check for missing tags
+                  tags = stack.get('Tags', [])
+                  required_tags = ['Environment', 'Owner', 'CostCenter']
+                  missing_tags = [tag for tag in required_tags if not any(t['Key'] == tag for t in tags)]
+
+                  if missing_tags:
+                      findings.append({
+                          'stack_name': stack_name,
+                          'severity': 'MEDIUM',
+                          'category': 'Tagging',
+                          'issue': f"Missing required tags: {', '.join(missing_tags)}",
+                          'recommendation': 'Add required tags for proper resource management and cost tracking'
+                      })
+
+                  # Check stack resources
+                  resources = list_stack_resources(stack_name)
+
+                  # Check for IAM resources with wildcard permissions
+                  for resource in resources:
+                      resource_type = resource['ResourceType']
+
+                      if resource_type == 'AWS::IAM::Role':
+                          findings.extend(check_iam_role(stack_name, resource))
+                      elif resource_type == 'AWS::S3::Bucket':
+                          findings.extend(check_s3_bucket(stack_name, resource))
+                      elif resource_type == 'AWS::RDS::DBInstance':
+                          findings.extend(check_rds_instance(stack_name, resource))
+
+                  # Check for stack drift
+                  if len(resources) > 0:
+                      findings.append({
+                          'stack_name': stack_name,
+                          'severity': 'INFO',
+                          'category': 'Best Practice',
+                          'issue': 'Stack drift detection recommended',
+                          'recommendation': 'Enable drift detection to identify manual changes to resources'
+                      })
+
+              except Exception as e:
+                  print(f"Error analyzing stack {stack_name}: {str(e)}")
+                  findings.append({
+                      'stack_name': stack_name,
+                      'severity': 'ERROR',
+                      'category': 'Analysis',
+                      'issue': f"Failed to analyze stack: {str(e)}",
+                      'recommendation': 'Check stack status and permissions'
+                  })
+
+              return findings
+
+          def list_stack_resources(stack_name: str) -> List[Dict[str, Any]]:
+              """List all resources in a stack."""
+              resources = []
+              paginator = cfn_client.get_paginator('list_stack_resources')
+
+              try:
+                  for page in paginator.paginate(StackName=stack_name):
+                      resources.extend(page['StackResourceSummaries'])
+              except Exception as e:
+                  print(f"Error listing resources for {stack_name}: {str(e)}")
+
+              return resources
+
+          def check_iam_role(stack_name: str, resource: Dict[str, Any]) -> List[Dict[str, Any]]:
+              """Check IAM role for overly permissive policies."""
+              findings = []
+
+              # This is a simplified check - in production, you would fetch and parse the policy
+              findings.append({
+                  'stack_name': stack_name,
+                  'severity': 'INFO',
+                  'category': 'Security',
+                  'issue': f"IAM Role {resource['LogicalResourceId']} should be reviewed for least-privilege",
+                  'recommendation': 'Verify IAM role policies follow least-privilege principle'
+              })
+
+              return findings
+
+          def check_s3_bucket(stack_name: str, resource: Dict[str, Any]) -> List[Dict[str, Any]]:
+              """Check S3 bucket for security best practices."""
+              findings = []
+
+              # Note: This is a simplified check. In production, you would call S3 APIs to check actual configuration
+              findings.append({
+                  'stack_name': stack_name,
+                  'severity': 'MEDIUM',
+                  'category': 'Security',
+                  'issue': f"S3 Bucket {resource['LogicalResourceId']} should have encryption and versioning enabled",
+                  'recommendation': 'Enable server-side encryption and versioning for data protection'
+              })
+
+              return findings
+
+          def check_rds_instance(stack_name: str, resource: Dict[str, Any]) -> List[Dict[str, Any]]:
+              """Check RDS instance for security and cost optimization."""
+              findings = []
+
+              findings.append({
+                  'stack_name': stack_name,
+                  'severity': 'MEDIUM',
+                  'category': 'Cost Optimization',
+                  'issue': f"RDS Instance {resource['LogicalResourceId']} - consider Aurora Serverless for cost savings",
+                  'recommendation': 'Evaluate Aurora Serverless v2 for better cost optimization with auto-scaling'
+              })
+
+              return findings
+
+          def generate_report(findings: List[Dict[str, Any]], stack_count: int) -> Dict[str, Any]:
+              """Generate analysis report."""
+              timestamp = datetime.utcnow().isoformat()
+
+              severity_counts = {
+                  'CRITICAL': sum(1 for f in findings if f['severity'] == 'CRITICAL'),
+                  'HIGH': sum(1 for f in findings if f['severity'] == 'HIGH'),
+                  'MEDIUM': sum(1 for f in findings if f['severity'] == 'MEDIUM'),
+                  'LOW': sum(1 for f in findings if f['severity'] == 'LOW'),
+                  'INFO': sum(1 for f in findings if f['severity'] == 'INFO')
+              }
+
+              return {
+                  'report_metadata': {
+                      'timestamp': timestamp,
+                      'stacks_analyzed': stack_count,
+                      'total_findings': len(findings),
+                      'severity_distribution': severity_counts
+                  },
+                  'findings': findings
+              }
+
+          def store_report(report: Dict[str, Any]) -> str:
+              """Store analysis report in S3."""
+              timestamp = datetime.utcnow().strftime('%Y/%m/%d/%H%M%S')
+              report_key = f"reports/{timestamp}/analysis-report.json"
+
+              s3_client.put_object(
+                  Bucket=REPORT_BUCKET,
+                  Key=report_key,
+                  Body=json.dumps(report, indent=2),
+                  ContentType='application/json',
+                  ServerSideEncryption='AES256'
+              )
+
+              print(f"Report stored at s3://{REPORT_BUCKET}/{report_key}")
+              return report_key
+
+          def publish_metrics(stack_count: int, finding_count: int, critical_count: int):
+              """Publish custom CloudWatch metrics."""
+              timestamp = datetime.utcnow()
+
+              metrics = [
+                  {
+                      'MetricName': 'StacksAnalyzed',
+                      'Value': stack_count,
+                      'Unit': 'Count',
+                      'Timestamp': timestamp
+                  },
+                  {
+                      'MetricName': 'TotalFindings',
+                      'Value': finding_count,
+                      'Unit': 'Count',
+                      'Timestamp': timestamp
+                  },
+                  {
+                      'MetricName': 'CriticalFindings',
+                      'Value': critical_count,
+                      'Unit': 'Count',
+                      'Timestamp': timestamp
+                  }
+              ]
+
+              cloudwatch_client.put_metric_data(
+                  Namespace='StackAnalysis',
+                  MetricData=metrics
+              )
+
+          def send_notification(critical_count: int, report_key: str):
+              """Send SNS notification for critical findings."""
+              message = f"""
+          CloudFormation Stack Analysis Alert
+
+          Critical findings detected during automated stack analysis.
+
+          Summary:
+          - Critical Issues Found: {critical_count}
+          - Report Location: s3://{REPORT_BUCKET}/{report_key}
+          - Environment: {ENVIRONMENT_SUFFIX}
+
+          Please review the detailed report and take appropriate action.
+          """
+
+              sns_client.publish(
+                  TopicArn=SNS_TOPIC_ARN,
+                  Subject='CloudFormation Stack Analysis - Critical Findings',
+                  Message=message
+              )
+
+              print(f"Notification sent for {critical_count} critical findings")
+      Tags:
+        - Key: Name
+          Value: !Sub stack-analysis-function-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Log Group for Lambda
+  AnalysisLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/stack-analysis-function-${EnvironmentSuffix}
+      RetentionInDays: 30
+
+  # EventBridge Rule for scheduled analysis
+  ScheduledAnalysisRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub stack-analysis-schedule-${EnvironmentSuffix}
+      Description: Scheduled trigger for CloudFormation stack analysis
+      ScheduleExpression: !Ref AnalysisSchedule
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StackAnalysisFunction.Arn
+          Id: StackAnalysisTarget
+
+  # Permission for EventBridge to invoke Lambda
+  AnalysisInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StackAnalysisFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduledAnalysisRule.Arn
+
+  # CloudWatch Alarm for Lambda errors
+  AnalysisFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub stack-analysis-errors-${EnvironmentSuffix}
+      AlarmDescription: Alert when stack analysis function encounters errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StackAnalysisFunction
+      AlarmActions:
+        - !Ref AnalysisNotificationTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for critical findings
+  CriticalFindingsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub stack-analysis-critical-findings-${EnvironmentSuffix}
+      AlarmDescription: Alert when critical findings are detected
+      MetricName: CriticalFindings
+      Namespace: StackAnalysis
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AnalysisNotificationTopic
+      TreatMissingData: notBreaching
+
+Outputs:
+  AnalysisReportsBucketName:
+    Description: Name of the S3 bucket storing analysis reports
+    Value: !Ref AnalysisReportsBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-ReportsBucket
+
+  AnalysisReportsBucketArn:
+    Description: ARN of the S3 bucket storing analysis reports
+    Value: !GetAtt AnalysisReportsBucket.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-ReportsBucketArn
+
+  StackAnalysisFunctionArn:
+    Description: ARN of the stack analysis Lambda function
+    Value: !GetAtt StackAnalysisFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-AnalysisFunctionArn
+
+  AnalysisNotificationTopicArn:
+    Description: ARN of the SNS topic for notifications
+    Value: !Ref AnalysisNotificationTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-NotificationTopicArn
+
+  ScheduledAnalysisRuleArn:
+    Description: ARN of the EventBridge rule for scheduled analysis
+    Value: !GetAtt ScheduledAnalysisRule.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-ScheduleRuleArn
+```
+
+## Deployment Instructions
+
+### Prerequisites
+- AWS CLI configured with appropriate credentials
+- Permissions to create CloudFormation stacks, Lambda functions, S3 buckets, SNS topics, and IAM roles
+
+### Deployment Steps
+
+1. Save the template to a file named `TapStack.yml`
+
+2. Deploy the stack using AWS CLI:
+```bash
+aws cloudformation create-stack \
+  --stack-name stack-analysis-system \
+  --template-body file://TapStack.yml \
+  --parameters \
+    ParameterKey=EnvironmentSuffix,ParameterValue=prod \
+    ParameterKey=NotificationEmail,ParameterValue=your-email@example.com \
+    ParameterKey=AnalysisSchedule,ParameterValue="rate(1 day)" \
+    ParameterKey=ReportRetentionDays,ParameterValue=90 \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+```
+
+3. Wait for stack creation to complete:
+```bash
+aws cloudformation wait stack-create-complete \
+  --stack-name stack-analysis-system \
+  --region us-east-1
+```
+
+4. Confirm the SNS subscription email that will be sent to the notification email address
+
+5. Verify the deployment:
+```bash
+aws cloudformation describe-stacks \
+  --stack-name stack-analysis-system \
+  --region us-east-1 \
+  --query 'Stacks[0].Outputs'
+```
+
+### Manual Testing
+
+Trigger the analysis function manually to test:
+```bash
+aws lambda invoke \
+  --function-name stack-analysis-function-prod \
+  --region us-east-1 \
+  --output json \
+  response.json
+```
+
+### Viewing Reports
+
+List analysis reports:
+```bash
+aws s3 ls s3://stack-analysis-reports-prod/reports/ --recursive
+```
+
+Download a specific report:
+```bash
+aws s3 cp s3://stack-analysis-reports-prod/reports/2025/11/12/143000/analysis-report.json ./report.json
+```
+
+### Monitoring
+
+View Lambda logs:
+```bash
+aws logs tail /aws/lambda/stack-analysis-function-prod --follow
+```
+
+View CloudWatch metrics:
+```bash
+aws cloudwatch get-metric-statistics \
+  --namespace StackAnalysis \
+  --metric-name CriticalFindings \
+  --start-time 2025-11-11T00:00:00Z \
+  --end-time 2025-11-12T00:00:00Z \
+  --period 3600 \
+  --statistics Sum
+```
+
+## Features Implemented
+
+1. **Stack Analysis**
+   - Automated scanning of all active CloudFormation stacks
+   - Tag compliance validation
+   - Resource-specific security checks (IAM, S3, RDS)
+   - Error handling with detailed logging
+
+2. **Quality Assurance**
+   - Multi-level severity classification (CRITICAL, HIGH, MEDIUM, LOW, INFO)
+   - Best practice recommendations
+   - Security and cost optimization checks
+
+3. **Report Management**
+   - JSON-formatted reports stored in S3
+   - Organized by date hierarchy (YYYY/MM/DD/HHMMSS)
+   - Automatic lifecycle management and retention
+   - Server-side encryption enabled
+
+4. **Scheduling**
+   - Configurable EventBridge schedule
+   - Default: daily analysis
+   - Can be customized via parameter
+
+5. **Notifications**
+   - SNS topic for critical findings
+   - Email notifications with report location
+   - CloudWatch alarms for errors and critical findings
+
+6. **Monitoring**
+   - CloudWatch Logs with 30-day retention
+   - Custom CloudWatch metrics for analysis results
+   - Alarms for function errors and critical findings
+
+7. **Security**
+   - Least-privilege IAM roles
+   - Read-only CloudFormation permissions
+   - Encrypted S3 bucket with versioning
+   - Public access blocked on S3
+   - Secure transport enforced
+
+## Cleanup
+
+To delete the stack and all resources:
+```bash
+# First, empty the S3 bucket
+aws s3 rm s3://stack-analysis-reports-prod --recursive
+
+# Then delete the stack
+aws cloudformation delete-stack \
+  --stack-name stack-analysis-system \
+  --region us-east-1
+```
+
+## Customization
+
+The solution can be extended by:
+- Adding more resource-specific checks in the Lambda function
+- Implementing custom compliance rules
+- Integrating with third-party tools
+- Adding more sophisticated IAM policy analysis
+- Implementing actual API calls to verify resource configurations
+- Creating a web dashboard to view reports

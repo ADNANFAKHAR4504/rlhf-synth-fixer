@@ -1,0 +1,28 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T07:57:59+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "CloudWatch",
+    "IAM"
+  ],
+  "po_id": "101912685",
+  "provider": "localstack",
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
