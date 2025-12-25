@@ -824,7 +824,10 @@ Resources:
         - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: !If
+          - IsLocalStackEnv
+          - '$Latest'
+          - !GetAtt LaunchTemplate.LatestVersionNumber
       MinSize: 1
       MaxSize: 3
       DesiredCapacity: 1

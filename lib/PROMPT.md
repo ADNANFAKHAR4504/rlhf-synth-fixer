@@ -4,13 +4,13 @@ Produce a single CloudFormation YAML template that creates a highly secure AWS i
 ---
 
 Requirements - functional 1. VPC & Networking
-• Create a VPC - parameterize the CIDR with default 10.0.0.0/16.
-• Create at least two public subnets and two private subnets across different Availability Zones - parameterize AZ selection or pick first two AZs in the region.
+• Create a VPC and parameterize the CIDR with default 10.0.0.0/16.
+• Create at least two public subnets and two private subnets across different Availability Zones. Parameterize AZ selection or pick first two AZs in the region.
 • Create an Internet Gateway attached to the VPC and a public route table associated with public subnets.
-• Create NAT Gateways in the public subnets for private-subnet outbound access; private subnets must route 0.0.0.0/0 to NAT Gateways.
+• Create NAT Gateways in the public subnets for private-subnet outbound access. Private subnets must route 0.0.0.0/0 to NAT Gateways.
 • Ensure EC2 instances in private subnets do not have public IPs and cannot be reached from the internet directly. 2. EC2
-• Create a Launch Template or Launch Configuration with AutoScalingGroup - minimum one EC2 instance in private subnet for demonstration.
-• Use an AMI resolved dynamically; do not hardcode region-specific AMI IDs - use SSM Parameter or accept AMI as parameter.
+• Create a Launch Template or Launch Configuration with AutoScalingGroup. Minimum one EC2 instance in private subnet for demonstration.
+• Use an AMI resolved dynamically. Do not hardcode region-specific AMI IDs. Use SSM Parameter or accept AMI as parameter.
 • Ensure EBS root and additional volumes are encrypted using a KMS key created in this template.
 • Attach an IAM instance role with least privilege required to:
   - Use SSM AmazonSSMManagedInstanceCore for session manager without SSH port open.
@@ -19,8 +19,8 @@ Requirements - functional 1. VPC & Networking
 • Create IAM roles and policies with least privilege for:
   - Lambda/EC2 roles where needed with only required actions on the created resources.
   - CloudFormation-created users/roles if required - keep minimal.
-• Avoid wildcards in resource ARNs; reference resources in the same template via !Ref / !GetAtt.
-• Include ManagedPolicyArns only where appropriate; prefer scoped inline policies for resource-specific access. 4. KMS & Encryption
+• Use specific resource ARNs instead of wildcards. Reference resources in the same template via !Ref / !GetAtt.
+• Include ManagedPolicyArns only where appropriate. Prefer scoped inline policies for resource-specific access. 4. KMS & Encryption
 • Create a customer-managed AWS KMS Key symmetric in this template with an appropriate key policy that:
   - Allows administration by the account root and CloudFormation service principal and allows the created roles to use it.
   - Grants encryption/decryption to the specific IAM roles that need it like EC2 instance profile, potential Lambda role.
@@ -32,10 +32,10 @@ Requirements - functional 1. VPC & Networking
 • Create an S3 bucket with:
   - Default encryption using the KMS key.
   - Public access blocked via BlockPublicAcls, BlockPublicPolicy, IgnorePublicAcls, RestrictPublicBuckets.
-  - Bucket policy that permits only the necessary roles/services from this stack; no public access. 6. Secrets & Sensitive Data
-• If any secrets are needed like DB password, create an AWS::SecretsManager::Secret and store password there; grant minimal access to the required IAM role.
+  - Bucket policy that permits only the necessary roles/services from this stack with no public access. 6. Secrets & Sensitive Data
+• If any secrets are needed like DB password, create an AWS::SecretsManager::Secret and store password there. Grant minimal access to the required IAM role.
 • Do not store plaintext secrets in the template. 7. CloudFormation Best Practices
-• Parameterize common values: Environment, VpcCidr, PublicSubnetCidrs, PrivateSubnetCidrs, InstanceType, KeyPairName, EnableNatGateway boolean.
+• Parameterize common values like Environment, VpcCidr, PublicSubnetCidrs, PrivateSubnetCidrs, InstanceType, KeyPairName, and EnableNatGateway boolean.
 • Add tagging on all resources for Environment, Project, Owner.
 • Include DeletionPolicy where appropriate - for KMS key/Secrets decide carefully - if template will be tested and then deleted, do not set Retain unless explained.
 • Template must declare required capabilities in deployment instructions CAPABILITY_NAMED_IAM if needed.
@@ -44,9 +44,9 @@ Requirements - functional 1. VPC & Networking
 
 Non-functional / Constraints
 • Output format: Single YAML CloudFormation template only with no nested stacks or multiple files.
-• No hardcoded region-dependent AMI IDs; prefer SSM parameter store or accept AMI param.
-• Everything should be deployable from CloudFormation console: no manual post-deploy actions required to make the stack succeed.
-• Minimize broad permissions by avoiding wildcard in Resource field - use specific ARNs or !Sub with resource names created in the stack.
+• No hardcoded region-dependent AMI IDs. Prefer SSM parameter store or accept AMI param.
+• Everything should be deployable from CloudFormation console with no manual post-deploy actions required to make the stack succeed.
+• Minimize broad permissions by using specific ARNs or !Sub with resource names created in the stack instead of wildcards in the Resource field.
 • For testing: the template must work in a fresh test account with limits permitting in us-east-1 or any specified region.
 
 ---
@@ -79,7 +79,7 @@ The submitted template will be validated against the following checks - the temp
 • S3 bucket default encryption uses the created KMS key - check BucketEncryption.
 • EC2 EBS volumes reference KmsKeyId pointing to created KMS key.
 • KMS key policy allows CloudFormation and principals that need to use it. 5. IAM
-• IAM policies are scoped to created resources with no * unless essential with clear justification.
+• IAM policies are scoped to created resources with specific ARNs unless wildcards are essential with clear justification.
 • EC2 role has AmazonSSMManagedInstanceCore or equivalent and permission to use the KMS key.
 • No CloudFormation creation failures due to IAM permission issues. 6. Secrets
 • Any secret is stored in Secrets Manager and access is restricted to the required IAM role. 7. Security
