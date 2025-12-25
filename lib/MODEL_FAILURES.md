@@ -108,5 +108,32 @@ Actual: Only S3 replication is implemented cross-region; all other resources rem
 Impact: Overstates replication scope.
 
 Summary
-The model’s response inflates complexity (more SGs, NAT gateways, private subnets, databases, IAM roles, monitoring tools) and adds non-existent components (databases, CloudTrail, AWS Config) while omitting implemented features (embedded CI/CD pipeline, single-route-table network design). It reads as a generic “idealized” Pulumi multi-region architecture, not a faithful explanation of the actual tap_stack.py.
+The model's response inflates complexity (more SGs, NAT gateways, private subnets, databases, IAM roles, monitoring tools) and adds non-existent components (databases, CloudTrail, AWS Config) while omitting implemented features (embedded CI/CD pipeline, single-route-table network design). It reads as a generic "idealized" Pulumi multi-region architecture, not a faithful explanation of the actual tap_stack.py.
+
+## LocalStack Compatibility Adjustments
+
+The following modifications were made to ensure LocalStack Community Edition compatibility. These are intentional architectural decisions, not bugs.
+
+| Feature | Community Edition | Pro/Ultimate Edition | Solution Applied | Production Status |
+|---------|-------------------|---------------------|------------------|-------------------|
+| VPC Flow Logs | Invalid Flow Log Max Aggregation Interval error | Works | `enable_flow_logs=not is_localstack` | Enabled in AWS |
+| Cross-Region Replication | Limited support | Full support | `enable_cross_region_replication=not is_localstack` | Enabled in AWS |
+
+### Environment Detection Pattern Used
+
+```python
+is_localstack = (
+    "localhost" in os.environ.get("AWS_ENDPOINT_URL", "")
+    or "4566" in os.environ.get("AWS_ENDPOINT_URL", "")
+)
+```
+
+### Services Verified Working in LocalStack
+
+- VPC (full support)
+- EC2 (subnets, security groups, IGW, NAT - full support)
+- S3 (full support)
+- CloudWatch (log groups - full support)
+- IAM (roles and policies - full support)
+- KMS (basic encryption - full support)
 
