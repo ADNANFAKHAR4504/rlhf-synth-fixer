@@ -12,10 +12,17 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "EC2",
     "VPC",
+    "EC2",
     "ELB",
     "Auto Scaling",
     "IAM"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "siddhantr-sudo",
+  "dockerS3Location": ""
 }
