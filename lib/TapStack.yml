@@ -284,7 +284,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-launch-template'
       LaunchTemplateData:
-        ImageId: 'ami-0c55b159cbfafe1f0'  # Hardcoded for LocalStack compatibility (SSM parameter resolution not supported)
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
@@ -527,7 +527,7 @@ Resources:
         - !Ref PublicSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref WebServerLaunchTemplate
-        Version: '$Latest'  # Changed from !GetAtt LatestVersionNumber for LocalStack compatibility
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
       MinSize: !Ref MinSize
       MaxSize: !Ref MaxSize
       DesiredCapacity: !Ref DesiredCapacity
