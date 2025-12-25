@@ -77,7 +77,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('AMIId parameter has correct schema', () => {
       const p = template.Parameters.AMIId;
-      expect(p.Type).toBe('String');
+      expect(p.Type).toBe('AWS::EC2::Image::Id');
       expect(p.Default).toBe('ami-03cf127a');
       expect(p.Description).toBe('AMI ID for the EC2 instance (use LocalStack default AMI for testing)');
       expect(p.ConstraintDescription).toBe('Must be a valid AMI ID');
@@ -227,9 +227,9 @@ describe('TapStack CloudFormation Template', () => {
   describe('EC2 Instance', () => {
     test('EC2 instance has correct configuration', () => {
       const instance = template.Resources.WebServerInstance;
-      
+
       expect(instance.Type).toBe('AWS::EC2::Instance');
-      expect(instance.Properties.ImageId).toBe('ami-0c02fb55956c7d316');
+      expect(instance.Properties.ImageId).toEqual({ Ref: 'AMIId' });
       expect(instance.Properties.InstanceType).toEqual({ Ref: 'InstanceType' });
       expect(instance.Properties.KeyName).toEqual({
         'Fn::If': [
