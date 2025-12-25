@@ -1,5 +1,6 @@
 package app;
 
+import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
@@ -122,10 +123,13 @@ public class SecureWebAppStack extends Stack {
         }
         
         // 7. Create DynamoDB table (referenced by IAM role)
-        createSecureDynamoTable();
+        Table dynamoTable = createSecureDynamoTable();
 
         // 8. Create security groups with IP restrictions
-        createRestrictedSecurityGroups(vpc);
+        SecurityGroup securityGroup = createRestrictedSecurityGroups(vpc);
+
+        // 9. Export CloudFormation outputs for integration with other stacks
+        createStackOutputs(vpc, logsBucket, appRole, dynamoTable, securityGroup);
     }
     
     /**
@@ -410,7 +414,73 @@ public class SecureWebAppStack extends Stack {
             Port.tcp(80),
             "HTTP outbound for package downloads"
         );
-        
+
         return webAppSG;
+    }
+
+    /**
+     * Creates CloudFormation stack outputs for integration with other stacks
+     */
+    private void createStackOutputs(final Vpc vpc, final Bucket logsBucket,
+                                    final Role appRole, final Table dynamoTable,
+                                    final SecurityGroup securityGroup) {
+        // VPC outputs
+        CfnOutput.Builder.create(this, "VpcId")
+            .value(vpc.getVpcId())
+            .description("VPC ID for secure web application")
+            .exportName("SecureWebApp-VpcId-" + environmentSuffix)
+            .build();
+
+        CfnOutput.Builder.create(this, "VpcCidr")
+            .value(vpc.getVpcCidrBlock())
+            .description("VPC CIDR block")
+            .exportName("SecureWebApp-VpcCidr-" + environmentSuffix)
+            .build();
+
+        // S3 bucket outputs
+        CfnOutput.Builder.create(this, "LogsBucketName")
+            .value(logsBucket.getBucketName())
+            .description("S3 bucket name for logs and CloudTrail data")
+            .exportName("SecureWebApp-LogsBucket-" + environmentSuffix)
+            .build();
+
+        CfnOutput.Builder.create(this, "LogsBucketArn")
+            .value(logsBucket.getBucketArn())
+            .description("S3 bucket ARN for logs")
+            .exportName("SecureWebApp-LogsBucketArn-" + environmentSuffix)
+            .build();
+
+        // IAM role outputs
+        CfnOutput.Builder.create(this, "AppRoleArn")
+            .value(appRole.getRoleArn())
+            .description("IAM role ARN with least privilege access")
+            .exportName("SecureWebApp-AppRoleArn-" + environmentSuffix)
+            .build();
+
+        CfnOutput.Builder.create(this, "AppRoleName")
+            .value(appRole.getRoleName())
+            .description("IAM role name")
+            .exportName("SecureWebApp-AppRoleName-" + environmentSuffix)
+            .build();
+
+        // DynamoDB table outputs
+        CfnOutput.Builder.create(this, "DynamoTableName")
+            .value(dynamoTable.getTableName())
+            .description("DynamoDB table name")
+            .exportName("SecureWebApp-DynamoTable-" + environmentSuffix)
+            .build();
+
+        CfnOutput.Builder.create(this, "DynamoTableArn")
+            .value(dynamoTable.getTableArn())
+            .description("DynamoDB table ARN")
+            .exportName("SecureWebApp-DynamoTableArn-" + environmentSuffix)
+            .build();
+
+        // Security group outputs
+        CfnOutput.Builder.create(this, "SecurityGroupId")
+            .value(securityGroup.getSecurityGroupId())
+            .description("Security group ID with IP restrictions")
+            .exportName("SecureWebApp-SecurityGroupId-" + environmentSuffix)
+            .build();
     }
 }

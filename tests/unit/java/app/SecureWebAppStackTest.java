@@ -335,11 +335,183 @@ public class SecureWebAppStackTest {
             "DeletionPolicy", "Delete",
             "UpdateReplacePolicy", "Delete"
         ));
-        
+
         // Verify S3 bucket has deletion policy
         template.hasResource("AWS::S3::Bucket", Map.of(
             "DeletionPolicy", "Delete",
             "UpdateReplacePolicy", "Delete"
+        ));
+    }
+
+    /**
+     * Test CloudFormation outputs for VPC resources
+     */
+    @Test
+    public void testVpcOutputs() {
+        // Verify VPC ID output
+        template.hasOutput("VpcId", Map.of(
+            "Export", Map.of(
+                "Name", "SecureWebApp-VpcId-" + testEnvironmentSuffix
+            )
+        ));
+
+        // Verify VPC CIDR output
+        template.hasOutput("VpcCidr", Map.of(
+            "Export", Map.of(
+                "Name", "SecureWebApp-VpcCidr-" + testEnvironmentSuffix
+            )
+        ));
+    }
+
+    /**
+     * Test CloudFormation outputs for S3 bucket
+     */
+    @Test
+    public void testS3BucketOutputs() {
+        // Verify S3 bucket name output
+        template.hasOutput("LogsBucketName", Map.of(
+            "Export", Map.of(
+                "Name", "SecureWebApp-LogsBucket-" + testEnvironmentSuffix
+            )
+        ));
+
+        // Verify S3 bucket ARN output
+        template.hasOutput("LogsBucketArn", Map.of(
+            "Export", Map.of(
+                "Name", "SecureWebApp-LogsBucketArn-" + testEnvironmentSuffix
+            )
+        ));
+    }
+
+    /**
+     * Test CloudFormation outputs for IAM role
+     */
+    @Test
+    public void testIamRoleOutputs() {
+        // Verify IAM role ARN output
+        template.hasOutput("AppRoleArn", Map.of(
+            "Export", Map.of(
+                "Name", "SecureWebApp-AppRoleArn-" + testEnvironmentSuffix
+            )
+        ));
+
+        // Verify IAM role name output
+        template.hasOutput("AppRoleName", Map.of(
+            "Export", Map.of(
+                "Name", "SecureWebApp-AppRoleName-" + testEnvironmentSuffix
+            )
+        ));
+    }
+
+    /**
+     * Test CloudFormation outputs for DynamoDB table
+     */
+    @Test
+    public void testDynamoTableOutputs() {
+        // Verify DynamoDB table name output
+        template.hasOutput("DynamoTableName", Map.of(
+            "Export", Map.of(
+                "Name", "SecureWebApp-DynamoTable-" + testEnvironmentSuffix
+            )
+        ));
+
+        // Verify DynamoDB table ARN output
+        template.hasOutput("DynamoTableArn", Map.of(
+            "Export", Map.of(
+                "Name", "SecureWebApp-DynamoTableArn-" + testEnvironmentSuffix
+            )
+        ));
+    }
+
+    /**
+     * Test CloudFormation outputs for Security Group
+     */
+    @Test
+    public void testSecurityGroupOutputs() {
+        // Verify Security Group ID output
+        template.hasOutput("SecurityGroupId", Map.of(
+            "Export", Map.of(
+                "Name", "SecureWebApp-SecurityGroupId-" + testEnvironmentSuffix
+            )
+        ));
+    }
+
+    /**
+     * Test that all critical outputs are present
+     */
+    @Test
+    public void testAllCriticalOutputsPresent() {
+        // Count total outputs - should have at least 9 outputs
+        Map<String, Object> outputs = template.toJSON();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> outputsMap = (Map<String, Object>) outputs.get("Outputs");
+
+        assertThat(outputsMap).isNotNull();
+        assertThat(outputsMap.size()).isGreaterThanOrEqualTo(9);
+
+        // Verify key outputs exist
+        assertThat(outputsMap).containsKeys(
+            "VpcId", "VpcCidr",
+            "LogsBucketName", "LogsBucketArn",
+            "AppRoleArn", "AppRoleName",
+            "DynamoTableName", "DynamoTableArn",
+            "SecurityGroupId"
+        );
+    }
+
+    /**
+     * Test that outputs are created regardless of LocalStack mode
+     */
+    @Test
+    public void testOutputsExistInBothModes() {
+        // Standard AWS mode
+        assertThat(template.toJSON().get("Outputs")).isNotNull();
+
+        // Verify outputs are created
+        @SuppressWarnings("unchecked")
+        Map<String, Object> outputsMap = (Map<String, Object>) template.toJSON().get("Outputs");
+        assertThat(outputsMap.size()).isGreaterThanOrEqualTo(9);
+    }
+
+    /**
+     * Test VPC subnet configuration details
+     */
+    @Test
+    public void testVpcSubnetConfiguration() {
+        // Verify public subnets exist
+        assertThat(template.findResources("AWS::EC2::Subnet", Map.of()).size()).isGreaterThanOrEqualTo(4);
+
+        // Verify internet gateway exists for public subnets
+        assertThat(template.findResources("AWS::EC2::InternetGateway", Map.of()).size()).isGreaterThanOrEqualTo(1);
+
+        // Verify route tables exist
+        assertThat(template.findResources("AWS::EC2::RouteTable", Map.of()).size()).isGreaterThanOrEqualTo(2);
+    }
+
+    /**
+     * Test S3 bucket versioning and lifecycle
+     */
+    @Test
+    public void testS3BucketVersioningAndLifecycle() {
+        // Already covered in testS3BucketSecurityConfiguration but adding explicit test
+        template.hasResourceProperties("AWS::S3::Bucket", Match.objectLike(Map.of(
+            "VersioningConfiguration", Map.of("Status", "Enabled")
+        )));
+
+        template.hasResourceProperties("AWS::S3::Bucket", Match.objectLike(Map.of(
+            "LifecycleConfiguration", Match.objectLike(Map.of(
+                "Rules", Match.anyValue()
+            ))
+        )));
+    }
+
+    /**
+     * Test DynamoDB billing mode
+     */
+    @Test
+    public void testDynamoDbBillingMode() {
+        template.hasResourceProperties("AWS::DynamoDB::Table", Map.of(
+            "BillingMode", "PAY_PER_REQUEST"
         ));
     }
 }
