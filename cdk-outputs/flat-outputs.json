@@ -1,0 +1,19 @@
+{
+  "CloudTrailLogBucketName": "localstack-stack-dev-cloudtraillogbucket-77cb44fc",
+  "ConfigRecorderName": "unknown",
+  "FinancialDynamoDBName": "localstack-stack-dev-FinancialDynamoDB-7fbd2d34",
+  "LambdaFunctionName": "localstack-stack-dev-FinancialLambdaFunction-60e77a64",
+  "PrivateSubnet1Id": "subnet-c21afbb592539f1f1",
+  "PrivateSubnet2Id": "subnet-dea1872d9435d8405",
+  "ProjectName": "defaultProject",
+  "PublicSubnet1Id": "subnet-d5b895ef2359e0029",
+  "PublicSubnet2Id": "subnet-088e332959a2078fc",
+  "RDSInstanceEndpoint": "localhost.localstack.cloud",
+  "RDSInstanceId": "db-c44e1b01",
+  "RDSInstancePort": "4510",
+  "S3BucketName": "localstack-stack-dev-secures3bucket-aae19b84",
+  "SNSTopicArn": "arn:aws:sns:us-east-1:000000000000:financial-secure-topic",
+  "VPCId": "vpc-58c4509f950f9b48e",
+  "WebACLArn": "arn:aws:wafv2:us-east-1:000000000000:regional/webacl/financialwebacl/a84916c5-1f87-4139-b4a9-fa63523361de",
+  "WebACLId": "a84916c5-1f87-4139-b4a9-fa63523361de"
+}
