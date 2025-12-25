@@ -1,12 +1,12 @@
 # Security, Compliance, and Governance
 
-> **[WARN] CRITICAL REQUIREMENT: This task MUST be implemented using cfn with json**
-> 
-> Platform: **cfn**  
-> Language: **json**  
-> Region: **us-east-1**
+> CRITICAL REQUIREMENT: This task MUST be implemented using cfn with json
 >
-> **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
+> Platform: cfn
+> Language: json
+> Region: us-east-1
+>
+> Do not substitute or change the platform or language. All infrastructure code must be written using the specified platform and language combination.
 
 ---
 
@@ -14,18 +14,18 @@
 A financial services company has discovered configuration drift in their production environment after a security audit. They need to implement automated infrastructure compliance scanning to ensure their CloudFormation stacks remain compliant with corporate security policies and AWS best practices.
 
 ## Problem Statement
-Create a CloudFormation template to deploy an automated infrastructure compliance analysis system. The configuration must: 
+Create a CloudFormation template to deploy an automated infrastructure compliance analysis system that monitors CloudFormation stacks for drift and security violations. AWS Config will continuously scan stack configurations and send compliance events through EventBridge to trigger Lambda validation functions. Non-compliant resources will generate SNS notifications to the security team, with detailed reports stored in S3. The configuration must: 
 
-1. Set up AWS Config with custom rules to monitor CloudFormation stack drift and compliance violations.
-2. Deploy Lambda functions (Python 3.9 runtime, 256MB memory) that validate resource configurations against security policies.
-3. Create S3 bucket with versioning enabled and lifecycle rules to transition compliance reports to Glacier after 30 days.
-4. Configure EventBridge rules to capture AWS Config compliance changes and trigger Lambda validation functions.
-5. Implement SNS topic with email subscriptions for security team notifications on non-compliant resources.
-6. Create CloudWatch dashboard displaying compliance metrics and drift detection results.
-7. Set up Parameter Store entries for storing approved AMI IDs and security group rules.
-8. Implement automated tagging compliance checks ensuring all resources have required tags (Environment, Owner, CostCenter).
-9. Configure AWS Config aggregator to collect compliance data from multiple AWS accounts if present.
-10. Create IAM roles and policies following least privilege principle for all services.
+1. Set up AWS Config with custom rules connected to CloudFormation stacks for monitoring drift and compliance violations, with Config sending findings to S3 for storage.
+2. Deploy Lambda functions that receive EventBridge events from AWS Config and validate resource configurations against security policies stored in Parameter Store using Python 3.9 runtime with 256MB memory.
+3. Create S3 bucket that receives compliance reports from AWS Config and Lambda functions, with versioning enabled and lifecycle rules to transition reports to Glacier after 30 days for cost optimization.
+4. Configure EventBridge rules that listen for AWS Config compliance change events and route them to Lambda functions for validation.
+5. Implement SNS topic that receives alerts from Lambda functions and distributes email notifications to security team for non-compliant resources.
+6. Create CloudWatch dashboard that displays compliance metrics from AWS Config and drift detection results from Lambda functions.
+7. Set up Parameter Store entries that store approved AMI IDs and security group rules, accessible by Lambda validation functions.
+8. Implement Lambda-based tagging compliance checks that scan CloudFormation resources and verify required tags like Environment, Owner, and CostCenter are present.
+9. Configure AWS Config aggregator that collects compliance data from multiple AWS accounts and centralizes reporting into single compliance dashboard.
+10. Create IAM roles with specific resource permissions that grant Config access to read CloudFormation stacks, Lambda permission to read Parameter Store, and SNS permission to publish to topics.
 
 Expected output: A CloudFormation template that deploys a complete infrastructure compliance monitoring system capable of detecting configuration drift, validating security policies, and alerting on non-compliant resources across CloudFormation stacks.
 
@@ -73,21 +73,21 @@ Infrastructure compliance monitoring system deployed in us-east-1 region. Uses A
 ## Deployment Requirements (CRITICAL)
 
 ### Resource Naming
-- **MANDATORY**: All named resources MUST include `environmentSuffix` in their names
-- Pattern: `{resource-name}-${environmentSuffix}` or `{resource-name}-${props.environmentSuffix}`
+- **MANDATORY**: All named resources MUST include environmentSuffix in their names
+- Pattern: resource-name concatenated with environmentSuffix variable
 - Examples:
-  - S3 Bucket: `my-bucket-${environmentSuffix}`
-  - Lambda Function: `my-function-${environmentSuffix}`
-  - DynamoDB Table: `my-table-${environmentSuffix}`
-- **Validation**: Every resource with a `name`, `bucketName`, `functionName`, `tableName`, `roleName`, `queueName`, `topicName`, `streamName`, `clusterName`, or `dbInstanceIdentifier` property MUST include environmentSuffix
+  - S3 Bucket: my-bucket with environmentSuffix appended
+  - Lambda Function: my-function with environmentSuffix appended
+  - DynamoDB Table: my-table with environmentSuffix appended
+- **Validation**: Every resource with name, bucketName, functionName, tableName, roleName, queueName, topicName, streamName, clusterName, or dbInstanceIdentifier property MUST include environmentSuffix
 
 ### Resource Lifecycle
 - **MANDATORY**: All resources MUST be destroyable after testing
-- **FORBIDDEN**: 
-  - `RemovalPolicy.RETAIN` (CDK/CDKTF) → Use `RemovalPolicy.DESTROY` instead
-  - `DeletionPolicy: Retain` (CloudFormation) → Remove or use `Delete`
-  - `deletionProtection: true` (RDS, DynamoDB) → Use `deletionProtection: false`
-  - `skip_final_snapshot: false` (RDS) → Use `skip_final_snapshot: true`
+- **FORBIDDEN**:
+  - RemovalPolicy.RETAIN in CDK/CDKTF - Use RemovalPolicy.DESTROY instead
+  - DeletionPolicy Retain in CloudFormation - Remove or use Delete
+  - deletionProtection true for RDS/DynamoDB - Use deletionProtection false
+  - skip_final_snapshot false for RDS - Use skip_final_snapshot true
 - **Rationale**: CI/CD needs to clean up resources after testing
 
 ### AWS Service-Specific Requirements
@@ -99,91 +99,46 @@ Infrastructure compliance monitoring system deployed in us-east-1 region. Uses A
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - [PASS] CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - [FAIL] WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - [FAIL] WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
-- **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
+  - CORRECT: arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+  - WRONG: arn:aws:iam::aws:policy/service-role/ConfigRole
+  - WRONG: arn:aws:iam::aws:policy/AWS_ConfigRole
+- **Alternative**: Use service-linked role AWSServiceRoleForConfig that is auto-created
 
 #### Lambda Functions
-- **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - [PASS] Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - [PASS] Or extract data from event object directly
-- **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
-  - If required, use low values (1-5) to avoid account limit issues
+- **Node.js 18.x+**: Do NOT use require for aws-sdk - AWS SDK v2 not available
+  - Use AWS SDK v3 with imports
+  - Or extract data from event object directly
+- **Reserved Concurrency**: Avoid setting reservedConcurrentExecutions unless required
+  - If required, use low values to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - [PASS] CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - [FAIL] WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  - CORRECT: synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0
+  - WRONG: SYNTHETICS_NODEJS_PUPPETEER_5_1 - deprecated version
 
 #### RDS Databases
-- **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
-- **If Multi-AZ required**: Set `backup_retention_period = 1` (minimum) and `skip_final_snapshot = true`
+- **Prefer**: Aurora Serverless v2 for faster provisioning and auto-scaling
+- **If Multi-AZ required**: Set backup_retention_period to 1 minimum and skip_final_snapshot to true
 - **Note**: Multi-AZ RDS takes 20-30 minutes to provision
 
 #### NAT Gateways
-- **Cost Warning**: NAT Gateways cost ~$32/month each
-- **Prefer**: VPC Endpoints for S3, DynamoDB (free)
-- **If NAT required**: Create only 1 NAT Gateway (not per AZ) for synthetic tasks
+- **Cost Warning**: NAT Gateways cost approximately 32 dollars per month each
+- **Prefer**: VPC Endpoints for S3 and DynamoDB which are free
+- **If NAT required**: Create only 1 NAT Gateway, not per AZ for synthetic tasks
 
-### Hardcoded Values (FORBIDDEN)
-- **DO NOT** hardcode:
-  - Environment names: `prod-`, `dev-`, `stage-`, `production`, `development`, `staging`
-  - Account IDs: `123456789012`, `arn:aws:.*:.*:account`
-  - Regions: Hardcoded `us-east-1` or `us-west-2` in resource names (use variables)
+### Hardcoded Values
+- **DO NOT** hardcode environment names like prod, dev, stage, production, development, or staging
+- **DO NOT** hardcode account IDs like 123456789012 or specific ARNs
+- **DO NOT** hardcode regions like us-east-1 or us-west-2 in resource names
 - **USE**: Environment variables, context values, or parameters instead
 
 ### Cross-Resource References
 - Ensure all resource references use proper ARNs or resource objects
-- Verify dependencies are explicit (use `DependsOn` in CloudFormation, `dependsOn` in CDK)
+- Verify dependencies are explicit using DependsOn in CloudFormation or dependsOn in CDK
 - Test that referenced resources exist before use
 
-## Code Examples (Reference)
-
-### Correct Resource Naming (CloudFormation)
-```json
-{
-  "Resources": {
-    "DataBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {
-          "Fn::Sub": "data-bucket-${EnvironmentSuffix}"
-        }
-      }
-    }
-  }
-}
-```
-
-### Correct AWS Config IAM Role (CloudFormation)
-```json
-{
-  "Resources": {
-    "ConfigRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [{
-            "Effect": "Allow",
-            "Principal": {
-              "Service": "config.amazonaws.com"
-            },
-            "Action": "sts:AssumeRole"
-          }]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-        ]
-      }
-    }
-  }
-}
-```
-
 ## Target Region
-All resources should be deployed to: **us-east-1**
+All infrastructure should be deployed to us-east-1 region
 
 ## Success Criteria
 - Infrastructure deploys successfully
