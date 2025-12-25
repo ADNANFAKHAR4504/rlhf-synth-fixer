@@ -383,9 +383,9 @@ describe('TapStack CloudFormation Template - Three-Tier Web Application', () => 
       expect(resourceCount).toBe(52);
     });
 
-    test('should have 6 parameters', () => {
+    test('should have 7 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6);
+      expect(parameterCount).toBe(7);
     });
 
     test('should have 10 outputs', () => {
