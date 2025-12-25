@@ -1,37 +1,17 @@
-# AWS CloudFormation Security Configuration Template
+Need a CloudFormation template for our IAM security setup that enforces MFA and follows least privilege principles. We're trying to tighten up our access controls and make sure everyone has to use MFA to assume roles.
 
-Create a production-ready CloudFormation template for IAM security configurations with MFA enforcement and least privilege access.
+The setup should have three main IAM roles with different permission levels - one for developers working on projects, one for read-only access for auditors and monitoring, and one for operations team doing production work. All three roles need to require MFA when someone tries to assume them.
 
-## Requirements
+For the developer role, I want them to be able to work with EC2 instances (but only smaller instance types like t3.micro, t3.small, t3.medium), access S3 buckets that start with "dev-", manage CloudFormation stacks prefixed with "dev-", and work with Lambda functions also prefixed with "dev-". The MFA session should be valid for 1 hour before they need to re-authenticate.
 
-### IAM Roles and Policies
-Create three IAM roles with MFA enforcement:
-- Developer Role that connects to S3 buckets for file access and triggers Lambda functions for development testing
-- Read-Only Role that accesses CloudWatch Logs for monitoring and retrieves CloudTrail events for auditing
-- Operations Role that invokes Systems Manager for instance management and writes to CloudWatch for operational metrics
+The read-only role should give full describe/get permissions across EC2, S3, Lambda, CloudFormation, and IAM so auditors can see everything but not make changes. Also include CloudTrail read access so they can review audit logs. MFA session can be a bit longer here, maybe 2 hours since they're just looking at things.
 
-### Security Architecture
-- IAM roles must require MFA for assumption through trust policy conditions
-- Developer role grants access to specific S3 bucket prefixes and Lambda functions
-- Read-Only role retrieves EC2 instance metadata and CloudFormation stack information
-- Operations role connects to SSM Parameter Store for configuration retrieval and sends commands to EC2 instances
+The operations role needs broader EC2 permissions for the current region, S3 access to production and backup buckets, CloudWatch for monitoring and logging, and Systems Manager for running commands and managing parameters. This one should have a shorter MFA timeout of 30 minutes since they're doing sensitive production work.
 
-### CloudTrail Integration
-- CloudTrail writes audit logs to a dedicated S3 bucket for compliance
-- Trail captures API events from Lambda and S3 data events
-- S3 bucket policy allows CloudTrail service to write log files
+Also set up a CloudTrail for audit logging that writes to an S3 bucket named "security-audit-logs-{account-id}". Make sure the bucket policy allows CloudTrail to write logs there. Enable log file validation and make it multi-region so we capture everything.
 
-### Constraints
-- Template must pass cfn-lint validation
-- Avoid hardcoding AWS regions
-- Use explicit resource ARNs instead of wildcards where possible
-- IAM policies must specify exact actions needed for each role
-- Include IsLogging property for CloudTrail Trail resource
+The roles should use the trust policy pattern where they trust the account root but require MFA present and check the MFA age. Each role gets its own managed policy with the specific permissions needed. Tag everything appropriately so we can track which role is for what purpose.
 
-### Expected Outputs
-- Export ARNs for each IAM role
-- Export CloudTrail ARN and log bucket name
-- Include proper resource dependencies between CloudTrail bucket policy and trail
+Make sure to follow the usual CloudFormation best practices - don't hardcode the region, use Fn::Sub for account ID references, make sure the IsLogging property is set to true for CloudTrail. Output the ARNs of all three roles and the CloudTrail so we can reference them later.
 
-## Response Format
-Provide the CloudFormation template in YAML format with descriptive comments explaining security configurations and resource tags for tracking.
+The whole template needs to pass cfn-lint validation and should be deployable without errors. Looking for production-ready code that I can deploy right away to tighten up our security posture.
