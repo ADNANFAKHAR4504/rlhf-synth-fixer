@@ -26,5 +26,6 @@
     "branches": 100
   },
   "author": "mayanksethi-turing",
-  "dockerS3Location": ""
+  "dockerS3Location": "",
+  "wave": "P1"
 }
