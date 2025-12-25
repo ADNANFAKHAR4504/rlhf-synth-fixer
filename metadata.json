@@ -1,0 +1,23 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "localstack",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291945",
+  "team": "synth-2",
+  "wave": "P0",
+  "startedAt": "2025-08-06T13:07:48.826Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM",
+    "CloudWatch Logs"
+  ]
+}
