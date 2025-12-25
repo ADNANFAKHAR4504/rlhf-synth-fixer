@@ -306,9 +306,14 @@ describe('Terraform Infrastructure - End-to-End Workflow Tests', () => {
     // Wait for S3 public access propagation
     await new Promise(resolve => setTimeout(resolve, 5000));
 
-    // Construct public URL using path-style (more reliable than virtual-hosted-style)
+    // Construct public URL - LocalStack-aware
+    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                         process.env.AWS_ENDPOINT_URL?.includes('4566');
     const region = process.env.AWS_REGION || 'us-east-1';
-    const publicUrl = `https://s3.${region}.amazonaws.com/${bucketName}/${publicTestKey}`;
+
+    const publicUrl = isLocalStack
+      ? `http://localhost:4566/${bucketName}/${publicTestKey}`
+      : `https://s3.${region}.amazonaws.com/${bucketName}/${publicTestKey}`;
 
     // Test public access via fetch
     const response = await fetch(publicUrl);
