@@ -123,8 +123,8 @@ The following modifications were made to ensure LocalStack Community Edition com
 | Feature | LocalStack Limitation | Solution Applied | Production Status |
 |---------|----------------------|------------------|-------------------|
 | DeletionPolicy | Required for cleanup | `DeletionPolicy: Delete` on all resources | Safe in AWS (controlled cleanup) |
-| AMI IDs | Real AMI IDs don't exist | Mock AMI `ami-12345678` (8 hex chars) in mappings | Use real region-specific AMIs in AWS |
-| AMI Resolution | SSM parameter resolution not supported | `!FindInMap [RegionMap, !Ref "AWS::Region", AMI]` | Enabled in AWS |
+| AMI IDs | Real AMI IDs don't exist | Mock AMI `ami-12345678` via Parameter (not Mapping) | Use real region-specific AMIs in AWS |
+| FindInMap Bug | `!FindInMap` double-wraps values `[['value']]` | Replaced Mappings with Parameter `AmiId` | Mappings work in AWS |
 | CloudTrail | Limited support in Community | Deployed as-is (may have limited functionality) | Fully functional in AWS |
 | NAT Gateway | EIP allocation can fail | Deployed as-is (may fail in some LocalStack setups) | Fully functional in AWS |
 | CloudWatch Metrics | Limited metric filter support | Deployed as-is (basic functionality) | Fully functional in AWS |

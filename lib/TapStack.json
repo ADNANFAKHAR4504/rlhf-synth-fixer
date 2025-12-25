@@ -49,6 +49,11 @@
             "Default": "0.0.0.0/0",
             "Description": "CIDR block allowed for SSH access to bastion (restrict in production!)",
             "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$"
+        },
+        "AmiId": {
+            "Type": "String",
+            "Default": "ami-12345678",
+            "Description": "AMI ID for EC2 instances (LocalStack uses mock AMI)"
         }
     },
     "Conditions": {
@@ -75,19 +80,6 @@
                     ]
                 }
             ]
-        }
-    },
-    "Mappings": {
-        "RegionMap": {
-            "us-east-1": {
-                "AMI": "ami-12345678"
-            },
-            "us-west-2": {
-                "AMI": "ami-12345678"
-            },
-            "eu-west-1": {
-                "AMI": "ami-12345678"
-            }
         }
     },
     "Resources": {
@@ -1813,13 +1805,7 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMI"
-                    ]
+                    "Ref": "AmiId"
                 },
                 "InstanceType": {
                     "Ref": "InstanceType"
@@ -1904,13 +1890,7 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMI"
-                    ]
+                    "Ref": "AmiId"
                 },
                 "InstanceType": {
                     "Ref": "InstanceType"

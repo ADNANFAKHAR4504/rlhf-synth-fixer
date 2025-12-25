@@ -52,19 +52,15 @@ Parameters:
     Description: "CIDR block allowed for SSH access to bastion (restrict in production!)"
     AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
 
+  # LocalStack-compatible AMI parameter (avoids FindInMap double-wrapping bug)
+  AmiId:
+    Type: String
+    Default: ami-12345678
+    Description: "AMI ID for EC2 instances (LocalStack uses mock AMI)"
+
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
   HasAlertEmail: !Not [!Equals [!Ref AlertEmail, ""]]
-
-Mappings:
-  # LocalStack Community Edition uses mock AMI IDs (8 or 17 hex chars after ami-)
-  RegionMap:
-    us-east-1:
-      AMI: ami-12345678
-    us-west-2:
-      AMI: ami-12345678
-    eu-west-1:
-      AMI: ami-12345678
 
 Resources:
   # --------------------------
@@ -913,7 +909,7 @@ Resources:
     Type: AWS::EC2::Instance
     DeletionPolicy: Delete
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      ImageId: !Ref AmiId
       InstanceType: !Ref InstanceType
       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
       SubnetId: !Ref PublicSubnet1
@@ -953,7 +949,7 @@ Resources:
     Type: AWS::EC2::Instance
     DeletionPolicy: Delete
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      ImageId: !Ref AmiId
       InstanceType: !Ref InstanceType
       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
       SubnetId: !Ref PrivateSubnet1
