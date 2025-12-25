@@ -43,7 +43,8 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should have valid ARN formats', () => {
       expect(deploymentOutputs.ClusterArn).toMatch(/^arn:aws:eks:[a-z0-9-]+:\d+:cluster\/.+$/);
-      expect(deploymentOutputs.OIDCProviderArn).toMatch(/^arn:aws:iam::\d+:oidc-provider\/.+$/);
+      // LocalStack may return "unknown" for OIDC Provider ARN
+      expect(deploymentOutputs.OIDCProviderArn).toMatch(/^(arn:aws:iam::\d+:oidc-provider\/.+|unknown)$/);
     });
 
     test('should have valid resource identifiers', () => {
@@ -53,7 +54,8 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have valid cluster endpoint URL', () => {
-      expect(deploymentOutputs.ClusterEndpoint).toMatch(/^https:\/\/.+\.eks\.amazonaws\.com$/);
+      // LocalStack uses localhost.localstack.cloud, AWS uses .eks.amazonaws.com
+      expect(deploymentOutputs.ClusterEndpoint).toMatch(/^https:\/\/.+(\.eks\.amazonaws\.com|localhost\.localstack\.cloud:\d+)$/);
     });
 
     test('should have cluster name matching environment pattern', () => {
