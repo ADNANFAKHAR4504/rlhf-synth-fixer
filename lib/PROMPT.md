@@ -7,35 +7,35 @@ Design a CloudFormation template in YAML to set up a web application environment
 
 ### Infrastructure Components
 
-1. **Virtual Private Cloud - VPC**
+1. Virtual Private Cloud - VPC
    - CIDR block: 10.0.0.0/16
 
-2. **Subnets**
+2. Subnets
    - Two public subnets in different availability zones, each with CIDR block 10.0.1.0/24
    - Two private subnets in different availability zones, each with CIDR block 10.0.2.0/24
 
-3. **Networking**
+3. Networking
    - Internet Gateway attached to the VPC for public subnet traffic
    - NAT Gateway in one of the public subnets for private subnet outbound access
    - Route Tables associated with each subnet with appropriate routing configurations
 
-4. **Compute Resources**
+4. Compute Resources
    - Application Load Balancer that distributes traffic across two EC2 instances in the private subnets
    - EC2 instances using AMI ID: ami-0abcdef1234567890
    - Instance type: t2.micro
    - Termination protection enabled for all EC2 instances
 
-5. **Security**
+5. Security
    - Security groups configured to:
      - Allow inbound HTTP traffic on port 80 to the load balancer
      - Allow SSH access on port 22 to EC2 instances from a provided IP range
    - Load balancer accessible only over HTTP on port 80
 
-6. **IAM and Monitoring**
+6. IAM and Monitoring
    - IAM roles for EC2 instances with least-privilege permissions: s3:GetObject and s3:PutObject actions on specific bucket ARNs only, and logs:CreateLogStream plus logs:PutLogEvents actions on specific CloudWatch log group ARNs only
    - CloudWatch configuration for logging all API gateway requests
 
-7. **Outputs**
+7. Outputs
    - Stack should output the DNS name of the load balancer
 
 ## Deployment Region
