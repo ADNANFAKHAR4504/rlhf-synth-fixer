@@ -67,7 +67,9 @@ const outputs = JSON.parse(
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
+const stackName = isLocalStack
+  ? `localstack-stack-${environmentSuffix}`
+  : `TapStack${environmentSuffix}`;
 
 // Extract outputs for testing
 const VPC_ID = outputs[`${stackName}-VPC-ID`] || outputs['VPCId'];
