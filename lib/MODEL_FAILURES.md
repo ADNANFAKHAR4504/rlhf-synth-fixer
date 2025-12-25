@@ -81,3 +81,30 @@ All resources are configured with:
 - Integration tests validated 13 out of 14 test cases successfully
 - Infrastructure successfully deployed to AWS us-west-2 region
 - All required tags and configurations verified through AWS API calls
+
+## LocalStack Compatibility Adjustments
+
+The following modifications were made to ensure LocalStack Community Edition compatibility. These are intentional architectural decisions, not bugs.
+
+| Feature | LocalStack Limitation | Solution Applied | Production Status |
+|---------|----------------------|------------------|-------------------|
+| NAT Gateway | EIP allocation fails in Community | Commented out NAT Gateway resources | Enabled in AWS production |
+| RDS Multi-AZ | Limited support in Community | Single-AZ deployment for LocalStack | Multi-AZ enabled in AWS |
+| Secrets Manager | Basic support | Simplified secret storage | Full integration in AWS |
+| Systems Manager | Limited Session Manager support | Basic SSM configuration | Full SSM in AWS |
+| VPC Flow Logs | CloudWatch integration limited | Basic flow log config | Full CloudWatch integration in AWS |
+| Auto Scaling Group | Basic support | Simplified ASG configuration | Full ASG features in AWS |
+
+### Environment Detection Pattern Used
+
+Resources are configured to work with both LocalStack and AWS by using conditional deployment based on environment variables and provider configuration.
+
+### Services Verified Working in LocalStack
+
+- VPC (full support)
+- EC2 (basic support with t3.medium instances)
+- RDS PostgreSQL (basic support)
+- Security Groups (full support)
+- IAM (basic support)
+- Secrets Manager (basic support)
+- CloudWatch Logs (basic support)

@@ -1,6 +1,17 @@
 # Cloud Environment Setup with Terraform HCL
 
-I need to create a complete cloud infrastructure setup using Terraform HCL for a production environment. The infrastructure should be deployed in the us-west-2 region and include the following requirements:
+I need to create a complete cloud infrastructure setup using Terraform HCL for a production environment. The infrastructure should be deployed in the us-west-2 region and demonstrate a secure multi-tier architecture where services connect and interact.
+
+## Architecture Overview
+
+Create a VPC with CIDR block 10.0.0.0/16 that hosts a multi-tier application:
+
+- EC2 instances in private subnets that connect to an RDS PostgreSQL database through VPC security groups
+- The EC2 instances retrieve database credentials from AWS Secrets Manager before connecting to RDS
+- RDS database is deployed across multiple availability zones in private subnets, accessible only from the EC2 security group
+- NAT Gateway provides outbound internet access for EC2 instances in private subnets to reach AWS services
+- Systems Manager enables secure remote management of EC2 instances without requiring SSH
+- VPC Flow Logs stream network traffic to CloudWatch for security monitoring
 
 ## Core Infrastructure Requirements
 
@@ -8,27 +19,30 @@ I need to create a complete cloud infrastructure setup using Terraform HCL for a
 - Create a VPC with CIDR block 10.0.0.0/16
 - Set up public and private subnets across multiple availability zones for high availability
 - Configure Internet Gateway for public subnet connectivity
-- Implement NAT Gateway for private subnet outbound internet access
+- Implement NAT Gateway in public subnet to allow private subnet resources to access internet
 - Use VPC Block Public Access feature for enhanced security
+- Enable VPC Flow Logs that send network traffic data to CloudWatch Logs for monitoring
 
 ### Compute Resources
-- Deploy EC2 instances with minimum t3.medium instance type
-- Place instances in private subnets for security
-- Configure proper security groups with restricted SSH access (port 22) only from specific IP ranges
-- Include systems manager access for secure remote management
+- Deploy EC2 instances with minimum t3.medium instance type in private subnets
+- Configure security groups that allow SSH access (port 22) only from specific IP ranges and database access (port 5432) to RDS
+- Attach IAM role to EC2 instances that grants permissions to read from Secrets Manager and use Systems Manager
+- Include Systems Manager Session Manager access for secure remote management without exposing SSH ports
 
 ### Database
-- Set up RDS PostgreSQL database version 12 or higher
-- Deploy database in private subnets with multi-AZ deployment for high availability
+- Set up RDS PostgreSQL database version 12 or higher in private subnets
+- Configure RDS security group to accept connections only from EC2 security group on port 5432
+- Deploy database with multi-AZ deployment for high availability
 - Configure 7-day backup retention policy
 - Enable encryption at rest for all database storage
 - Create database subnet group spanning multiple availability zones
+- Store database master password in AWS Secrets Manager and grant EC2 IAM role read access
 
 ### Security and Compliance
 - Implement encryption at rest for all storage components
-- Configure security groups following principle of least privilege
-- Use AWS Secrets Manager for database credential management
-- Enable VPC Flow Logs for network monitoring
+- Configure security groups following principle of least privilege with explicit source/destination rules
+- Use AWS Secrets Manager to store RDS credentials and allow EC2 instances to retrieve them via IAM role
+- Enable VPC Flow Logs for network monitoring with CloudWatch Logs as destination
 
 ### Resource Tagging
 All resources must be tagged with:
