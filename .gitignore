@@ -24,6 +24,7 @@ cdk.out.test/
 # IDE/Editor files
 .vscode/settings.local.json
 .claude/settings.local.json
+.cursor/mcp.json
 .idea/
 *.swp
 *.swo

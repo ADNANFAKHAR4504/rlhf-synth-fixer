@@ -1,14 +1,12 @@
-version: '3.8'
-
 services:
   localstack:
     image: localstack/localstack-pro:stable
     ports:
       - "4566:4566"
     environment:
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}
       - SERVICES=${SERVICES:-s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr,elb,autoscaling}
       - DEBUG=1
-      - DATA_DIR=/tmp/localstack/data
       - DOCKER_HOST=unix:///var/run/docker.sock
       - S3_SKIP_SIGNATURE_VALIDATION=1
       - ENFORCE_IAM=0
@@ -23,5 +21,8 @@ services:
       - DISABLE_CORS_CHECKS=1
       - SKIP_INFRA_DOWNLOADS=1
     volumes:
-      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - localstack_data:/var/lib/localstack
       - "/var/run/docker.sock:/var/run/docker.sock"
+
+volumes:
+  localstack_data:
