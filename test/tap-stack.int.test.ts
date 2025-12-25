@@ -28,13 +28,21 @@ const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || proc
 const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
+// CI/CD sets ENVIRONMENT_SUFFIX with 'pr' prefix (e.g., 'pr9297', 'dev', 'prod')
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Stack naming for LocalStack deployments (from scripts/localstack-cloudformation-deploy.sh)
-// LocalStack uses: tap-stack-localstack (fixed name)
-// Regular AWS uses: TapStack{suffix}
+// Check if running in CI environment
+const isCI = process.env.CI === '1' || process.env.CI === 'true';
+
+// Stack naming conventions:
+// - LocalStack (CI/CD):  localstack-stack-{ENVIRONMENT_SUFFIX} (e.g., localstack-stack-pr9297)
+//   From scripts/localstack-ci-deploy.sh line 652
+// - LocalStack (local):  tap-stack-localstack (fixed name)
+//   From scripts/localstack-cloudformation-deploy.sh line 71
+// - Live AWS:            TapStack{ENVIRONMENT_SUFFIX} (e.g., TapStackpr9297, TapStackdev)
+//   From scripts/stack-config.sh and package.json cfn:deploy-yaml
 const stackName = isLocalStack
-  ? 'tap-stack-localstack'
+  ? (isCI ? `localstack-stack-${environmentSuffix}` : 'tap-stack-localstack')
   : `TapStack${environmentSuffix}`;
 
 // Stack outputs will be fetched dynamically from CloudFormation
