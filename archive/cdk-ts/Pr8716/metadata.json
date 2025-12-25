@@ -21,5 +21,12 @@
   "migrated_from": {
     "po_id": "291857",
     "pr": "Pr432"
-  }
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "siddhantr-sudo",
+  "dockerS3Location": ""
 }
