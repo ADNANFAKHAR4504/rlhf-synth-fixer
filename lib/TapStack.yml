@@ -925,7 +925,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'myapp-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: postgres
-      EngineVersion: '14'
+      EngineVersion: '16.9'
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
       AllocatedStorage: 20
