@@ -1,7 +1,5 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   APIGatewayClient,
   GetMethodCommand,
@@ -20,6 +18,8 @@ import {
   InvokeCommand,
   LambdaClient
 } from '@aws-sdk/client-lambda';
+import * as fs from 'fs';
+import * as path from 'path';
 
 
 
@@ -42,7 +42,7 @@ const dynamodb = new DynamoDBClient(clientConfig);
 async function getStackOutputs(): Promise<Record<string, string>> {
   // First, try to load from flat-outputs.json (for LocalStack deployments)
   const flatOutputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
-  
+
   if (fs.existsSync(flatOutputsPath)) {
     try {
       const fileContent = fs.readFileSync(flatOutputsPath, 'utf-8').trim();
@@ -148,20 +148,32 @@ describe('TapStack Integration Tests', () => {
   describe('API Gateway', () => {
     test('should exist and be configured', async () => {
       const apiUrl = outputs.ApiGatewayUrl;
+      let apiId: string;
+      
       // Handle both AWS and LocalStack URL formats
       if (isLocalStack) {
-        // LocalStack format: http://localhost:4566/restapis/{api-id}/{stage}/_user_request/{path}
-        expect(apiUrl).toMatch(/^http:\/\/localhost:4566\/restapis\/.+/);
-        const apiIdMatch = apiUrl.match(/\/restapis\/([^\/]+)/);
-        if (apiIdMatch) {
-          const apiId = apiIdMatch[1];
-          const response = await apigateway.send(new GetRestApiCommand({ restApiId: apiId }));
-          expect(response.id).toBe(apiId);
+        // LocalStack format: https://{api-id}.execute-api.amazonaws.com:4566/{stage}
+        // or: http://localhost:4566/restapis/{api-id}/{stage}/_user_request/{path}
+        if (apiUrl.includes('localhost:4566/restapis')) {
+          const apiIdMatch = apiUrl.match(/\/restapis\/([^\/]+)/);
+          if (apiIdMatch) {
+            apiId = apiIdMatch[1];
+          } else {
+            throw new Error(`Could not extract API ID from LocalStack URL: ${apiUrl}`);
+          }
+        } else if (apiUrl.includes(':4566')) {
+          // Format: https://{api-id}.execute-api.amazonaws.com:4566/{stage}
+          apiId = apiUrl.split('https://')[1].split('.')[0];
+        } else {
+          throw new Error(`Unexpected LocalStack API Gateway URL format: ${apiUrl}`);
         }
+        
+        const response = await apigateway.send(new GetRestApiCommand({ restApiId: apiId }));
+        expect(response.id).toBe(apiId);
       } else {
         // AWS format: https://{api-id}.execute-api.{region}.amazonaws.com/{stage}
         expect(apiUrl).toMatch(/^https:\/\/.*\.execute-api\..+\.amazonaws\.com\/.+/);
-        const apiId = apiUrl.split('https://')[1].split('.')[0];
+        apiId = apiUrl.split('https://')[1].split('.')[0];
         const response = await apigateway.send(new GetRestApiCommand({ restApiId: apiId }));
         expect(response.id).toBe(apiId);
         expect(response.endpointConfiguration?.types).toContain('REGIONAL');
@@ -171,23 +183,32 @@ describe('TapStack Integration Tests', () => {
     test('should have /data resource and GET/POST methods', async () => {
       const apiUrl = outputs.ApiGatewayUrl;
       let apiId: string;
-      
+
       if (isLocalStack) {
         // Extract API ID from LocalStack URL format
-        const apiIdMatch = apiUrl.match(/\/restapis\/([^\/]+)/);
-        if (!apiIdMatch) {
-          throw new Error(`Could not extract API ID from LocalStack URL: ${apiUrl}`);
+        // Format: https://{api-id}.execute-api.amazonaws.com:4566/{stage}
+        // or: http://localhost:4566/restapis/{api-id}/{stage}/_user_request/{path}
+        if (apiUrl.includes('localhost:4566/restapis')) {
+          const apiIdMatch = apiUrl.match(/\/restapis\/([^\/]+)/);
+          if (!apiIdMatch) {
+            throw new Error(`Could not extract API ID from LocalStack URL: ${apiUrl}`);
+          }
+          apiId = apiIdMatch[1];
+        } else if (apiUrl.includes(':4566')) {
+          // Format: https://{api-id}.execute-api.amazonaws.com:4566/{stage}
+          apiId = apiUrl.split('https://')[1].split('.')[0];
+        } else {
+          throw new Error(`Unexpected LocalStack API Gateway URL format: ${apiUrl}`);
         }
-        apiId = apiIdMatch[1];
       } else {
         // Extract API ID from AWS URL format
         apiId = apiUrl.split('https://')[1].split('.')[0];
       }
-      
+
       const resourcesResp = await apigateway.send(new GetResourcesCommand({ restApiId: apiId }));
       const dataResource = resourcesResp.items?.find(r => r.pathPart === 'data');
       expect(dataResource).toBeDefined();
-      
+
       if (dataResource?.id) {
         const getMethodResp = await apigateway.send(new GetMethodCommand({
           restApiId: apiId,
@@ -195,7 +216,7 @@ describe('TapStack Integration Tests', () => {
           httpMethod: 'GET'
         }));
         expect(getMethodResp.httpMethod).toBe('GET');
-        
+
         const postMethodResp = await apigateway.send(new GetMethodCommand({
           restApiId: apiId,
           resourceId: dataResource.id,
@@ -208,7 +229,20 @@ describe('TapStack Integration Tests', () => {
 
   describe('End-to-End', () => {
     test('API Gateway should invoke Lambda and return expected response', async () => {
-      const apiUrl = outputs.ApiGatewayUrl;
+      let apiUrl = outputs.ApiGatewayUrl;
+      
+      // For LocalStack, convert AWS-style URL to localhost format
+      if (isLocalStack && apiUrl.includes(':4566') && apiUrl.includes('.execute-api.amazonaws.com')) {
+        // Convert: https://{api-id}.execute-api.amazonaws.com:4566/{stage}
+        // To: http://localhost:4566/restapis/{api-id}/{stage}/_user_request/{path}
+        const urlMatch = apiUrl.match(/https:\/\/([^.]+)\.execute-api\.amazonaws\.com:4566\/(.+)/);
+        if (urlMatch) {
+          const apiId = urlMatch[1];
+          const stage = urlMatch[2];
+          apiUrl = `http://localhost:4566/restapis/${apiId}/${stage}/_user_request/data`;
+        }
+      }
+      
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
