@@ -391,9 +391,9 @@ Resources:
                         
                         <div class="info-card">
                             <h3>⚡ Status & Performance</h3>
-                            <p><strong>Status:</strong> <span class="status">✅ Healthy & Running</span></p>
-                            <p><strong>Load Balancer:</strong> <span class="status">✅ Active</span></p>
-                            <p><strong>Auto Scaling:</strong> <span class="status">✅ Enabled</span></p>
+                            <p><strong>Status:</strong> <span class="status"> Healthy & Running</span></p>
+                            <p><strong>Load Balancer:</strong> <span class="status"> Active</span></p>
+                            <p><strong>Auto Scaling:</strong> <span class="status"> Enabled</span></p>
                         </div>
                         
                         <div class="info-card">
