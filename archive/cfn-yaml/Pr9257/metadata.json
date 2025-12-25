@@ -21,5 +21,11 @@
     "Cloud Environment Setup"
   ],
   "provider": "localstack",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
