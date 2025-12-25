@@ -201,11 +201,12 @@ describe('TapStack CloudFormation Template', () => {
       const policies = role.Properties.Policies;
       expect(policies).toHaveLength(1);
       expect(policies[0].PolicyName).toBe('S3ReadOnlyAccess');
-      
-      const statement = policies[0].PolicyDocument.Statement[0];
-      expect(statement.Action).toContain('s3:GetObject');
-      expect(statement.Action).toContain('s3:GetObjectVersion');
-      expect(statement.Action).toContain('s3:ListBucket');
+
+      const statements = policies[0].PolicyDocument.Statement;
+      const allActions = statements.flatMap((stmt: any) => stmt.Action);
+      expect(allActions).toContain('s3:GetObject');
+      expect(allActions).toContain('s3:GetObjectVersion');
+      expect(allActions).toContain('s3:ListBucket');
     });
 
     test('IAM role should have CloudWatch permissions', () => {
