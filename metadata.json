@@ -1,22 +1,19 @@
 {
   "platform": "tf",
   "language": "hcl",
+  "provider": "aws",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "trainr878",
   "team": "synth-2",
   "wave": "P1",
   "startedAt": "2025-08-17T20:56:08+05:30",
-  "subtask": "CI/CD Pipeline Infrastructure",
+  "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "CI/CD Pipeline Infrastructure",
-    "Security Configuration",
-    "Monitoring Setup",
-    "Access Control",
-    "Performance Optimization"
+    "CI/CD Pipeline",
+    "Security Configuration as Code",
+    "Infrastructure Analysis/Monitoring"
   ],
-  "training_quality": 8,
   "aws_services": [
     "AWS CodePipeline",
     "AWS CodeBuild",
@@ -28,13 +25,5 @@
     "AWS EventBridge",
     "AWS Secrets Manager",
     "AWS Config"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "iamarpit-turing",
-  "dockerS3Location": "",
-  "localstack_compatible": true,
-  "localstack_pro_required": true
+  ]
 }
