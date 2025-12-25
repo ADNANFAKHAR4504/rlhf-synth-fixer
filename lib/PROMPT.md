@@ -4,7 +4,9 @@ I need to create a comprehensive AWS CDK Java stack that demonstrates security b
 
 1. **EC2 Security Configuration**
    - Launch EC2 instances with encrypted EBS volumes using customer-managed KMS keys
-   - Configure security groups with minimal required access (no 0.0.0.0/0 ingress except for specific ports like HTTPS)
+   - Configure security groups with minimal required access - all ingress rules must specify exact CIDR blocks or reference other security groups
+   - Web traffic should only allow ingress from load balancer security groups or specific trusted IP ranges
+   - Never use 0.0.0.0/0 ingress rules for any service
    - Use Systems Manager Session Manager for secure access instead of SSH key pairs where possible
    - Deploy instances in private subnets with no public IPs unless absolutely necessary for web servers
 
@@ -21,9 +23,10 @@ I need to create a comprehensive AWS CDK Java stack that demonstrates security b
    - Deploy in private subnets with database security groups allowing access only from application tiers
 
 4. **IAM Security Implementation**
-   - Create IAM roles following principle of least privilege
-   - Use resource-based policies where appropriate
-   - Implement cross-service resource access patterns securely
+   - Create IAM roles with exact resource ARNs and specific actions - never use Resource: * or Action: *
+   - Each role should have only the minimum permissions required for its specific function
+   - Implement service-specific IAM policies with exact resource ARNs and minimal required actions
+   - Use resource-based policies where appropriate with explicit resource references
    - Enable MFA requirements for sensitive operations
 
 5. **Network Security**
