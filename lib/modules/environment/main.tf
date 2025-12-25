@@ -473,8 +473,8 @@ resource "aws_instance" "web" {
               EOF
   )
 
-  # Serialize instance creation for LocalStack - each instance waits for previous
-  depends_on = count.index > 0 ? [aws_instance.web[count.index - 1]] : [aws_iam_instance_profile.ec2_profile]
+  # Dependency on IAM instance profile
+  depends_on = [aws_iam_instance_profile.ec2_profile]
 
   # Shorter timeouts for LocalStack
   timeouts {
