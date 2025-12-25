@@ -21,5 +21,12 @@
   "migrated_from": {
     "po_id": "synth-1580",
     "pr": "Pr1580"
-  }
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
 }
