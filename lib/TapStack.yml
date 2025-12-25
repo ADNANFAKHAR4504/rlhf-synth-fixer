@@ -14,23 +14,7 @@ Parameters:
     Description: 'Application name for resource naming'
 
   # Performance Configuration Parameters
-  EnableProvisionedConcurrency:
-    Type: String
-    Default: 'false'
-    Description: 'Enable provisioned concurrency for Lambda functions'
-    AllowedValues:
-      - 'true'
-      - 'false'
-
-  LambdaProvisionedConcurrency:
-    Type: Number
-    Default: 10
-    Description: 'Provisioned concurrency for Lambda functions to avoid cold starts'
-    MinValue: 10
-    MaxValue: 100
-
-Conditions:
-  EnableProvisionedConcurrency: !Equals [!Ref EnableProvisionedConcurrency, 'true']
+  # Note: Provisioned concurrency removed for LocalStack compatibility
 
 Resources:
   # =====================================================
