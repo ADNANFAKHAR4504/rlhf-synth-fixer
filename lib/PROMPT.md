@@ -1,79 +1,80 @@
-Hey team,
+Need help refactoring our transaction processing CloudFormation template. Current stack has circular dependencies causing deployment failures. Lambda role depends on DynamoDB, but DynamoDB permissions also depend on the role. Plus we have hardcoded ARNs everywhere.
 
-We've got a transaction processing infrastructure that's been causing deployment headaches due to circular dependencies and poor resource ordering. The current CloudFormation template has several issues: hardcoded ARNs, Lambda execution role that depends on DynamoDB while DynamoDB permissions depend on the role, and scattered IAM policies that make it hard to maintain.
+Business needs this for payment processing so reliability is critical. Must use CloudFormation JSON format.
 
-I need to refactor this infrastructure to eliminate these circular dependencies and make it deployable reliably. The business relies on this for processing payment transactions, so we need to get this right. I've been asked to create this using CloudFormation with JSON format.
+## Current Issues
 
-The current setup has a DynamoDB table for transaction records and a Lambda function for payment processing, but the deployment order is broken. CloudFormation keeps failing because resources reference each other in ways that create dependency cycles.
+- Circular dependencies between Lambda execution role and DynamoDB permissions  
+- Hardcoded ARNs instead of CloudFormation references
+- IAM policies scattered across multiple resources
+- Deployment failures due to improper resource ordering
 
-## What we need to build
+## What I Need
 
-Create a transaction processing infrastructure using **CloudFormation with JSON** that eliminates circular dependencies and improves deployment reliability.
+Transaction processing infrastructure using CloudFormation JSON that actually deploys without dependency errors.
 
-### Core Requirements
+### Core Components
 
 1. DynamoDB Transaction Table
-   - Table for storing transaction records with PAY_PER_REQUEST billing mode
-   - Must include proper deletion policies (no Retain policies)
-   - Use Parameters for table name configuration
+   - PAY_PER_REQUEST billing (no provisioned capacity)
+   - Must be destroyable for testing (no deletion protection)
+   - Parameterized table name
 
-2. Lambda Payment Processor
-   - Function with 256MB memory allocation for payment processing logic
-   - Use Parameters for function name configuration
-   - Proper IAM execution role with minimal required permissions
+2. Lambda Payment Processor  
+   - 256MB memory for transaction processing
+   - Parameterized function name
+   - Proper IAM role with minimal permissions
 
-3. Circular Dependency Resolution
-   - Fix circular dependency between Lambda execution role and DynamoDB table permissions
-   - Use proper CloudFormation intrinsic functions (!Ref, !GetAtt) instead of hardcoded ARNs
-   - Add explicit DependsOn attributes to enforce correct resource creation order
-   - Consolidate IAM policies into single managed policy document
+3. Fix the Circular Dependencies
+   - Break dependency cycle between Lambda role and DynamoDB
+   - Use CloudFormation intrinsic functions (!Ref, !GetAtt) instead of hardcoded values
+   - Add DependsOn where needed to force correct creation order
+   - Consolidate IAM policies
 
-4. Parameterization and Outputs
-   - Use Parameters section for table name, function name, and environment tag
-   - Include Outputs section with Lambda function ARN and DynamoDB table name
-   - Export output values for cross-stack integration
+4. Parameters and Outputs
+   - Parameters for table name, function name, environment suffix
+   - Outputs with Lambda ARN and DynamoDB table name
+   - Export outputs for cross-stack references
 
-### Technical Requirements
+### Technical Details
 
-- All infrastructure defined using CloudFormation with JSON
-- Use DynamoDB for transaction storage
-- Use Lambda for payment processing logic
-- Use IAM for access management and least-privilege policies
-- Resource names must include EnvironmentSuffix parameter for uniqueness
-- Follow naming convention: resource-type-environment-suffix
-- Deploy to us-east-1 region
-- All resources must be destroyable (no DeletionProtectionEnabled)
+- CloudFormation JSON format (not YAML)
+- DynamoDB for transaction storage
+- Lambda for payment processing
+- IAM for access control
+- Resources must include environment suffix for uniqueness  
+- Deploy to us-east-1
+- Everything must be destroyable (no Retain policies)
 
-### Constraints
+### Requirements
 
-- No hardcoded ARNs or resource names in IAM policies
-- All resource references must use !Ref or !GetAtt intrinsic functions
-- IAM policies must follow least-privilege principle
-- No circular dependencies in resource creation order
-- All resources must be destroyable after testing (no Retain policies)
-- Include proper error handling and resource dependencies
+- No hardcoded ARNs
+- Use !Ref and !GetAtt for all resource references
+- Least-privilege IAM policies
+- No circular dependencies
+- All resources destroyable
+- Proper error handling
 
-### Optional Enhancements (if time permits)
+### Nice to Have (if easy to add)
 
-- API Gateway REST API for webhook endpoint to enable external integration testing
-- CloudWatch alarm for DynamoDB throttling to improve monitoring
-- Lambda reserved concurrent executions to prevent throttling
+- API Gateway REST endpoint for webhooks
+- CloudWatch alarm for DynamoDB throttling
+- Lambda reserved concurrency
 
 ## Success Criteria
 
-- Functionality: Template deploys without circular dependency errors
-- Resource Configuration: All MANDATORY requirements implemented with proper parameters
-- Dependency Management: Correct use of !Ref, !GetAtt, and DependsOn attributes
-- IAM Best Practices: Consolidated policies with minimal required permissions
-- Resource Naming: All resources include EnvironmentSuffix parameter
-- Code Quality: Valid CloudFormation JSON, properly structured, well-documented
+- Template deploys without circular dependency errors
+- All resources created with proper parameters
+- IAM policies consolidated with minimal permissions
+- Resources named with environment suffix
+- Valid CloudFormation JSON
 
-## What to deliver
+## Deliverables
 
-- Complete CloudFormation JSON template implementation
-- DynamoDB table for transaction records with PAY_PER_REQUEST billing
-- Lambda function with execution role and proper permissions
-- IAM managed policy consolidating all required permissions
-- Parameters section for table name, function name, and environment suffix
-- Outputs section exporting Lambda ARN and DynamoDB table name
-- Documentation of dependency resolution strategy
+- CloudFormation JSON template
+- DynamoDB table with PAY_PER_REQUEST billing
+- Lambda function with execution role
+- IAM managed policy with required permissions
+- Parameters section for configuration
+- Outputs section with exported values
+- Brief explanation of dependency resolution approach
