@@ -13,11 +13,7 @@ terraform {
       version = "~> 3.0"
     }
   }
-
-  # Using local backend for LocalStack testing
-  backend "local" {
-    path = "terraform.tfstate"
-  }
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources

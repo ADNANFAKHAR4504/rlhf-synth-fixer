@@ -21,5 +21,9 @@
     "AWS Systems Manager Parameter Store",
     "Amazon EventBridge"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr898",
+    "pr": "Pr1712"
+  }
 }
