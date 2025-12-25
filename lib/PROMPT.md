@@ -1,5 +1,3 @@
-Hey team,
-
 We just inherited a complex situation from the recent acquisition. The security team discovered that the acquired company deployed their infrastructure using wildly inconsistent templates, and we need to analyze and validate everything against our standards before migration. This is a critical security gate we can't skip.
 
 I've been asked to build an automated infrastructure validation system that can scan their existing CloudFormation templates for security and compliance issues. The business wants this built using **CloudFormation with JSON** so it integrates naturally with our existing template ecosystem.
