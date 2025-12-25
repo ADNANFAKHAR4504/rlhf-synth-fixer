@@ -7,7 +7,7 @@ Design a CloudFormation template in YAML to set up a web application environment
 
 ### Infrastructure Components
 
-1. **Virtual Private Cloud (VPC)**
+1. **Virtual Private Cloud - VPC**
    - CIDR block: 10.0.0.0/16
 
 2. **Subnets**
@@ -27,8 +27,8 @@ Design a CloudFormation template in YAML to set up a web application environment
 
 5. **Security**
    - Security groups configured to:
-     - Allow inbound HTTP traffic (port 80) to the load balancer
-     - Allow SSH access (port 22) to EC2 instances from a provided IP range
+     - Allow inbound HTTP traffic on port 80 to the load balancer
+     - Allow SSH access on port 22 to EC2 instances from a provided IP range
    - Load balancer accessible only over HTTP on port 80
 
 6. **IAM and Monitoring**
