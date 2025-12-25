@@ -18,3 +18,15 @@ variable "common_tags" {
     Purpose = "Multi-Environment Infrastructure"
   }
 }
+
+variable "enable_flow_logs" {
+  description = "Enable VPC Flow Logs (disable for LocalStack compatibility)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_ec2_instances" {
+  description = "Enable EC2 instances (disable for LocalStack compatibility)"
+  type        = bool
+  default     = false
+}

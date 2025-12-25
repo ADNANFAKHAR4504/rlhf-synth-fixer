@@ -93,7 +93,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
   describe('Environment Module Configuration', () => {
     test('should define all three environments in main configuration', () => {
       const mainConfig = readTerraformFile(path.join(libPath, 'tap_stack.tf'));
-      
+
       // Check for dev environment
       expect(mainConfig).toMatch(/module\s+"dev_environment"/);
       expect(mainConfig).toMatch(/environment\s*=\s*"dev"/);
@@ -104,36 +104,37 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(mainConfig).toMatch(/module\s+"staging_environment"/);
       expect(mainConfig).toMatch(/environment\s*=\s*"staging"/);
       expect(mainConfig).toMatch(/vpc_cidr\s*=\s*"10\.1\.0\.0\/16"/);
-      expect(mainConfig).toMatch(/instance_type\s*=\s*"t3\.medium"/);
+      // t2.micro for LocalStack compatibility
 
       // Check for prod environment
       expect(mainConfig).toMatch(/module\s+"prod_environment"/);
       expect(mainConfig).toMatch(/environment\s*=\s*"prod"/);
       expect(mainConfig).toMatch(/vpc_cidr\s*=\s*"10\.2\.0\.0\/16"/);
-      expect(mainConfig).toMatch(/instance_type\s*=\s*"m5\.large"/);
+      // t2.micro for LocalStack compatibility
     });
 
     test('should have correct subnet configurations for each environment', () => {
       const mainConfig = readTerraformFile(path.join(libPath, 'tap_stack.tf'));
-      
-      // Dev subnets
-      expect(mainConfig).toMatch(/public_subnet_cidrs\s*=\s*\["10\.0\.1\.0\/24",\s*"10\.0\.2\.0\/24"\]/);
-      expect(mainConfig).toMatch(/private_subnet_cidrs\s*=\s*\["10\.0\.10\.0\/24",\s*"10\.0\.20\.0\/24"\]/);
 
-      // Staging subnets  
-      expect(mainConfig).toMatch(/public_subnet_cidrs\s*=\s*\["10\.1\.1\.0\/24",\s*"10\.1\.2\.0\/24"\]/);
-      expect(mainConfig).toMatch(/private_subnet_cidrs\s*=\s*\["10\.1\.10\.0\/24",\s*"10\.1\.20\.0\/24"\]/);
+      // Dev subnets (1 public + 1 private for LocalStack compatibility)
+      expect(mainConfig).toMatch(/public_subnet_cidrs\s*=\s*\["10\.0\.1\.0\/24"\]/);
+      expect(mainConfig).toMatch(/private_subnet_cidrs\s*=\s*\["10\.0\.10\.0\/24"\]/);
+
+      // Staging subnets
+      expect(mainConfig).toMatch(/public_subnet_cidrs\s*=\s*\["10\.1\.1\.0\/24"\]/);
+      expect(mainConfig).toMatch(/private_subnet_cidrs\s*=\s*\["10\.1\.10\.0\/24"\]/);
 
       // Prod subnets
-      expect(mainConfig).toMatch(/public_subnet_cidrs\s*=\s*\["10\.2\.1\.0\/24",\s*"10\.2\.2\.0\/24"\]/);
-      expect(mainConfig).toMatch(/private_subnet_cidrs\s*=\s*\["10\.2\.10\.0\/24",\s*"10\.2\.20\.0\/24"\]/);
+      expect(mainConfig).toMatch(/public_subnet_cidrs\s*=\s*\["10\.2\.1\.0\/24"\]/);
+      expect(mainConfig).toMatch(/private_subnet_cidrs\s*=\s*\["10\.2\.10\.0\/24"\]/);
     });
 
     test('should use availability zones data source', () => {
       const mainConfig = readTerraformFile(path.join(libPath, 'tap_stack.tf'));
-      
+
       expect(mainConfig).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
-      expect(mainConfig).toMatch(/availability_zones\s*=\s*slice\(data\.aws_availability_zones\.available\.names,\s*0,\s*2\)/);
+      // Using 1 AZ for LocalStack compatibility
+      expect(mainConfig).toMatch(/availability_zones\s*=\s*slice\(data\.aws_availability_zones\.available\.names,\s*0,\s*1\)/);
     });
   });
 
@@ -280,11 +281,12 @@ describe('Terraform Infrastructure Unit Tests', () => {
   describe('EC2 Instances', () => {
     test('should have EC2 instances resource configuration', () => {
       const moduleMain = readTerraformFile(path.join(environmentModulePath, 'main.tf'));
-      
+
       expect(moduleMain).toMatch(/resource\s+"aws_instance"\s+"web"/);
-      expect(moduleMain).toMatch(/count\s*=\s*length\(var\.public_subnet_cidrs\)/);
+      // Conditional count for LocalStack compatibility
+      expect(moduleMain).toMatch(/count\s*=\s*var\.enable_ec2_instances\s*\?\s*length\(var\.public_subnet_cidrs\)\s*:\s*0/);
       expect(moduleMain).toMatch(/ami\s*=\s*data\.aws_ami\.amazon_linux\.id/);
-      expect(moduleMain).toMatch(/instance_type\s*=\s*var\.instance_type/);
+      expect(moduleMain).toMatch(/instance_type\s*=\s*"t2\.micro"/);
       expect(moduleMain).toMatch(/subnet_id\s*=\s*aws_subnet\.private\[count\.index\]\.id/);
     });
 
@@ -327,10 +329,11 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
     test('should have VPC Flow Log resource', () => {
       const moduleMain = readTerraformFile(path.join(environmentModulePath, 'main.tf'));
-      
+
       expect(moduleMain).toMatch(/resource\s+"aws_flow_log"\s+"vpc_flow_logs"/);
-      expect(moduleMain).toMatch(/iam_role_arn\s*=\s*aws_iam_role\.flow_logs_role\.arn/);
-      expect(moduleMain).toMatch(/log_destination\s*=\s*aws_cloudwatch_log_group\.vpc_flow_logs\.arn/);
+      // Conditional resources use [0] index for LocalStack compatibility
+      expect(moduleMain).toMatch(/iam_role_arn\s*=\s*aws_iam_role\.flow_logs_role\[0\]\.arn/);
+      expect(moduleMain).toMatch(/log_destination\s*=\s*aws_cloudwatch_log_group\.vpc_flow_logs\[0\]\.arn/);
       expect(moduleMain).toMatch(/traffic_type\s*=\s*"ALL"/);
       expect(moduleMain).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
     });

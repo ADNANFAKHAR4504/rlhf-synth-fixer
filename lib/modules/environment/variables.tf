@@ -37,3 +37,15 @@ variable "common_tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)
 }
+
+variable "enable_flow_logs" {
+  description = "Enable VPC Flow Logs (disable for LocalStack compatibility)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_ec2_instances" {
+  description = "Enable EC2 instances (disable for LocalStack compatibility)"
+  type        = bool
+  default     = true
+}

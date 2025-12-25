@@ -385,8 +385,9 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   })
 }
 
-# VPC Flow Logs
+# VPC Flow Logs (conditional for LocalStack compatibility)
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
+  count             = var.enable_flow_logs ? 1 : 0
   name              = "/aws/vpc/flowlogs/${var.environment}-${var.environment_suffix}"
   retention_in_days = 30
 
@@ -397,7 +398,8 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 }
 
 resource "aws_iam_role" "flow_logs_role" {
-  name = "${var.environment}-flow-logs-role-${var.environment_suffix}"
+  count = var.enable_flow_logs ? 1 : 0
+  name  = "${var.environment}-flow-logs-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -419,8 +421,9 @@ resource "aws_iam_role" "flow_logs_role" {
 }
 
 resource "aws_iam_role_policy" "flow_logs_policy" {
-  name = "${var.environment}-flow-logs-policy-${var.environment_suffix}"
-  role = aws_iam_role.flow_logs_role.id
+  count = var.enable_flow_logs ? 1 : 0
+  name  = "${var.environment}-flow-logs-policy-${var.environment_suffix}"
+  role  = aws_iam_role.flow_logs_role[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -441,10 +444,12 @@ resource "aws_iam_role_policy" "flow_logs_policy" {
 }
 
 resource "aws_flow_log" "vpc_flow_logs" {
-  iam_role_arn    = aws_iam_role.flow_logs_role.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
+  count                = var.enable_flow_logs ? 1 : 0
+  iam_role_arn         = aws_iam_role.flow_logs_role[0].arn
+  log_destination      = aws_cloudwatch_log_group.vpc_flow_logs[0].arn
+  log_destination_type = "cloud-watch-logs"
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.main.id
 
   tags = merge(var.common_tags, {
     Name        = "${var.environment}-vpc-flow-logs-${var.environment_suffix}"
@@ -452,13 +457,12 @@ resource "aws_flow_log" "vpc_flow_logs" {
   })
 }
 
-# EC2 Instances for testing
-# LocalStack optimization: Serialize instance creation to prevent timeout issues
+# EC2 Instances for testing (conditional for LocalStack compatibility)
 resource "aws_instance" "web" {
-  count = length(var.public_subnet_cidrs)
+  count = var.enable_ec2_instances ? length(var.public_subnet_cidrs) : 0
 
   ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t2.micro" # Fixed for LocalStack compatibility
+  instance_type          = "t2.micro"
   subnet_id              = aws_subnet.private[count.index].id
   vpc_security_group_ids = [aws_security_group.web.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
@@ -473,10 +477,8 @@ resource "aws_instance" "web" {
               EOF
   )
 
-  # Dependency on IAM instance profile
   depends_on = [aws_iam_instance_profile.ec2_profile]
 
-  # Shorter timeouts for LocalStack
   timeouts {
     create = "5m"
     update = "5m"
