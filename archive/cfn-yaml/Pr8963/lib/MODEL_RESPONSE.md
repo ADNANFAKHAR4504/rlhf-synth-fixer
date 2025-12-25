@@ -1,0 +1,305 @@
+Here's the CloudFormation template for the projectX serverless setup with production-grade security.
+
+It creates two Lambda functions (dataProcessor and responseHandler) with separate IAM roles, encrypted CloudWatch log groups using KMS, CloudWatch alarms for error monitoring, and SQS dead-letter queues for failed invocations. The dataProcessor Lambda can invoke the responseHandler through its IAM permissions.
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation template for projectX - Deploys two serverless functions with
+  KMS encryption, CloudWatch alarms, SQS DLQ, and IAM roles with least privilege.
+
+Parameters:
+
+  ProjectXDataProcessorFunctionName:
+    Type: String
+    Description: The name of the dataProcessor Lambda function.
+    Default: projectX-dataProcessor
+
+  ProjectXResponseHandlerFunctionName:
+    Type: String
+    Description: The name of the responseHandler Lambda function.
+    Default: projectX-responseHandler
+
+Resources:
+
+  # KMS Key for CloudWatch Logs encryption
+  LogsKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting projectX CloudWatch Logs
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+
+  LogsKmsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/projectX-logs-key
+      TargetKeyId: !Ref LogsKmsKey
+
+  # Dead-Letter Queue for dataProcessor
+  DataProcessorDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: projectX-dataProcessor-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
+      KmsMasterKeyId: alias/aws/sqs
+
+  # Dead-Letter Queue for responseHandler
+  ResponseHandlerDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: projectX-responseHandler-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
+      KmsMasterKeyId: alias/aws/sqs
+
+  # IAM Role for dataProcessor Lambda
+  DataProcessorExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: projectX-dataProcessor-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "DataProcessorPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectXDataProcessorFunctionName}:*"
+              - Effect: "Allow"
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource:
+                  - !GetAtt ProjectXResponseHandlerFunction.Arn
+              - Effect: "Allow"
+                Action:
+                  - "sqs:SendMessage"
+                Resource:
+                  - !GetAtt DataProcessorDLQ.Arn
+
+  # IAM Role for responseHandler Lambda
+  ResponseHandlerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: projectX-responseHandler-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "ResponseHandlerPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectXResponseHandlerFunctionName}:*"
+              - Effect: "Allow"
+                Action:
+                  - "sqs:SendMessage"
+                Resource:
+                  - !GetAtt ResponseHandlerDLQ.Arn
+
+  # CloudWatch Log Group for dataProcessor (encrypted)
+  DataProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ProjectXDataProcessorFunctionName}
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt LogsKmsKey.Arn
+
+  # CloudWatch Log Group for responseHandler (encrypted)
+  ResponseHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ProjectXResponseHandlerFunctionName}
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt LogsKmsKey.Arn
+
+  # Lambda Function: dataProcessor
+  ProjectXDataProcessorFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: DataProcessorLogGroup
+    Properties:
+      FunctionName: !Ref ProjectXDataProcessorFunctionName
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt DataProcessorExecutionRole.Arn
+      DeadLetterConfig:
+        TargetArn: !GetAtt DataProcessorDLQ.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              try:
+                  print("Processing data")
+                  return {"statusCode": 200, "body": "Data processed"}
+              except Exception as e:
+                  print(f"Error: {e}")
+                  raise  # Propagate error to trigger DLQ
+      Timeout: 10
+      MemorySize: 128
+
+  # Lambda Function: responseHandler
+  ProjectXResponseHandlerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: ResponseHandlerLogGroup
+    Properties:
+      FunctionName: !Ref ProjectXResponseHandlerFunctionName
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt ResponseHandlerExecutionRole.Arn
+      DeadLetterConfig:
+        TargetArn: !GetAtt ResponseHandlerDLQ.Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              try:
+                  print("Handling response")
+                  return {"statusCode": 200, "body": "Response handled"}
+              except Exception as e:
+                  print(f"Error: {e}")
+                  raise  # Propagate error to trigger DLQ
+      Timeout: 10
+      MemorySize: 128
+
+  # CloudWatch Alarm for dataProcessor errors
+  DataProcessorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: projectX-dataProcessor-errors
+      AlarmDescription: Alert when dataProcessor Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProjectXDataProcessorFunction
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for responseHandler errors
+  ResponseHandlerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: projectX-responseHandler-errors
+      AlarmDescription: Alert when responseHandler Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProjectXResponseHandlerFunction
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for dataProcessor DLQ messages
+  DataProcessorDLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: projectX-dataProcessor-dlq-messages
+      AlarmDescription: Alert when messages land in dataProcessor DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DataProcessorDLQ.QueueName
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for responseHandler DLQ messages
+  ResponseHandlerDLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: projectX-responseHandler-dlq-messages
+      AlarmDescription: Alert when messages land in responseHandler DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ResponseHandlerDLQ.QueueName
+      TreatMissingData: notBreaching
+
+Outputs:
+  DataProcessorFunctionName:
+    Description: Lambda Function Name for dataProcessor
+    Value: !Ref ProjectXDataProcessorFunction
+
+  DataProcessorFunctionArn:
+    Description: Lambda Function ARN for dataProcessor
+    Value: !GetAtt ProjectXDataProcessorFunction.Arn
+
+  ResponseHandlerFunctionName:
+    Description: Lambda Function Name for responseHandler
+    Value: !Ref ProjectXResponseHandlerFunction
+
+  ResponseHandlerFunctionArn:
+    Description: Lambda Function ARN for responseHandler
+    Value: !GetAtt ProjectXResponseHandlerFunction.Arn
+
+  KmsKeyId:
+    Description: KMS Key ID for CloudWatch Logs encryption
+    Value: !Ref LogsKmsKey
+
+  DataProcessorDLQUrl:
+    Description: Dead-Letter Queue URL for dataProcessor
+    Value: !Ref DataProcessorDLQ
+
+  ResponseHandlerDLQUrl:
+    Description: Dead-Letter Queue URL for responseHandler
+    Value: !Ref ResponseHandlerDLQ
+
+```

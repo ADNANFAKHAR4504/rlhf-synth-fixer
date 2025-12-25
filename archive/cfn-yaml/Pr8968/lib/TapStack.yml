@@ -1,0 +1,678 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Modular multi-environment infrastructure template with VPC, EC2, RDS, and ALB
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - test
+    - stage
+    - prod
+    Description: Target deployment environment
+  ProjectName:
+    Type: String
+    Default: MyApp
+    Description: Project name for resource naming and tagging
+  Owner:
+    Type: String
+    Default: DevOps-Team
+    Description: Resource owner for tagging
+  CostCenter:
+    Type: String
+    Default: Engineering
+    Description: Cost center for billing allocation
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: Latest Amazon Linux 2 AMI ID
+Mappings:
+  EnvironmentConfig:
+    dev:
+      VpcCidr: 10.0.0.0/16
+      PublicSubnet1Cidr: 10.0.1.0/24
+      PublicSubnet2Cidr: 10.0.2.0/24
+      PrivateSubnet1Cidr: 10.0.3.0/24
+      PrivateSubnet2Cidr: 10.0.4.0/24
+      InstanceType: t3.micro
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
+      DBInstanceClass: db.t3.micro
+      DBAllocatedStorage: 20
+      MultiAZ: false
+    test:
+      VpcCidr: 10.1.0.0/16
+      PublicSubnet1Cidr: 10.1.1.0/24
+      PublicSubnet2Cidr: 10.1.2.0/24
+      PrivateSubnet1Cidr: 10.1.3.0/24
+      PrivateSubnet2Cidr: 10.1.4.0/24
+      InstanceType: t3.small
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 2
+      DBInstanceClass: db.t3.micro
+      DBAllocatedStorage: 20
+      MultiAZ: false
+    stage:
+      VpcCidr: 10.2.0.0/16
+      PublicSubnet1Cidr: 10.2.1.0/24
+      PublicSubnet2Cidr: 10.2.2.0/24
+      PrivateSubnet1Cidr: 10.2.3.0/24
+      PrivateSubnet2Cidr: 10.2.4.0/24
+      InstanceType: t3.medium
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      DBInstanceClass: db.t3.small
+      DBAllocatedStorage: 50
+      MultiAZ: true
+    prod:
+      VpcCidr: 10.3.0.0/16
+      PublicSubnet1Cidr: 10.3.1.0/24
+      PublicSubnet2Cidr: 10.3.2.0/24
+      PrivateSubnet1Cidr: 10.3.3.0/24
+      PrivateSubnet2Cidr: 10.3.4.0/24
+      InstanceType: t3.large
+      MinSize: 2
+      MaxSize: 6
+      DesiredCapacity: 3
+      DBInstanceClass: db.t3.medium
+      DBAllocatedStorage: 100
+      MultiAZ: true
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        Fn::FindInMap:
+        - EnvironmentConfig
+        - Ref: Environment
+        - VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-VPC-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: ProjectName
+      - Key: CostCenter
+        Value:
+          Ref: CostCenter
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-IGW-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId:
+        Ref: InternetGateway
+      VpcId:
+        Ref: VPC
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      CidrBlock:
+        Fn::FindInMap:
+        - EnvironmentConfig
+        - Ref: Environment
+        - PublicSubnet1Cidr
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-Public-Subnet-AZ1-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Fn::Select:
+        - 1
+        - Fn::GetAZs: ''
+      CidrBlock:
+        Fn::FindInMap:
+        - EnvironmentConfig
+        - Ref: Environment
+        - PublicSubnet2Cidr
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-Public-Subnet-AZ2-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      CidrBlock:
+        Fn::FindInMap:
+        - EnvironmentConfig
+        - Ref: Environment
+        - PrivateSubnet1Cidr
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-Private-Subnet-AZ1-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone:
+        Fn::Select:
+        - 1
+        - Fn::GetAZs: ''
+      CidrBlock:
+        Fn::FindInMap:
+        - EnvironmentConfig
+        - Ref: Environment
+        - PrivateSubnet2Cidr
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-Private-Subnet-AZ2-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    Condition: IsProductionLike
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-NAT-EIP1-${Environment}
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Condition: IsProductionLike
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - NatGateway1EIP
+        - AllocationId
+      SubnetId:
+        Ref: PublicSubnet1
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-NAT-Gateway1-${Environment}
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-Public-Routes-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      SubnetId:
+        Ref: PublicSubnet1
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      SubnetId:
+        Ref: PublicSubnet2
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-Private-Routes-AZ1-${Environment}
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Condition: IsProductionLike
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NatGateway1
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable1
+      SubnetId:
+        Ref: PrivateSubnet1
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable1
+      SubnetId:
+        Ref: PrivateSubnet2
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName:
+        Fn::Sub: ${ProjectName}-ALB-SG-${Environment}
+      GroupDescription: Security group for Application Load Balancer
+      VpcId:
+        Ref: VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-ALB-SG-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName:
+        Fn::Sub: ${ProjectName}-WebServer-SG-${Environment}
+      GroupDescription: Security group for web servers
+      VpcId:
+        Ref: VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId:
+          Ref: ALBSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp:
+          Fn::FindInMap:
+          - EnvironmentConfig
+          - Ref: Environment
+          - VpcCidr
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-WebServer-SG-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName:
+        Fn::Sub: ${ProjectName}-Database-SG-${Environment}
+      GroupDescription: Security group for RDS database
+      VpcId:
+        Ref: VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId:
+          Ref: WebServerSecurityGroup
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-Database-SG-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name:
+        Fn::Sub: ${ProjectName}-ALB-${Environment}
+      Scheme: internet-facing
+      SecurityGroups:
+      - Ref: ALBSecurityGroup
+      Subnets:
+      - Ref: PublicSubnet1
+      - Ref: PublicSubnet2
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-ALB-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: ProjectName
+      - Key: CostCenter
+        Value:
+          Ref: CostCenter
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name:
+        Fn::Sub: ${ProjectName}-TG-${Environment}
+      Port: 80
+      Protocol: HTTP
+      VpcId:
+        Ref: VPC
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-TG-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: ALBTargetGroup
+      LoadBalancerArn:
+        Ref: ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName:
+        Fn::Sub: ${ProjectName}-LaunchTemplate-${Environment}
+      LaunchTemplateData:
+        ImageId:
+          Ref: LatestAmiId
+        InstanceType:
+          Fn::FindInMap:
+          - EnvironmentConfig
+          - Ref: Environment
+          - InstanceType
+        SecurityGroupIds:
+        - Ref: WebServerSecurityGroup
+        UserData:
+          Fn::Base64:
+            Fn::Sub: '#!/bin/bash
+
+              yum update -y
+
+              yum install -y httpd
+
+              systemctl start httpd
+
+              systemctl enable httpd
+
+              echo "<h1>Hello from ${Environment} environment!</h1>" > /var/www/html/index.html
+
+              echo "OK" > /var/www/html/health
+
+              '
+        TagSpecifications:
+        - ResourceType: instance
+          Tags:
+          - Key: Name
+            Value:
+              Fn::Sub: ${ProjectName}-WebServer-${Environment}
+          - Key: Environment
+            Value:
+              Ref: Environment
+          - Key: Owner
+            Value:
+              Ref: Owner
+          - Key: Project
+            Value:
+              Ref: ProjectName
+          - Key: CostCenter
+            Value:
+              Ref: CostCenter
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName:
+        Fn::Sub: ${ProjectName}-ASG-${Environment}
+      VPCZoneIdentifier:
+      - Ref: PrivateSubnet1
+      - Ref: PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId:
+          Ref: LaunchTemplate
+        Version: $Latest
+      MinSize:
+        Fn::FindInMap:
+        - EnvironmentConfig
+        - Ref: Environment
+        - MinSize
+      MaxSize:
+        Fn::FindInMap:
+        - EnvironmentConfig
+        - Ref: Environment
+        - MaxSize
+      DesiredCapacity:
+        Fn::FindInMap:
+        - EnvironmentConfig
+        - Ref: Environment
+        - DesiredCapacity
+      TargetGroupARNs:
+      - Ref: ALBTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-ASG-${Environment}
+        PropagateAtLaunch: false
+      - Key: Environment
+        Value:
+          Ref: Environment
+        PropagateAtLaunch: true
+      - Key: Owner
+        Value:
+          Ref: Owner
+        PropagateAtLaunch: true
+      - Key: Project
+        Value:
+          Ref: ProjectName
+        PropagateAtLaunch: true
+      - Key: CostCenter
+        Value:
+          Ref: CostCenter
+        PropagateAtLaunch: true
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName:
+        Fn::Sub: ${ProjectName}-db-subnet-group-${Environment}
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+      - Ref: PrivateSubnet1
+      - Ref: PrivateSubnet2
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-DB-SubnetGroup-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name:
+        Fn::Sub: ${ProjectName}/database/${Environment}
+      Description:
+        Fn::Sub: Database credentials for ${ProjectName} ${Environment} environment
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-Database-Secret-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: ProjectName
+      - Key: CostCenter
+        Value:
+          Ref: CostCenter
+  Database:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateRealRDS
+    DependsOn: DatabaseSecret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DBInstanceIdentifier:
+        Fn::Sub: ${ProjectName}-db-${Environment}
+      DBInstanceClass:
+        Fn::FindInMap:
+        - EnvironmentConfig
+        - Ref: Environment
+        - DBInstanceClass
+      Engine: mysql
+      EngineVersion: '8.0.40'
+      AllocatedStorage:
+        Fn::FindInMap:
+        - EnvironmentConfig
+        - Ref: Environment
+        - DBAllocatedStorage
+      StorageType: gp2
+      DBName:
+        Fn::Sub: ${ProjectName}${Environment}
+      MasterUsername: admin
+      MasterUserPassword:
+        Fn::Sub: '{{resolve:secretsmanager:${ProjectName}/database/${Environment}:SecretString:password}}'
+      VPCSecurityGroups:
+      - Ref: DatabaseSecurityGroup
+      DBSubnetGroupName:
+        Ref: DBSubnetGroup
+      MultiAZ: false
+      BackupRetentionPeriod: 0
+      DeletionProtection: false
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Sub: ${ProjectName}-Database-${Environment}
+      - Key: Environment
+        Value:
+          Ref: Environment
+      - Key: Owner
+        Value:
+          Ref: Owner
+      - Key: Project
+        Value:
+          Ref: ProjectName
+      - Key: CostCenter
+        Value:
+          Ref: CostCenter
+Conditions:
+  IsProductionLike:
+    Fn::Or:
+    - Fn::Equals:
+      - Ref: Environment
+      - stage
+    - Fn::Equals:
+      - Ref: Environment
+      - prod
+  CreateRealRDS:
+    Fn::Not:
+    - Fn::Equals:
+      - Ref: AWS::AccountId
+      - '000000000000'
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value:
+      Ref: VPC
+    Export:
+      Name:
+        Fn::Sub: ${ProjectName}-VPC-${Environment}
+  LoadBalancerURL:
+    Description: Application Load Balancer URL
+    Value:
+      Fn::Sub: http://${ApplicationLoadBalancer.DNSName}
+    Export:
+      Name:
+        Fn::Sub: ${ProjectName}-ALB-URL-${Environment}
+  DatabaseEndpoint:
+    Description: RDS Database Endpoint
+    Value:
+      Fn::If:
+      - CreateRealRDS
+      - Fn::GetAtt:
+        - Database
+        - Endpoint.Address
+      - localhost:3306
+    Export:
+      Name:
+        Fn::Sub: ${ProjectName}-DB-Endpoint-${Environment}
+  Environment:
+    Description: Deployed Environment
+    Value:
+      Ref: Environment
