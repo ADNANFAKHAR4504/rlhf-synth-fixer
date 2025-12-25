@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291450",
+  "team": "5",
+  "provider": "localstack",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AutoScaling",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "IAM",
+    "KMS",
+    "S3"
+  ],
+  "startedAt": "2025-08-08T16:38:51.045Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

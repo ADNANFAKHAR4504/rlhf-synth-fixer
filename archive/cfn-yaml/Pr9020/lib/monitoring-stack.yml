@@ -1,0 +1,296 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Monitoring stack with EventBridge, Lambda, and SNS'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Unique suffix for environment resources'
+
+  Environment:
+    Type: String
+    Description: 'Environment name'
+
+  DevOpsEmail:
+    Type: String
+    Description: 'Email for DevOps notifications'
+
+  ComplianceLambdaRoleArn:
+    Type: String
+    Description: 'Compliance Lambda role ARN'
+
+  Application:
+    Type: String
+    Description: 'Application name'
+
+  CostCenter:
+    Type: String
+    Description: 'Cost center'
+
+Resources:
+  # SNS Topic for Drift Detection
+  DriftDetectionTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'drift-detection-${EnvironmentSuffix}'
+      DisplayName: 'CloudFormation Drift Detection Alerts'
+      Subscription:
+        - Endpoint: !Ref DevOpsEmail
+          Protocol: email
+      Tags:
+        - Key: Name
+          Value: !Sub 'drift-detection-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # SNS Topic for Compliance Violations
+  ComplianceTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'compliance-violations-${EnvironmentSuffix}'
+      DisplayName: 'Compliance Violation Alerts'
+      Subscription:
+        - Endpoint: !Ref DevOpsEmail
+          Protocol: email
+      Tags:
+        - Key: Name
+          Value: !Sub 'compliance-violations-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Lambda Function for Compliance Checks
+  ComplianceLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'compliance-checker-${EnvironmentSuffix}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !Ref ComplianceLambdaRoleArn
+      Timeout: 300
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          SNS_TOPIC_ARN: !Ref ComplianceTopic
+          DRIFT_TOPIC_ARN: !Ref DriftDetectionTopic
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import os
+          from datetime import datetime
+
+          cloudformation = boto3.client('cloudformation')
+          sns = boto3.client('sns')
+
+          def lambda_handler(event, context):
+              """
+              Compliance checker Lambda function.
+              Monitors CloudFormation stack changes and checks for drift.
+              """
+              print(f"Event received: {json.dumps(event)}")
+
+              compliance_topic = os.environ['SNS_TOPIC_ARN']
+              drift_topic = os.environ['DRIFT_TOPIC_ARN']
+              environment = os.environ['ENVIRONMENT']
+
+              # Extract event details
+              detail = event.get('detail', {})
+              event_name = detail.get('eventName', '')
+              stack_name = detail.get('requestParameters', {}).get('stackName', '')
+
+              violations = []
+
+              # Check for manual changes
+              if event_name in ['UpdateStack', 'DeleteStack']:
+                  try:
+                      response = cloudformation.describe_stacks(StackName=stack_name)
+                      stack = response['Stacks'][0]
+
+                      # Check for required tags
+                      tags = {tag['Key']: tag['Value'] for tag in stack.get('Tags', [])}
+                      required_tags = ['Environment', 'Application', 'CostCenter']
+
+                      for tag in required_tags:
+                          if tag not in tags:
+                              violations.append(f"Missing required tag: {tag}")
+
+                      # Trigger drift detection
+                      drift_response = cloudformation.detect_stack_drift(
+                          StackName=stack_name
+                      )
+                      drift_id = drift_response['StackDriftDetectionId']
+
+                      # Wait briefly and check drift status
+                      import time
+                      time.sleep(10)
+
+                      drift_status = cloudformation.describe_stack_drift_detection_status(
+                          StackDriftDetectionId=drift_id
+                      )
+
+                      if drift_status['StackDriftStatus'] in ['DRIFTED', 'UNKNOWN']:
+                          message = f"""
+                          Stack Drift Detected!
+
+                          Stack: {stack_name}
+                          Environment: {environment}
+                          Drift Status: {drift_status['StackDriftStatus']}
+                          Time: {datetime.utcnow().isoformat()}
+
+                          Please investigate and remediate any manual changes.
+                          """
+
+                          sns.publish(
+                              TopicArn=drift_topic,
+                              Subject=f"Stack Drift Detected: {stack_name}",
+                              Message=message
+                          )
+
+                  except Exception as e:
+                      print(f"Error checking stack: {str(e)}")
+                      violations.append(f"Error checking stack: {str(e)}")
+
+              # Send compliance violations
+              if violations:
+                  message = f"""
+                  Compliance Violations Detected!
+
+                  Stack: {stack_name}
+                  Environment: {environment}
+                  Event: {event_name}
+                  Time: {datetime.utcnow().isoformat()}
+
+                  Violations:
+                  {chr(10).join(f"- {v}" for v in violations)}
+                  """
+
+                  sns.publish(
+                      TopicArn=compliance_topic,
+                      Subject=f"Compliance Violations: {stack_name}",
+                      Message=message
+                  )
+
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'message': 'Compliance check completed',
+                      'violations': violations
+                  })
+              }
+      Tags:
+        - Key: Name
+          Value: !Sub 'compliance-checker-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Lambda Permission for EventBridge
+  ComplianceLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ComplianceLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CloudFormationEventRule.Arn
+
+  # EventBridge Rule for CloudFormation Changes
+  CloudFormationEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'cfn-change-monitor-${EnvironmentSuffix}'
+      Description: 'Monitor CloudFormation stack changes'
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.cloudformation
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventName:
+            - CreateStack
+            - UpdateStack
+            - DeleteStack
+      Targets:
+        - Arn: !GetAtt ComplianceLambdaFunction.Arn
+          Id: ComplianceChecker
+
+  # EventBridge Rule for DynamoDB Changes
+  DynamoDBEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'dynamodb-change-monitor-${EnvironmentSuffix}'
+      Description: 'Monitor DynamoDB table changes'
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.dynamodb
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventName:
+            - CreateTable
+            - UpdateTable
+            - DeleteTable
+      Targets:
+        - Arn: !Ref ComplianceTopic
+          Id: DynamoDBAlert
+
+  # CloudWatch Alarm for Lambda Errors
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'compliance-lambda-errors-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert on Lambda function errors'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ComplianceLambdaFunction
+      AlarmActions:
+        - !Ref ComplianceTopic
+      TreatMissingData: notBreaching
+
+  # Parameter Store Entries
+  SNSTopicParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${Environment}/monitoring/sns-topic'
+      Description: 'SNS topic ARN for alerts'
+      Type: String
+      Value: !Ref DriftDetectionTopic
+      Tags:
+        Environment: !Ref Environment
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+
+Outputs:
+  SNSTopicArn:
+    Description: 'SNS topic ARN for drift detection'
+    Value: !Ref DriftDetectionTopic
+
+  ComplianceTopicArn:
+    Description: 'SNS topic ARN for compliance violations'
+    Value: !Ref ComplianceTopic
+
+  ComplianceLambdaArn:
+    Description: 'Compliance Lambda function ARN'
+    Value: !GetAtt ComplianceLambdaFunction.Arn
+
+  CloudFormationEventRuleArn:
+    Description: 'EventBridge rule ARN for CloudFormation events'
+    Value: !GetAtt CloudFormationEventRule.Arn
