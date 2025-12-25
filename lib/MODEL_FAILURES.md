@@ -2,9 +2,9 @@
 
 ---
 
-## ✅ Comparison Summary
+## [PASS] Comparison Summary
 
-| Aspect                        | Ideal Response (✅)                                                                                         | Model Response (❌)                                                                                          | Comments                                                                                               |
+| Aspect                        | Ideal Response ([PASS])                                                                                         | Model Response ([FAIL])                                                                                          | Comments                                                                                               |
 |------------------------------|-------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------|
 | Parameter Handling           | Uses `Type: String` with `Default: ""` and supports optional keypair behavior                              | Uses `Type: AWS::EC2::KeyPair::KeyName` without default                                                       | Makes `KeyPairName` required, which causes deploy failure unless explicitly passed                     |
 | Condition Usage              | Defines `HasKeyPair` condition and uses `Fn::If` to include `KeyName` only if provided                     | No condition logic, assumes `KeyName` always present                                                         | CI/CD deployment breaks if `KeyPairName` is missing or unset                                          |
@@ -20,24 +20,24 @@
 
 ---
 
-## 🔥 Model Failure Diagnosis Prompt
+## ## Model Failure Diagnosis Prompt
 
 Use the following checklist and corrections to fix issues found in the model's output and align with CI/CD pipeline expectations:
 
-### 🔧 Corrections for Model Output
+### ## Corrections for Model Output
 
-1. ❗ Change `KeyPairName` parameter:
+1. ! Change `KeyPairName` parameter:
    - Type: `String`
    - Default: `""`
    - Description: "Name of an existing EC2 KeyPair (leave empty to disable SSH)"
    - ConstraintDescription: "Must be a valid EC2 KeyPair name or an empty string"
 
-2. ✅ Add a Conditions block:
+2. [PASS] Add a Conditions block:
     Conditions:
         HasKeyPair: !Not [!Equals !Ref KeyPairName, “”]
 
 
-3. ✅ Use conditional logic in the EC2 `KeyName` property:
+3. [PASS] Use conditional logic in the EC2 `KeyName` property:
     KeyName: !If HasKeyPair, !Ref KeyPairName, !Ref “AWS::NoValue”
 
 
