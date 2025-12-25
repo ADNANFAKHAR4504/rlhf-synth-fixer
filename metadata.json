@@ -11,19 +11,16 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "RDS",
-    "Config",
     "EC2",
-    "ElastiCache",
+    "ECS",
+    "ElasticLoadBalancing",
+    "DynamoDB",
+    "CloudWatch",
     "IAM",
-    "Lambda",
-    "S3",
-    "CloudTrail",
-    "SecretsManager",
-    "WAFv2",
-    "ApplicationInsights",
-    "Backup"
+    "SNS",
+    "SSM"
   ],
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 8
 }
