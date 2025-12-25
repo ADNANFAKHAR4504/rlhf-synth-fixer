@@ -1,6 +1,6 @@
 {
   "platform": "cfn",
-  "language": "yml",
+  "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "trainr915",
