@@ -1,0 +1,43 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291757",
+  "team": "synth-2",
+  "startedAt": "2025-08-20T12:37:46.425Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "Auto Scaling Group",
+    "RDS",
+    "KMS",
+    "SSM Parameter Store",
+    "IAM",
+    "CloudWatch",
+    "EBS",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Elastic IP",
+    "EFS",
+    "EventBridge"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291757",
+    "pr": "Pr380"
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

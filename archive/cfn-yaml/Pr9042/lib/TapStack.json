@@ -1,0 +1,1676 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack - Async financial processing (SQS FIFO, Lambda, DynamoDB, EventBridge, CloudWatch, SSM). All names include EnvironmentSuffix. Security-hardened & production-ready.",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "prod-us",
+            "Description": "Suffix used in resource names (e.g., prod-us, production, qa). Lowercase letters, digits, hyphens only.",
+            "AllowedPattern": "^[a-z0-9-]{2,20}$",
+            "MinLength": 2,
+            "MaxLength": 20
+        },
+        "PrimaryRegion": {
+            "Type": "String",
+            "Description": "Primary region for dashboard rendering and SSM ARNs.",
+            "Default": "us-east-1",
+            "AllowedValues": [
+                "us-east-1",
+                "us-west-2"
+            ]
+        },
+        "IsProduction": {
+            "Type": "String",
+            "Description": "true to disable auto-purge; false enables non-prod purge (when flag below is true).",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "QueueVisibilityTimeoutSeconds": {
+            "Type": "Number",
+            "Description": "Default SQS visibility timeout (seconds).",
+            "Default": 60,
+            "MinValue": 1,
+            "MaxValue": 43200
+        },
+        "PrimaryLambdaReservedConcurrency": {
+            "Type": "Number",
+            "Description": "Reserved concurrency for primary processor Lambda.",
+            "Default": 50,
+            "MinValue": 1,
+            "MaxValue": 10000
+        },
+        "ReplicationLambdaReservedConcurrency": {
+            "Type": "Number",
+            "Description": "Reserved concurrency for replication Lambda.",
+            "Default": 10,
+            "MinValue": 1,
+            "MaxValue": 1000
+        },
+        "DlqAlarmThreshold": {
+            "Type": "Number",
+            "Description": "DLQ visible messages alarm threshold.",
+            "Default": 10,
+            "MinValue": 1,
+            "MaxValue": 100000
+        },
+        "QueueDepthAlarmThreshold": {
+            "Type": "Number",
+            "Description": "Primary queue visible messages alarm threshold.",
+            "Default": 1000,
+            "MinValue": 1,
+            "MaxValue": 1000000
+        },
+        "TrustedRoleArn": {
+            "Type": "String",
+            "Description": "Optional IAM role ARN from a trusted account for least-privileged queue access. Leave blank to skip.",
+            "Default": "",
+            "AllowedPattern": "^$|^arn:aws:iam::[0-9]{12}:role\\/[A-Za-z0-9+=,.@_\\-\\/]+$"
+        },
+        "EnableAutoPurgeNonProd": {
+            "Type": "String",
+            "Description": "Enable scheduled queue purging in non-production (true/false).",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "QueuePurgeScheduleExpression": {
+            "Type": "String",
+            "Description": "EventBridge schedule for purge (cron() or rate()). Used only if non-prod and enabled.",
+            "Default": "cron(0 3 ? * SUN *)",
+            "AllowedPattern": "^(cron\\(.+\\)|rate\\(.+\\))$"
+        }
+    },
+    "Conditions": {
+        "IsProdEnv": {
+            "Fn::Equals": [
+                {
+                    "Ref": "IsProduction"
+                },
+                "true"
+            ]
+        },
+        "HasTrustedRole": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "TrustedRoleArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "AutoPurgeActive": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableAutoPurgeNonProd"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Condition": "IsProdEnv"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "PrimaryDlqQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "orders-dlq-${EnvironmentSuffix}.fifo"
+                },
+                "FifoQueue": true,
+                "ContentBasedDeduplication": true,
+                "VisibilityTimeout": {
+                    "Ref": "QueueVisibilityTimeoutSeconds"
+                },
+                "ReceiveMessageWaitTimeSeconds": 10,
+                "SqsManagedSseEnabled": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "PrimaryFifoQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "orders-${EnvironmentSuffix}.fifo"
+                },
+                "FifoQueue": true,
+                "ContentBasedDeduplication": true,
+                "VisibilityTimeout": {
+                    "Ref": "QueueVisibilityTimeoutSeconds"
+                },
+                "ReceiveMessageWaitTimeSeconds": 10,
+                "RedrivePolicy": {
+                    "deadLetterTargetArn": {
+                        "Fn::GetAtt": [
+                            "PrimaryDlqQueue",
+                            "Arn"
+                        ]
+                    },
+                    "maxReceiveCount": 3
+                },
+                "SqsManagedSseEnabled": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "DrDlqQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "orders-dr-dlq-${EnvironmentSuffix}.fifo"
+                },
+                "FifoQueue": true,
+                "ContentBasedDeduplication": true,
+                "VisibilityTimeout": {
+                    "Ref": "QueueVisibilityTimeoutSeconds"
+                },
+                "ReceiveMessageWaitTimeSeconds": 10,
+                "SqsManagedSseEnabled": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "DrFifoQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "orders-dr-${EnvironmentSuffix}.fifo"
+                },
+                "FifoQueue": true,
+                "ContentBasedDeduplication": true,
+                "VisibilityTimeout": {
+                    "Ref": "QueueVisibilityTimeoutSeconds"
+                },
+                "ReceiveMessageWaitTimeSeconds": 10,
+                "RedrivePolicy": {
+                    "deadLetterTargetArn": {
+                        "Fn::GetAtt": [
+                            "DrDlqQueue",
+                            "Arn"
+                        ]
+                    },
+                    "maxReceiveCount": 3
+                },
+                "SqsManagedSseEnabled": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "QueuePolicyPrimary": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Condition": "HasTrustedRole",
+            "Properties": {
+                "Queues": [
+                    {
+                        "Ref": "PrimaryFifoQueue"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowTrustedRoleAccessPrimary",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Ref": "TrustedRoleArn"
+                                }
+                            },
+                            "Action": [
+                                "sqs:SendMessage",
+                                "sqs:ReceiveMessage",
+                                "sqs:GetQueueAttributes",
+                                "sqs:GetQueueUrl",
+                                "sqs:DeleteMessage",
+                                "sqs:ChangeMessageVisibility"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "PrimaryFifoQueue",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "QueuePolicyPrimaryDlq": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Condition": "HasTrustedRole",
+            "Properties": {
+                "Queues": [
+                    {
+                        "Ref": "PrimaryDlqQueue"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowTrustedRoleReadPrimaryDlq",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Ref": "TrustedRoleArn"
+                                }
+                            },
+                            "Action": [
+                                "sqs:ReceiveMessage",
+                                "sqs:GetQueueAttributes",
+                                "sqs:GetQueueUrl"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "PrimaryDlqQueue",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "QueuePolicyDr": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Condition": "HasTrustedRole",
+            "Properties": {
+                "Queues": [
+                    {
+                        "Ref": "DrFifoQueue"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowTrustedRoleAccessDr",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Ref": "TrustedRoleArn"
+                                }
+                            },
+                            "Action": [
+                                "sqs:SendMessage",
+                                "sqs:ReceiveMessage",
+                                "sqs:GetQueueAttributes",
+                                "sqs:GetQueueUrl",
+                                "sqs:DeleteMessage",
+                                "sqs:ChangeMessageVisibility"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "DrFifoQueue",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "QueuePolicyDrDlq": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Condition": "HasTrustedRole",
+            "Properties": {
+                "Queues": [
+                    {
+                        "Ref": "DrDlqQueue"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowTrustedRoleReadDrDlq",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Ref": "TrustedRoleArn"
+                                }
+                            },
+                            "Action": [
+                                "sqs:ReceiveMessage",
+                                "sqs:GetQueueAttributes",
+                                "sqs:GetQueueUrl"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "DrDlqQueue",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaExecutionManagedPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "ManagedPolicyName": {
+                    "Fn::Sub": "lambda-exec-base-${EnvironmentSuffix}-${AWS::Region}"
+                },
+                "Description": "Base policy for Lambda logs (scoped to specific log groups)",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "LogsCore",
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogStreams"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/primary-processor-${EnvironmentSuffix}:*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/queue-replication-${EnvironmentSuffix}:*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/queue-purge-${EnvironmentSuffix}:*"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "PrimaryProcessorLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "primary-processor-role-${EnvironmentSuffix}-${AWS::Region}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    {
+                        "Ref": "LambdaExecutionManagedPolicy"
+                    }
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "primary-processor-inline-${EnvironmentSuffix}-${AWS::Region}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:ReceiveMessage",
+                                        "sqs:DeleteMessage",
+                                        "sqs:ChangeMessageVisibility",
+                                        "sqs:GetQueueAttributes"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "PrimaryFifoQueue",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:ConditionCheckItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MessageStateTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:GetParameter",
+                                        "ssm:GetParameters"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/async/${EnvironmentSuffix}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "ReplicationLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "replication-lambda-role-${EnvironmentSuffix}-${AWS::Region}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    {
+                        "Ref": "LambdaExecutionManagedPolicy"
+                    }
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "replication-inline-${EnvironmentSuffix}-${AWS::Region}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:ReceiveMessage",
+                                        "sqs:DeleteMessage",
+                                        "sqs:GetQueueAttributes"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "PrimaryFifoQueue",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DrFifoQueue",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:GetParameter"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/async/${EnvironmentSuffix}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "QueuePurgeLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "AutoPurgeActive",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "queue-purge-role-${EnvironmentSuffix}-${AWS::Region}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    {
+                        "Ref": "LambdaExecutionManagedPolicy"
+                    }
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "queue-purge-inline-${EnvironmentSuffix}-${AWS::Region}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:PurgeQueue",
+                                        "sqs:GetQueueAttributes"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PrimaryFifoQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PrimaryDlqQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DrFifoQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DrDlqQueue",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "PrimaryProcessorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/primary-processor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "ReplicationLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/queue-replication-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "QueuePurgeLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Condition": "AutoPurgeActive",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/queue-purge-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "PrimaryProcessorLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "primary-processor-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "PrimaryProcessorLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 512,
+                "ReservedConcurrentExecutions": {
+                    "Ref": "PrimaryLambdaReservedConcurrency"
+                },
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        },
+                        "PRIMARY_QUEUE_URL_SSM": {
+                            "Ref": "PrimaryQueueUrlParameter"
+                        },
+                        "PRIMARY_DLQ_URL_SSM": {
+                            "Ref": "PrimaryDlqUrlParameter"
+                        },
+                        "MESSAGE_TABLE_NAME": {
+                            "Ref": "MessageStateTable"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os\nimport json\nimport boto3\nfrom botocore.exceptions import ClientError\nfrom datetime import datetime, timezone\n\nddb = boto3.client('dynamodb')\n\ndef handler(event, context):\n    table = os.environ.get('MESSAGE_TABLE_NAME')\n    now = datetime.now(timezone.utc).isoformat()\n    for record in event.get('Records', []):\n        msg_id = record.get('messageId')\n        body = record.get('body', '')\n        try:\n            ddb.put_item(\n                TableName=table,\n                Item={\n                    'MessageId': {'S': msg_id},\n                    'ProcessedAt': {'S': now},\n                    'Payload': {'S': body},\n                    'Status': {'S': 'PROCESSED'}\n                },\n                ConditionExpression='attribute_not_exists(MessageId)'\n            )\n        except ClientError as e:\n            error_code = e.response.get('Error', {}).get('Code')\n            if error_code != 'ConditionalCheckFailedException':\n                print(f\"DynamoDB error: {error_code} - {e}\")\n                raise\n            print(f\"Duplicate message detected: {msg_id}\")\n    return {'statusCode': 200}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "PrimaryProcessorEventSourceMapping": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "PrimaryProcessorLambda"
+                },
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "PrimaryFifoQueue",
+                        "Arn"
+                    ]
+                },
+                "Enabled": true,
+                "BatchSize": 5
+            }
+        },
+        "ReplicationLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "queue-replication-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "ReplicationLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "ReservedConcurrentExecutions": {
+                    "Ref": "ReplicationLambdaReservedConcurrency"
+                },
+                "Environment": {
+                    "Variables": {
+                        "DEST_QUEUE_URL_PARAM": {
+                            "Ref": "DrQueueUrlParameter"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os\nimport boto3\nfrom botocore.exceptions import ClientError\nsqs = boto3.client('sqs')\nssm = boto3.client('ssm')\n\ndef _resolve_dest(param_or_url):\n    if not param_or_url:\n        return None\n    if param_or_url.startswith('/'):\n        try:\n            return ssm.get_parameter(Name=param_or_url)['Parameter']['Value']\n        except ClientError as e:\n            print(f\"SSM get_parameter failed: {e}\")\n            return None\n    return param_or_url\n\ndef handler(event, context):\n    dest = _resolve_dest(os.environ.get('DEST_QUEUE_URL_PARAM')) or os.environ.get('DEST_QUEUE_URL')\n    if not dest:\n        raise ValueError('Destination queue not configured')\n\n    for record in event.get('Records', []):\n        body = record.get('body', '')\n        attrs = record.get('attributes', {}) or {}\n        group_id = attrs.get('MessageGroupId')\n        if not group_id:\n            raise ValueError(f\"Missing MessageGroupId for message {record.get('messageId')}\")\n        dedup = attrs.get('MessageDeduplicationId') or record.get('messageId')\n        try:\n            sqs.send_message(\n                QueueUrl=dest,\n                MessageBody=body,\n                MessageGroupId=group_id,\n                MessageDeduplicationId=dedup\n            )\n        except ClientError as exc:\n            print('Replication send failed', exc)\n            raise\n    return {'statusCode': 200}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "ReplicationEventSourceMapping": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ReplicationLambda"
+                },
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "PrimaryFifoQueue",
+                        "Arn"
+                    ]
+                },
+                "Enabled": true,
+                "BatchSize": 5
+            }
+        },
+        "QueuePurgeLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Condition": "AutoPurgeActive",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "queue-purge-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "QueuePurgeLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 128,
+                "Environment": {
+                    "Variables": {
+                        "PRIMARY_QUEUE_URL": {
+                            "Ref": "PrimaryFifoQueue"
+                        },
+                        "PRIMARY_DLQ_URL": {
+                            "Ref": "PrimaryDlqQueue"
+                        },
+                        "DR_QUEUE_URL": {
+                            "Ref": "DrFifoQueue"
+                        },
+                        "DR_DLQ_URL": {
+                            "Ref": "DrDlqQueue"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os\nimport boto3\nfrom botocore.exceptions import ClientError\nsqs = boto3.client('sqs')\n\ndef _purge(url):\n    if not url:\n        return\n    try:\n        sqs.purge_queue(QueueUrl=url)\n        print('Purged:', url)\n    except ClientError as e:\n        print('Purge failed:', e)\n\ndef handler(event, context):\n    for u in [os.environ.get('PRIMARY_QUEUE_URL'),\n              os.environ.get('PRIMARY_DLQ_URL'),\n              os.environ.get('DR_QUEUE_URL'),\n              os.environ.get('DR_DLQ_URL')]:\n        _purge(u)\n    return {'status': 'ok'}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "QueuePurgeSchedule": {
+            "Type": "AWS::Events::Rule",
+            "Condition": "AutoPurgeActive",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "queue-purge-schedule-${EnvironmentSuffix}"
+                },
+                "ScheduleExpression": {
+                    "Ref": "QueuePurgeScheduleExpression"
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Id": {
+                            "Fn::Sub": "queue-purge-target-${EnvironmentSuffix}"
+                        },
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "QueuePurgeLambda",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "QueuePurgeLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Condition": "AutoPurgeActive",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "QueuePurgeLambda"
+                },
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "QueuePurgeSchedule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "MessageStateTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "message-state-${EnvironmentSuffix}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "MessageId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "ProcessingKey",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "MessageId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "ProcessingKeyIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "ProcessingKey",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "PrimaryQueueDepthAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "primary-queue-depth-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": {
+                    "Fn::Sub": "Primary FIFO queue depth exceeds ${QueueDepthAlarmThreshold} (${EnvironmentSuffix})"
+                },
+                "Namespace": "AWS/SQS",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Dimensions": [
+                    {
+                        "Name": "QueueName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "PrimaryFifoQueue",
+                                "QueueName"
+                            ]
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": {
+                    "Ref": "QueueDepthAlarmThreshold"
+                },
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "PrimaryDlqDepthAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "primary-dlq-depth-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": {
+                    "Fn::Sub": "Primary DLQ depth exceeds ${DlqAlarmThreshold} (${EnvironmentSuffix})"
+                },
+                "Namespace": "AWS/SQS",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Dimensions": [
+                    {
+                        "Name": "QueueName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "PrimaryDlqQueue",
+                                "QueueName"
+                            ]
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": {
+                    "Ref": "DlqAlarmThreshold"
+                },
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DrQueueDepthAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "dr-queue-depth-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": {
+                    "Fn::Sub": "DR FIFO queue depth exceeds ${QueueDepthAlarmThreshold} (${EnvironmentSuffix})"
+                },
+                "Namespace": "AWS/SQS",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Dimensions": [
+                    {
+                        "Name": "QueueName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "DrFifoQueue",
+                                "QueueName"
+                            ]
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": {
+                    "Ref": "QueueDepthAlarmThreshold"
+                },
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DrDlqDepthAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "dr-dlq-depth-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": {
+                    "Fn::Sub": "DR DLQ depth exceeds ${DlqAlarmThreshold} (${EnvironmentSuffix})"
+                },
+                "Namespace": "AWS/SQS",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Dimensions": [
+                    {
+                        "Name": "QueueName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "DrDlqQueue",
+                                "QueueName"
+                            ]
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": {
+                    "Ref": "DlqAlarmThreshold"
+                },
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "PrimaryProcessorThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "primary-processor-throttles-${EnvironmentSuffix}"
+                },
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Throttles",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "PrimaryProcessorLambda"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ReplicationThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "replication-throttles-${EnvironmentSuffix}"
+                },
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Throttles",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ReplicationLambda"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ReplicationLambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "replication-lambda-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Replication Lambda errors",
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Errors",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ReplicationLambda"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "missing"
+            }
+        },
+        "ProcessingDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 0, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Primary Queue Depth (${EnvironmentSuffix})\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",\"QueueName\",\"${PrimaryFifoQueue.QueueName}\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 0, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Primary DLQ Depth (${EnvironmentSuffix})\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",\"QueueName\",\"${PrimaryDlqQueue.QueueName}\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 6, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Primary Processor Lambda\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/Lambda\",\"Invocations\",\"FunctionName\",\"${PrimaryProcessorLambda}\"],\n          [\".\",\"Errors\",\".\",\".\"],\n          [\".\",\"Throttles\",\".\",\".\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 6, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Replication Lambda\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/Lambda\",\"Invocations\",\"FunctionName\",\"${ReplicationLambda}\"],\n          [\".\",\"Errors\",\".\",\".\"],\n          [\".\",\"Throttles\",\".\",\".\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 12, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"DR Queue Depth (${EnvironmentSuffix})\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",\"QueueName\",\"${DrFifoQueue.QueueName}\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 12, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"DR DLQ Depth (${EnvironmentSuffix})\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",\"QueueName\",\"${DrDlqQueue.QueueName}\"]\n        ]\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "DlqNotifierTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "dlq-notifier-${EnvironmentSuffix}"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "DLQ Notifications - ${EnvironmentSuffix}"
+                }
+            }
+        },
+        "DlqNotifierTopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Fn::GetAtt": [
+                            "DlqNotifierTopic",
+                            "TopicArn"
+                        ]
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowEventsToPublish",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "events.amazonaws.com"
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "DlqNotifierTopic",
+                                    "TopicArn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "DlqAlarmStateChangeRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "dlq-state-change-${EnvironmentSuffix}"
+                },
+                "EventPattern": {
+                    "source": [
+                        "aws.cloudwatch"
+                    ],
+                    "detail-type": [
+                        "CloudWatch Alarm State Change"
+                    ],
+                    "detail": {
+                        "alarmName": [
+                            {
+                                "Fn::Sub": "primary-dlq-depth-${EnvironmentSuffix}"
+                            }
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Id": {
+                            "Fn::Sub": "dlq-target-${EnvironmentSuffix}"
+                        },
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "DlqNotifierTopic",
+                                "TopicArn"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "PrimaryQueueUrlParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/async/${EnvironmentSuffix}/primary-queue-url"
+                },
+                "Type": "String",
+                "Value": {
+                    "Ref": "PrimaryFifoQueue"
+                }
+            }
+        },
+        "PrimaryQueueArnParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/async/${EnvironmentSuffix}/primary-queue-arn"
+                },
+                "Type": "String",
+                "Value": {
+                    "Fn::GetAtt": [
+                        "PrimaryFifoQueue",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "PrimaryDlqUrlParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/async/${EnvironmentSuffix}/primary-dlq-url"
+                },
+                "Type": "String",
+                "Value": {
+                    "Ref": "PrimaryDlqQueue"
+                }
+            }
+        },
+        "PrimaryDlqArnParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/async/${EnvironmentSuffix}/primary-dlq-arn"
+                },
+                "Type": "String",
+                "Value": {
+                    "Fn::GetAtt": [
+                        "PrimaryDlqQueue",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "DrQueueUrlParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/async/${EnvironmentSuffix}/dr-queue-url"
+                },
+                "Type": "String",
+                "Value": {
+                    "Ref": "DrFifoQueue"
+                }
+            }
+        },
+        "DrQueueArnParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/async/${EnvironmentSuffix}/dr-queue-arn"
+                },
+                "Type": "String",
+                "Value": {
+                    "Fn::GetAtt": [
+                        "DrFifoQueue",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "VisibilityTimeoutParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/async/${EnvironmentSuffix}/visibility-timeout-seconds"
+                },
+                "Type": "String",
+                "Value": {
+                    "Ref": "QueueVisibilityTimeoutSeconds"
+                }
+            }
+        },
+        "TrustedRoleParameter": {
+            "Condition": "HasTrustedRole",
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/async/${EnvironmentSuffix}/trusted-role-arn"
+                },
+                "Type": "String",
+                "Value": {
+                    "Ref": "TrustedRoleArn"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "PrimaryQueueUrl": {
+            "Description": "Primary FIFO queue URL",
+            "Value": {
+                "Ref": "PrimaryFifoQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "primary-queue-url-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PrimaryQueueArn": {
+            "Description": "Primary FIFO queue ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrimaryFifoQueue",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "primary-queue-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PrimaryDlqUrl": {
+            "Description": "Primary DLQ FIFO queue URL",
+            "Value": {
+                "Ref": "PrimaryDlqQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "primary-dlq-url-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PrimaryDlqArn": {
+            "Description": "Primary DLQ FIFO queue ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrimaryDlqQueue",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "primary-dlq-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "DrQueueUrl": {
+            "Description": "DR FIFO queue URL",
+            "Value": {
+                "Ref": "DrFifoQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "dr-queue-url-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "DrQueueArn": {
+            "Description": "DR FIFO queue ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DrFifoQueue",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "dr-queue-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PrimaryProcessorLambdaArn": {
+            "Description": "Primary processor Lambda ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrimaryProcessorLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "primary-processor-lambda-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ReplicationLambdaArn": {
+            "Description": "Replication Lambda ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ReplicationLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "replication-lambda-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "MessageStateTableName": {
+            "Description": "DynamoDB table for message state",
+            "Value": {
+                "Ref": "MessageStateTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "message-state-table-name-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ProcessingDashboardName": {
+            "Description": "CloudWatch dashboard logical name",
+            "Value": {
+                "Ref": "ProcessingDashboard"
+            }
+        }
+    }
+}

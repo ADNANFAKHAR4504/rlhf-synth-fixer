@@ -1,0 +1,649 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless Cryptocurrency Webhook Processing System",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        }
+    },
+    "Resources": {
+        "LambdaEncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for Lambda environment variable encryption - ${EnvironmentSuffix}"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Lambda to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaEncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/lambda-webhook-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "LambdaEncryptionKey"
+                }
+            }
+        },
+        "TransactionTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "crypto-transactions-${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "transactionId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "transactionId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "DeletionProtectionEnabled": false
+            }
+        },
+        "DeadLetterQueue": {
+            "Type": "AWS::SQS::Queue",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "webhook-dlq-${EnvironmentSuffix}"
+                },
+                "MessageRetentionPeriod": 1209600
+            }
+        },
+        "ProcessingQueue": {
+            "Type": "AWS::SQS::Queue",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "webhook-processing-${EnvironmentSuffix}"
+                },
+                "VisibilityTimeout": 300,
+                "RedrivePolicy": {
+                    "deadLetterTargetArn": {
+                        "Fn::GetAtt": [
+                            "DeadLetterQueue",
+                            "Arn"
+                        ]
+                    },
+                    "maxReceiveCount": 3
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "webhook-lambda-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaExecutionPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage",
+                                        "sqs:GetQueueAttributes"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProcessingQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DeadLetterQueue",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "LambdaEncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/webhook-processor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "BTCMetricFilter": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "FilterPattern": "[time, request_id, event_type, currency = BTC, ...]",
+                "LogGroupName": {
+                    "Ref": "LambdaLogGroup"
+                },
+                "MetricTransformations": [
+                    {
+                        "MetricName": {
+                            "Fn::Sub": "BTCTransactionCount-${EnvironmentSuffix}"
+                        },
+                        "MetricNamespace": "CryptoWebhooks",
+                        "MetricValue": "1",
+                        "DefaultValue": 0
+                    }
+                ]
+            }
+        },
+        "ETHMetricFilter": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "FilterPattern": "[time, request_id, event_type, currency = ETH, ...]",
+                "LogGroupName": {
+                    "Ref": "LambdaLogGroup"
+                },
+                "MetricTransformations": [
+                    {
+                        "MetricName": {
+                            "Fn::Sub": "ETHTransactionCount-${EnvironmentSuffix}"
+                        },
+                        "MetricNamespace": "CryptoWebhooks",
+                        "MetricValue": "1",
+                        "DefaultValue": 0
+                    }
+                ]
+            }
+        },
+        "USDTMetricFilter": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "FilterPattern": "[time, request_id, event_type, currency = USDT, ...]",
+                "LogGroupName": {
+                    "Ref": "LambdaLogGroup"
+                },
+                "MetricTransformations": [
+                    {
+                        "MetricName": {
+                            "Fn::Sub": "USDTTransactionCount-${EnvironmentSuffix}"
+                        },
+                        "MetricNamespace": "CryptoWebhooks",
+                        "MetricValue": "1",
+                        "DefaultValue": 0
+                    }
+                ]
+            }
+        },
+        "WebhookProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DependsOn": "LambdaLogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "webhook-processor-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "MemorySize": 1024,
+                "Timeout": 60,
+                "ReservedConcurrentExecutions": 50,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "KmsKeyArn": {
+                    "Fn::GetAtt": [
+                        "LambdaEncryptionKey",
+                        "Arn"
+                    ]
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "DeadLetterQueue",
+                            "Arn"
+                        ]
+                    }
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Environment": {
+                    "Variables": {
+                        "TRANSACTION_TABLE": {
+                            "Ref": "TransactionTable"
+                        },
+                        "PROCESSING_QUEUE_URL": {
+                            "Ref": "ProcessingQueue"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndynamodb = boto3.resource('dynamodb')\nsqs = boto3.client('sqs')\ntable = dynamodb.Table(os.environ['TRANSACTION_TABLE'])\nqueue_url = os.environ['PROCESSING_QUEUE_URL']\n\ndef handler(event, context):\n    try:\n        logger.info(f\"Processing webhook event: {json.dumps(event)}\")\n\n        # Extract currency from path parameters\n        currency = event.get('pathParameters', {}).get('currency', 'UNKNOWN')\n\n        # Validate currency\n        valid_currencies = ['BTC', 'ETH', 'USDT']\n        if currency not in valid_currencies:\n            logger.error(f\"Invalid currency: {currency}\")\n            return {\n                'statusCode': 400,\n                'body': json.dumps({'error': 'Invalid currency. Must be BTC, ETH, or USDT'})\n            }\n\n        # Parse webhook payload\n        body = json.loads(event.get('body', '{}'))\n        transaction_id = body.get('transactionId')\n        timestamp = int(datetime.utcnow().timestamp() * 1000)\n\n        if not transaction_id:\n            logger.error(\"Missing transactionId in payload\")\n            return {\n                'statusCode': 400,\n                'body': json.dumps({'error': 'Missing transactionId'})\n            }\n\n        # Log transaction for metric filter\n        logger.info(f\"TRANSACTION {currency} {transaction_id}\")\n\n        # Store transaction in DynamoDB\n        table.put_item(\n            Item={\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'currency': currency,\n                'payload': body,\n                'processedAt': datetime.utcnow().isoformat()\n            }\n        )\n\n        # Send to processing queue\n        sqs.send_message(\n            QueueUrl=queue_url,\n            MessageBody=json.dumps({\n                'transactionId': transaction_id,\n                'currency': currency,\n                'timestamp': timestamp\n            })\n        )\n\n        logger.info(f\"Successfully processed transaction {transaction_id}\")\n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Transaction processed successfully',\n                'transactionId': transaction_id,\n                'currency': currency\n            })\n        }\n\n    except Exception as e:\n        logger.error(f\"Error processing webhook: {str(e)}\")\n        raise\n"
+                }
+            }
+        },
+        "RequestValidator": {
+            "Type": "AWS::ApiGateway::RequestValidator",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "webhook-validator-${EnvironmentSuffix}"
+                },
+                "RestApiId": {
+                    "Ref": "WebhookRestApi"
+                },
+                "ValidateRequestBody": true,
+                "ValidateRequestParameters": true
+            }
+        },
+        "WebhookRequestModel": {
+            "Type": "AWS::ApiGateway::Model",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "WebhookRestApi"
+                },
+                "Name": "WebhookRequest",
+                "ContentType": "application/json",
+                "Schema": {
+                    "$schema": "http://json-schema.org/draft-04/schema#",
+                    "title": "Webhook Request Schema",
+                    "type": "object",
+                    "required": [
+                        "transactionId"
+                    ],
+                    "properties": {
+                        "transactionId": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "amount": {
+                            "type": "number"
+                        },
+                        "sender": {
+                            "type": "string"
+                        },
+                        "receiver": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "WebhookRestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "webhook-api-${EnvironmentSuffix}"
+                },
+                "Description": "Cryptocurrency Webhook Processing API",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "WebhooksResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "WebhookRestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "WebhookRestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "webhooks"
+            }
+        },
+        "CurrencyResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "WebhookRestApi"
+                },
+                "ParentId": {
+                    "Ref": "WebhooksResource"
+                },
+                "PathPart": "{currency}"
+            }
+        },
+        "WebhookPostMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "WebhookRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "CurrencyResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "AWS_IAM",
+                "RequestValidatorId": {
+                    "Ref": "RequestValidator"
+                },
+                "RequestModels": {
+                    "application/json": {
+                        "Ref": "WebhookRequestModel"
+                    }
+                },
+                "RequestParameters": {
+                    "method.request.path.currency": true
+                },
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebhookProcessorFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "ApiGatewayInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "WebhookProcessorFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebhookRestApi}/*"
+                }
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": "WebhookPostMethod",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "WebhookRestApi"
+                }
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "WebhookRestApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "TracingEnabled": true,
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "LoggingLevel": "INFO",
+                        "DataTraceEnabled": true,
+                        "MetricsEnabled": true
+                    }
+                ]
+            }
+        },
+        "ApiUsagePlan": {
+            "Type": "AWS::ApiGateway::UsagePlan",
+            "Properties": {
+                "UsagePlanName": {
+                    "Fn::Sub": "webhook-usage-plan-${EnvironmentSuffix}"
+                },
+                "Description": "Usage plan with 1000 requests per day limit",
+                "ApiStages": [
+                    {
+                        "ApiId": {
+                            "Ref": "WebhookRestApi"
+                        },
+                        "Stage": {
+                            "Ref": "ApiStage"
+                        }
+                    }
+                ],
+                "Quota": {
+                    "Limit": 1000,
+                    "Period": "DAY"
+                },
+                "Throttle": {
+                    "BurstLimit": 100,
+                    "RateLimit": 50
+                }
+            }
+        },
+        "ApiKey": {
+            "Type": "AWS::ApiGateway::ApiKey",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "webhook-api-key-${EnvironmentSuffix}"
+                },
+                "Enabled": true
+            }
+        },
+        "UsagePlanKey": {
+            "Type": "AWS::ApiGateway::UsagePlanKey",
+            "Properties": {
+                "KeyId": {
+                    "Ref": "ApiKey"
+                },
+                "KeyType": "API_KEY",
+                "UsagePlanId": {
+                    "Ref": "ApiUsagePlan"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ApiEndpointUrl": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${WebhookRestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}/webhooks/{currency}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiEndpointUrl"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebhookProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB table name for transactions",
+            "Value": {
+                "Ref": "TransactionTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+                }
+            }
+        },
+        "ProcessingQueueUrl": {
+            "Description": "SQS processing queue URL",
+            "Value": {
+                "Ref": "ProcessingQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessingQueueUrl"
+                }
+            }
+        },
+        "DeadLetterQueueUrl": {
+            "Description": "SQS dead letter queue URL",
+            "Value": {
+                "Ref": "DeadLetterQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DeadLetterQueueUrl"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS key ID for Lambda encryption",
+            "Value": {
+                "Ref": "LambdaEncryptionKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+                }
+            }
+        },
+        "ApiKeyId": {
+            "Description": "API Gateway API Key ID",
+            "Value": {
+                "Ref": "ApiKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiKeyId"
+                }
+            }
+        }
+    }
+}

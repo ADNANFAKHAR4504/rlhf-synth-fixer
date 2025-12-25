@@ -24,6 +24,7 @@ cdk.out.test/
 # IDE/Editor files
 .vscode/settings.local.json
 .claude/settings.local.json
+.cursor/mcp.json
 .idea/
 *.swp
 *.swo
@@ -159,3 +160,4 @@ tasks.csv
 ci_checks.json
 # Root reports folder (use .claude/reports/ instead)
 reports/
+cdk-outputs/

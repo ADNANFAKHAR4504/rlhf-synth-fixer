@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291563",
+  "team": "5",
+  "startedAt": "2025-08-19T01:48:41.014Z",
+  "provider": "localstack",
+  "subtask": "Application Deployment",
+  "wave": "P0",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "Gateway",
+    "IAM",
+    "SAM",
+    "Logs",
+    "CloudWatch",
+    "SQS",
+    "DynamoDB"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "govardhan-turing",
+  "dockerS3Location": ""
+}
