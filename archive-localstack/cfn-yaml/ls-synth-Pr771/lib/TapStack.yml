@@ -1,0 +1,378 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-ready serverless infrastructure with Lambda, API Gateway, S3, and CloudWatch - LocalStack Compatible'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment name for resource naming (e.g., dev, staging, prod)'
+    AllowedValues: ['dev', 'staging', 'prod']
+
+  ApplicationName:
+    Type: String
+    Default: 'serverless-app'
+    Description: 'Application name for resource naming'
+
+  # Performance Configuration Parameters
+  EnableProvisionedConcurrency:
+    Type: String
+    Default: 'false'
+    Description: 'Enable provisioned concurrency for Lambda functions'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  LambdaProvisionedConcurrency:
+    Type: Number
+    Default: 10
+    Description: 'Provisioned concurrency for Lambda functions to avoid cold starts'
+    MinValue: 10
+    MaxValue: 100
+
+Conditions:
+  EnableProvisionedConcurrency: !Equals [!Ref EnableProvisionedConcurrency, 'true']
+
+Resources:
+  # =====================================================
+  # IAM ROLES AND POLICIES (Principle of Least Privilege)
+  # =====================================================
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub 'arn:aws:s3:::${ApplicationName}-${Environment}-data/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Sub 'arn:aws:s3:::${ApplicationName}-${Environment}-data'
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                  - logs:DescribeLogGroups
+                Resource: '*'
+
+  # API Gateway CloudWatch Role
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                  - logs:DescribeLogGroups
+                Resource: '*'
+
+  # =====================================================
+  # S3 BUCKET WITH ENCRYPTION AND LOGGING
+  # =====================================================
+
+  # Main application S3 bucket with encryption
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${ApplicationName}-${Environment}-data'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'access-logs/'
+
+
+
+  # S3 bucket for access logs
+  S3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${ApplicationName}-${Environment}-access-logs'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+
+  # =====================================================
+  # LAMBDA FUNCTIONS WITH PERFORMANCE OPTIMIZATION
+  # =====================================================
+
+  # Main Lambda function optimized for high performance
+  MainLambdaFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    Properties:
+      FunctionName: !Sub '${ApplicationName}-${Environment}-main-function'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          BUCKET_NAME: !Sub '${ApplicationName}-${Environment}-data'
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+
+          def lambda_handler(event, context):
+              try:
+                  # High-performance request processing
+                  bucket_name = os.environ['BUCKET_NAME']
+
+                  # Process the request
+                  response_data = {
+                      'statusCode': 200,
+                      'message': 'Request processed successfully',
+                      'timestamp': datetime.utcnow().isoformat(),
+                      'requestId': context.aws_request_id
+                  }
+
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps(response_data)
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({
+                          'error': str(e),
+                          'requestId': context.aws_request_id
+                      })
+                  }
+
+
+
+  # Lambda Alias for Provisioned Concurrency (disabled for LocalStack)
+  LambdaAlias:
+    Type: AWS::Lambda::Alias
+    DeletionPolicy: Delete
+    Properties:
+      FunctionName: !Ref MainLambdaFunction
+      FunctionVersion: '$LATEST'
+      Name: 'prod'
+
+  # Lambda permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaAlias
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/POST/*'
+
+  # =====================================================
+  # API GATEWAY WITH HIGH THROUGHPUT CONFIGURATION
+  # =====================================================
+
+  # REST API Gateway
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    DeletionPolicy: Delete
+    Properties:
+      Name: !Sub '${ApplicationName}-${Environment}-api'
+      Description: 'High-performance serverless API'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: execute-api:Invoke
+            Resource: '*'
+
+  # API Gateway Resource
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    DeletionPolicy: Delete
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: 'api'
+
+  # API Gateway Method
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    DeletionPolicy: Delete
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaAlias}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DeletionPolicy: Delete
+    DependsOn: ApiMethod
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: 'Production deployment'
+
+  # API Gateway Stage with throttling (LocalStack-compatible settings)
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    DeletionPolicy: Delete
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: !Ref Environment
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+          ThrottlingRateLimit: 1000
+          ThrottlingBurstLimit: 2000
+
+  # =====================================================
+  # CLOUDWATCH LOGGING
+  # =====================================================
+
+  # CloudWatch Log Group for Lambda
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${MainLambdaFunction}'
+      RetentionInDays: 7
+
+  # CloudWatch Log Group for API Gateway
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub 'API-Gateway-Execution-Logs_${RestApi}/${Environment}'
+      RetentionInDays: 7
+
+# =====================================================
+# OUTPUTS
+# =====================================================
+
+Outputs:
+  ApiGatewayUrl:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/api'
+    Export:
+      Name: !Sub '${ApplicationName}-${Environment}-api-url'
+
+  S3BucketName:
+    Description: 'S3 bucket name for application data'
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub '${ApplicationName}-${Environment}-s3-bucket'
+
+  LambdaFunctionName:
+    Description: 'Lambda function name'
+    Value: !Ref MainLambdaFunction
+    Export:
+      Name: !Sub '${ApplicationName}-${Environment}-lambda-function'
+
+  LambdaFunctionArn:
+    Description: 'Lambda function ARN'
+    Value: !GetAtt MainLambdaFunction.Arn
+    Export:
+      Name: !Sub '${ApplicationName}-${Environment}-lambda-arn'
+
+  CloudWatchLogGroups:
+    Description: 'CloudWatch Log Groups created'
+    Value: !Sub '${LambdaLogGroup}, ${ApiGatewayLogGroup}'
+
+  SecurityFeatures:
+    Description: 'Security features enabled'
+    Value: 'S3 AES-256 encryption, IAM least privilege, Access logging'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  Environment:
+    Description: 'Environment name used for this deployment'
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-Environment'
