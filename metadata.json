@@ -1,0 +1,20 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-291169",
+  "team": "synth-2",
+  "startedAt": "2025-08-05T11:39:52.198Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3"
+  ],
+  "wave": "P0"
+}
