@@ -56,10 +56,14 @@ let secretsClient: SecretsManagerClient;
 let region: string;
 
 function loadOutputs() {
-  const p = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
+  // CI/CD saves to cdk-outputs, local saves to cfn-outputs
+  const ciPath = path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json");
+  const localPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
+
+  const p = fs.existsSync(ciPath) ? ciPath : localPath;
 
   if (!fs.existsSync(p)) {
-    throw new Error("Outputs file not found at cfn-outputs/flat-outputs.json. Please run terraform apply first.");
+    throw new Error("Outputs file not found. Please run terraform apply first.");
   }
 
   try {
@@ -90,7 +94,7 @@ function loadOutputs() {
     };
 
     if (missing.length) {
-      throw new Error(`Missing required outputs in cfn-outputs/flat-outputs.json: ${missing.join(", ")}`);
+      throw new Error(`Missing required outputs: ${missing.join(", ")}`);
     }
     return o;
   } catch (error) {
