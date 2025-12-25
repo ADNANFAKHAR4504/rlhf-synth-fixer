@@ -151,7 +151,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${ProjectName}-${EnvironmentSuffix}-serverless-function'
-      CodeUri: s3://iac-rlhf-cfn-states-us-west-2/synthtrainr915/lambda-function.zip
+      CodeUri: ./src/
       Handler: app.lambda_handler
       Runtime: python3.11
       Role: !GetAtt LambdaExecutionRole.Arn
