@@ -1,0 +1,45 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr868",
+  "team": "synth-2",
+  "wave": "P1",
+  "startedAt": "2025-08-15T12:07:30+05:30",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Performance Optimization"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "KMS",
+    "SecretsManager",
+    "IAM",
+    "AutoScaling"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": "",
+  "localstack_migration": {
+    "migrated": true,
+    "migrated_at": "2025-12-25T03:03:00Z",
+    "original_pr": "Pr1299",
+    "deployment_success": true,
+    "excluded_services": ["VPN", "SecurityHub", "Config"]
+  }
+}
