@@ -26,7 +26,7 @@ Requirements:
    - SNS topic receives alarm notifications for security incidents
 
 Service Connectivity:
-S3 bucket -> KMS for encryption -> CloudTrail logs operations -> CloudWatch Logs stores trail data -> CloudWatch Alarms monitor for security events -> SNS notifies on alarms. IAM roles grant CloudTrail write access to CloudWatch Logs and S3 access logging permissions.
+S3 bucket uses KMS key for encryption. CloudTrail monitors the S3 bucket and sends operation logs to CloudWatch Logs. CloudWatch Alarms monitor the log data and trigger notifications. When alarms detect security events, SNS sends alerts to subscribers. IAM roles connect CloudTrail to CloudWatch Logs and grant S3 logging permissions.
 
 Include proper resource naming with meaningful prefixes, tags for resource management, and IAM roles with specific permissions for CloudTrail and CloudWatch. Follow AWS security best practices and compliance requirements.
 
