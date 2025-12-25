@@ -23,7 +23,9 @@ resource "aws_elastic_beanstalk_application" "main" {
 }
 
 # Elastic Beanstalk Environment
+# Note: LocalStack Community has limited EB support - environment creation may fail
 resource "aws_elastic_beanstalk_environment" "main" {
+  count               = local.is_localstack ? 0 : 1
   name                = "${var.project_name}-${var.environment_suffix}-env"
   application         = aws_elastic_beanstalk_application.main.name
   solution_stack_name = var.eb_solution_stack

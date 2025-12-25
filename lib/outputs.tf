@@ -30,12 +30,12 @@ output "eb_application_name" {
 
 output "eb_environment_name" {
   description = "Name of the Elastic Beanstalk environment"
-  value       = aws_elastic_beanstalk_environment.main.name
+  value       = local.is_localstack ? "N/A (LocalStack Community)" : aws_elastic_beanstalk_environment.main[0].name
 }
 
 output "eb_environment_url" {
   description = "URL of the Elastic Beanstalk environment"
-  value       = aws_elastic_beanstalk_environment.main.endpoint_url
+  value       = local.is_localstack ? "N/A (LocalStack Community)" : aws_elastic_beanstalk_environment.main[0].endpoint_url
 }
 
 output "rds_endpoint" {

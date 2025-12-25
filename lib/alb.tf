@@ -8,6 +8,15 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = false
 
+  # Disable access logs and health check logs for LocalStack compatibility
+  # LocalStack Community doesn't support these ALB logging features
+  dynamic "access_logs" {
+    for_each = local.is_localstack ? [] : [1]
+    content {
+      enabled = false
+    }
+  }
+
   tags = {
     Name        = "${var.project_name}-${var.environment_suffix}-alb"
     Environment = var.environment
