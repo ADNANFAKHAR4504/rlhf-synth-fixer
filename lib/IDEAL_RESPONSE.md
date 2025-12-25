@@ -51,6 +51,12 @@ Complete CloudFormation JSON template implementing a production-ready three-tier
       "Description": "Cost center tag",
       "Default": "Finance"
     },
+    "DBMasterPassword": {
+      "Type": "String",
+      "Description": "Master password for RDS Aurora cluster",
+      "NoEcho": true,
+      "Default": "TempPassword123!"
+    },
     "DomainName": {
       "Type": "String",
       "Description": "Domain name for CloudFront (must have ACM certificate)",
@@ -771,7 +777,7 @@ Complete CloudFormation JSON template implementing a production-ready three-tier
         "Engine": "aurora-mysql",
         "EngineVersion": "5.7.mysql_aurora.2.11.2",
         "MasterUsername": "admin",
-        "MasterUserPassword": "TempPassword123!",
+        "MasterUserPassword": {"Ref": "DBMasterPassword"},
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
         "VpcSecurityGroupIds": [{"Ref": "DBSecurityGroup"}],
         "BackupRetentionPeriod": 7,
