@@ -19,7 +19,7 @@ Create a serverless payment webhook processing system using **CloudFormation wit
    - Enable X-Ray tracing for observability and performance monitoring
    - Set reserved concurrent executions to 100 to prevent throttling during peak loads
 
-2. **DynamoDB Transaction Storage**
+2. DynamoDB Transaction Storage
    - Create DynamoDB table with partition key 'transactionId' for transaction storage
    - Configure on-demand billing mode for cost optimization with variable workloads
    - Enable point-in-time recovery for data protection and compliance
