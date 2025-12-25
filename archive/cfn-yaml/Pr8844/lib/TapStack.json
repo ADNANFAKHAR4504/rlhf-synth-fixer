@@ -1,0 +1,298 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TAP Stack - Task Assignment Platform CloudFormation Template - LocalStack Compatible",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming"
+        }
+    },
+    "Resources": {
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapLambdaExecutionRole-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaAssetsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tap-lambda-assets-${Environment}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                }
+            }
+        },
+        "TapFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "TapFunction-${Environment}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 128,
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        },
+                        "BUCKET_NAME": {
+                            "Ref": "LambdaAssetsBucket"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport logging\nimport re\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef validate_email(email):\n    \"\"\"Basic email validation\"\"\"\n    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'\n    return re.match(pattern, str(email)) is not None\n\ndef validate_required_fields(data, required_fields):\n    \"\"\"Validate that required fields are present in the data\"\"\"\n    missing_fields = []\n    for field in required_fields:\n        if field not in data or not str(data[field]).strip():\n            missing_fields.append(field)\n    return missing_fields\n\ndef sanitize_input(data):\n    \"\"\"Basic input sanitization\"\"\"\n    if isinstance(data, dict):\n        return {k: sanitize_input(v) for k, v in data.items()}\n    elif isinstance(data, list):\n        return [sanitize_input(item) for item in data]\n    elif isinstance(data, str):\n        # Basic HTML/script tag removal\n        data = re.sub(r'<[^>]*>', '', data)\n        return data.strip()\n    return data\n\ndef lambda_handler(event, context):\n    \"\"\"\n    AWS Lambda handler function for the TAP serverless application.\n    Handles HTTP requests from API Gateway (REST API v1).\n    \"\"\"\n    \n    # Log the incoming event\n    logger.info(f\"Received event: {json.dumps(event)}\")\n    \n    # Extract HTTP method and path - support both REST API v1 and direct invocation\n    http_method = event.get('httpMethod', event.get('requestContext', {}).get('http', {}).get('method', 'GET'))\n    path = event.get('path', event.get('requestContext', {}).get('http', {}).get('path', '/'))\n    \n    # Get environment variables\n    environment = os.environ.get('ENVIRONMENT', 'dev')\n    bucket_name = os.environ.get('BUCKET_NAME', 'unknown')\n    \n    # Generate request ID\n    request_id = 'unknown'\n    if context and hasattr(context, 'aws_request_id'):\n        request_id = context.aws_request_id\n    elif isinstance(context, dict):\n        request_id = context.get('aws_request_id', 'unknown')\n\n    # Basic routing based on HTTP method and path\n    if http_method == 'GET':\n        # Handle GET requests - typically for reading/retrieving resources\n        if path == '/health' or path == '/' or path == '':\n            response_body = {\n                'message': 'TAP Serverless Application is running!',\n                'status': 'healthy',\n                'environment': environment,\n                'bucket': bucket_name,\n                'path': path,\n                'method': http_method,\n                'timestamp': request_id,\n                'version': '1.0.0'\n            }\n            status_code = 200\n        elif path.startswith('/api/'):\n            # Handle API endpoints\n            query_params = event.get('queryStringParameters') or {}\n            path_params = event.get('pathParameters') or {}\n            \n            response_body = {\n                'message': f'GET API endpoint {path}',\n                'query_parameters': query_params,\n                'path_parameters': path_params,\n                'environment': environment,\n                'request_id': request_id\n            }\n            status_code = 200\n        else:\n            response_body = {\n                'error': f'GET endpoint {path} not found',\n                'available_endpoints': {\n                    'health_check': '/health or /',\n                    'api_endpoints': '/api/*'\n                },\n                'message': 'Please use one of the available endpoints'\n            }\n            status_code = 404\n    elif http_method == 'POST':\n        # Handle POST requests - typically for creating resources\n        try:\n            request_body = json.loads(event.get('body', '{}') or '{}')\n            \n            # Basic validation for POST requests\n            if not request_body:\n                response_body = {\n                    'error': 'POST request requires a request body',\n                    'message': 'Please provide data to create a resource'\n                }\n                status_code = 400\n            else:\n                # Sanitize input data\n                sanitized_data = sanitize_input(request_body)\n                \n                # Example validation - you can customize this based on your needs\n                if 'email' in sanitized_data and not validate_email(sanitized_data['email']):\n                    response_body = {\n                        'error': 'Invalid email format',\n                        'message': 'Please provide a valid email address'\n                    }\n                    status_code = 400\n                else:\n                    response_body = {\n                        'message': 'POST request processed successfully',\n                        'action': 'resource_created',\n                        'received_data': sanitized_data,\n                        'environment': environment,\n                        'request_id': request_id\n                    }\n                    status_code = 201  # Created\n                \n        except json.JSONDecodeError:\n            response_body = {\n                'error': 'Invalid JSON in request body',\n                'message': 'POST request body must be valid JSON'\n            }\n            status_code = 400\n    elif http_method == 'PUT':\n        # Handle PUT requests - typically for updating resources\n        try:\n            request_body = json.loads(event.get('body', '{}') or '{}')\n            \n            # Basic validation for PUT requests\n            if not request_body:\n                response_body = {\n                    'error': 'PUT request requires a request body',\n                    'message': 'Please provide data to update'\n                }\n                status_code = 400\n            else:\n                # Sanitize input data\n                sanitized_data = sanitize_input(request_body)\n                \n                # Validate required fields for update operations\n                missing_fields = validate_required_fields(sanitized_data, ['id'])\n                if missing_fields:\n                    response_body = {\n                        'error': f'Missing required fields: {\", \".join(missing_fields)}',\n                        'message': 'PUT requests must include an id field to identify the resource to update',\n                        'required_fields': ['id']\n                    }\n                    status_code = 400\n                else:\n                    # Additional email validation if present\n                    if 'email' in sanitized_data and not validate_email(sanitized_data['email']):\n                        response_body = {\n                            'error': 'Invalid email format',\n                            'message': 'Please provide a valid email address'\n                        }\n                        status_code = 400\n                    else:\n                        response_body = {\n                            'message': 'PUT request processed successfully',\n                            'action': 'resource_updated',\n                            'resource_id': sanitized_data.get('id'),\n                            'updated_data': sanitized_data,\n                            'environment': environment,\n                            'request_id': request_id\n                        }\n                        status_code = 200\n                \n        except json.JSONDecodeError:\n            response_body = {\n                'error': 'Invalid JSON in request body',\n                'message': 'PUT request body must be valid JSON'\n            }\n            status_code = 400\n    elif http_method == 'DELETE':\n        # Handle DELETE requests - typically for removing resources\n        query_params = event.get('queryStringParameters') or {}\n        path_params = event.get('pathParameters') or {}\n        \n        # Extract resource identifier from path or query parameters\n        resource_id = None\n        if path_params:\n            resource_id = path_params.get('id') or path_params.get('proxy')\n        if not resource_id and query_params:\n            resource_id = query_params.get('id')\n        \n        if not resource_id:\n            response_body = {\n                'error': 'Missing resource identifier',\n                'message': 'DELETE requests require an id parameter in the path or query string',\n                'examples': [\n                    f'{path}?id=123',\n                    'Use path parameter: /resource/123'\n                ]\n            }\n            status_code = 400\n        else:\n            # Validate resource ID format\n            if not str(resource_id).strip():\n                response_body = {\n                    'error': 'Invalid resource identifier',\n                    'message': 'Resource ID cannot be empty'\n                }\n                status_code = 400\n            else:\n                response_body = {\n                    'message': 'DELETE request processed successfully',\n                    'action': 'resource_deleted',\n                    'resource_id': resource_id,\n                    'path': path,\n                    'environment': environment,\n                    'request_id': request_id\n                }\n                status_code = 200\n    elif http_method == 'OPTIONS':\n        # Handle OPTIONS requests - for CORS preflight\n        response_body = {\n            'message': 'CORS preflight response',\n            'allowed_methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],\n            'allowed_headers': ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key', 'X-Amz-Security-Token'],\n            'environment': environment\n        }\n        status_code = 200\n    else:\n        # Handle unsupported HTTP methods\n        response_body = {\n            'error': f'HTTP method {http_method} is not supported',\n            'path': path,\n            'supported_methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],\n            'message': 'Please use one of the supported HTTP methods'\n        }\n        status_code = 405\n    \n    # Prepare the response\n    response = {\n        'statusCode': status_code,\n        'headers': {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*',\n            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'\n        },\n        'body': json.dumps(response_body)\n    }\n    logger.info(f\"Returning response: {json.dumps(response)}\")\n    return response\n"
+                }
+            }
+        },
+        "LambdaApiGatewayPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "TapFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TapRestApi}/*"
+                }
+            }
+        },
+        "TapRestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TapRestApi-${Environment}"
+                },
+                "Description": "TAP REST API Gateway",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "RootMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TapRestApi"
+                },
+                "ResourceId": {
+                    "Fn::GetAtt": [
+                        "TapRestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "HttpMethod": "ANY",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TapFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "ProxyResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TapRestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "TapRestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "{proxy+}"
+            }
+        },
+        "ProxyMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TapRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ProxyResource"
+                },
+                "HttpMethod": "ANY",
+                "AuthorizationType": "NONE",
+                "RequestParameters": {
+                    "method.request.path.proxy": true
+                },
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TapFunction.Arn}/invocations"
+                    },
+                    "RequestParameters": {
+                        "integration.request.path.proxy": "method.request.path.proxy"
+                    }
+                }
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "RootMethod",
+                "ProxyMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TapRestApi"
+                }
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TapRestApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "RestApiUrl": {
+            "Description": "REST API endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${TapRestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-${Environment}-ApiUrl"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TapFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-${Environment}-LambdaArn"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "S3 Bucket for Lambda assets",
+            "Value": {
+                "Ref": "LambdaAssetsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-${Environment}-S3Bucket"
+                }
+            }
+        },
+        "LambdaExecutionRoleArn": {
+            "Description": "Lambda Execution Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaExecutionRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-${Environment}-RoleArn"
+                }
+            }
+        },
+        "RestApiId": {
+            "Description": "REST API Gateway ID",
+            "Value": {
+                "Ref": "TapRestApi"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "TapStack-${Environment}-RestApiId"
+                }
+            }
+        }
+    }
+}
