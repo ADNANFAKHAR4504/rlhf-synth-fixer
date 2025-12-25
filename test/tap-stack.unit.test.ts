@@ -159,33 +159,11 @@ describe('TapStack', () => {
     });
   });
 
-    test('should apply lifecycle policies to buckets', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        LifecycleConfiguration: {
-          Rules: [
-            {
-              Id: 'DeleteIncompleteMultipartUploads',
-              Status: 'Enabled',
-              AbortIncompleteMultipartUpload: {
-                DaysAfterInitiation: 7,
-              },
-            },
-            {
-              Id: 'TransitionToIA',
-              Status: 'Enabled',
-              Transitions: [
-                {
-                  StorageClass: 'STANDARD_IA',
-                  TransitionInDays: 30,
-                },
-                {
-                  StorageClass: 'GLACIER',
-                  TransitionInDays: 90,
-                },
-              ],
-            },
-          ],
-        },
+    test('should not have lifecycle policies configured (LocalStack compatibility)', () => {
+      // LocalStack: Lifecycle policies are not configured in the stack
+      const buckets = template.findResources('AWS::S3::Bucket');
+      Object.values(buckets).forEach((bucket: any) => {
+        expect(bucket.Properties.LifecycleConfiguration).toBeUndefined();
       });
     });
 
