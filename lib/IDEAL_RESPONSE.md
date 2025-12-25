@@ -14,7 +14,7 @@ This document contains the improved CloudFormation JSON template and Lambda func
 - Created comprehensive unit tests
 - Added deployment instructions for starting Config Recorder
 
-## File: lib/compliance-stack.json
+## File: lib/TapStack.json
 
 ```json
 {

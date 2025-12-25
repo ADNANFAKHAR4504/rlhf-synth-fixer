@@ -2,7 +2,7 @@
 
 This document contains the CloudFormation JSON template and Lambda function code for implementing an automated infrastructure compliance analysis system.
 
-## File: lib/compliance-stack.json
+## File: lib/TapStack.json
 
 ```json
 {
