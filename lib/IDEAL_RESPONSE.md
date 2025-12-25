@@ -769,9 +769,9 @@ Complete CloudFormation JSON template implementing a production-ready three-tier
       "Properties": {
         "DBClusterIdentifier": {"Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"},
         "Engine": "aurora-mysql",
-        "EngineVersion": "8.0.mysql_aurora.3.02.0",
-        "MasterUsername": {"Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"},
-        "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"},
+        "EngineVersion": "5.7.mysql_aurora.2.11.2",
+        "MasterUsername": "admin",
+        "MasterUserPassword": "TempPassword123!",
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
         "VpcSecurityGroupIds": [{"Ref": "DBSecurityGroup"}],
         "BackupRetentionPeriod": 7,
