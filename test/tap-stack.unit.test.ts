@@ -236,7 +236,7 @@ describe('TapStack CloudFormation Template', () => {
       
       [instance1, instance2].forEach(instance => {
         expect(instance.Type).toBe('AWS::EC2::Instance');
-        expect(instance.Properties.ImageId).toBe('ami-066a7fbea5161f451');
+        expect(instance.Properties.ImageId).toEqual({ Ref: 'ImageId' });
         expect(instance.Properties.InstanceType).toBe('t2.micro');
         expect(instance.Properties.DisableApiTermination).toBe(true);
         expect(instance.Properties.IamInstanceProfile).toEqual({ Ref: 'EC2InstanceProfile' });
