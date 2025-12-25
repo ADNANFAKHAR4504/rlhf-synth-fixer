@@ -41,31 +41,31 @@ Use the following checklist and corrections to fix issues found in the model's o
     KeyName: !If HasKeyPair, !Ref KeyPairName, !Ref “AWS::NoValue”
 
 
-4. 🚫 Remove hardcoded `GroupName`, and apply dynamic naming like:
+4. [BLOCK] Remove hardcoded `GroupName`, and apply dynamic naming like:
     Tags:- 
         Key: 
         NameValue: !Sub ‘${AWS::StackName}-WebServerSecurityGroup’
 
-5. 🏷 Ensure consistent resource tagging:
+5. [TAG] Ensure consistent resource tagging:
 - Apply to all core resources:
   ```
   - Key: Environment
     Value: Production
   ```
 
-6. 📦 Use proper output export names for CI/CD:
+6. [PACKAGE] Use proper output export names for CI/CD:
     Outputs:
         VPCId:
         Value: !Ref VPC
         Export:
         Name: !Sub ‘${AWS::StackName}-VPC-ID’
 
-7. 🧪 Confirm the template passes all validation:
+7. [TEST] Confirm the template passes all validation:
 - `cfn-lint`
 - `npm run build`
 - `npm run test:unit`
 
-8. 🎯 Final Goals:
+8. [TARGET] Final Goals:
 - CI/CD-safe with no required user input
 - All IDs and resources dual-tagged with `Name` & `Environment`
 - Flexible for dynamic environments and reusable across regions
