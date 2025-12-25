@@ -1331,25 +1331,25 @@ Outputs:
 
 ## Key Features and Security Controls
 
-### 🏗️ **Infrastructure Components**
+###  **Infrastructure Components**
 - **VPC**: Secure virtual private cloud with DNS support
 - **Subnets**: 2 public and 2 private subnets across different AZs for high availability
 - **NAT Gateways**: Redundant NAT gateways for private subnet internet access
 - **Route Tables**: Proper routing configuration for public and private subnets
 
-### 🔒 **Security Controls**
+###  **Security Controls**
 - **Network ACLs**: Restrictive network access control lists with IP-based filtering
 - **KMS**: Customer-managed encryption keys for secure key management
 - **IAM Roles**: Least privilege access with minimal required permissions
 - **S3 Encryption**: All S3 buckets use SSE-S3 encryption by default
 
-### 📊 **Monitoring & Compliance**
+###  **Monitoring & Compliance**
 - **CloudTrail**: Multi-region trail with log file validation enabled
 - **GuardDuty**: Threat detection with malware protection and S3 monitoring
 - **AWS Config**: Configuration compliance monitoring with delivery channel
 - **WAF**: Web application firewall with managed rule sets
 
-### 🛡️ **Best Practices Implemented**
+###  **Best Practices Implemented**
 - All resources use the `SecureApp` prefix as required
 - No hardcoded regions (uses dynamic references)
 - Proper resource dependencies and conditions
@@ -1357,7 +1357,7 @@ Outputs:
 - Public access blocked on all S3 buckets
 - Versioning enabled on critical S3 buckets
 
-### 🔧 **Deployment Considerations**
+###  **Deployment Considerations**
 - The template uses environment variables for region deployment
 - All secrets use dynamic references (no hardcoded values)
 - Template passes CloudFormation validation and cfn-lint checks
