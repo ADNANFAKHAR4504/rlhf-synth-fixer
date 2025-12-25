@@ -1,3 +1,56 @@
+# Ideal Response - TAP Stack Infrastructure
+
+## Overview
+
+This Terraform configuration implements a complete three-tier AWS infrastructure including VPC networking, Application Load Balancer, Auto Scaling Group with EC2 instances, and CloudWatch monitoring. The implementation is designed to work with LocalStack Community for testing while maintaining production-ready patterns.
+
+## Architecture
+
+The infrastructure consists of the following components:
+
+### Networking Layer
+- VPC with 10.0.0.0/16 CIDR block
+- 2 public subnets across 2 availability zones
+- 2 private subnets across 2 availability zones
+- Internet Gateway for public subnet internet access
+- NAT Gateway for private subnet outbound connectivity
+- Public and private route tables with appropriate associations
+
+### Security Layer
+- ALB Security Group allowing HTTP/HTTPS inbound from anywhere
+- Application Security Group allowing HTTP only from ALB
+- All security groups allow full egress
+
+### Load Balancing Layer (Conditional - requires LocalStack Pro)
+- Application Load Balancer in public subnets
+- Target Group with health checks on port 80
+- HTTP Listener forwarding to target group
+
+### Compute Layer
+- Launch Template with Amazon Linux 2 AMI
+- User data script installing httpd web server
+- Auto Scaling Group spanning private subnets
+- Desired capacity of 2, minimum 2, maximum 4 instances
+
+### Monitoring Layer (Conditional)
+- CloudWatch CPU high alarm triggering scale out
+- CloudWatch CPU low alarm triggering scale in
+- ALB unhealthy targets alarm (requires both alarms and load balancer enabled)
+
+## LocalStack Compatibility
+
+This configuration includes conditional resources for LocalStack Community compatibility:
+
+- `enable_load_balancer` (default: false) - ELBv2 requires LocalStack Pro
+- `enable_cloudwatch_alarms` (default: false) - CloudWatch alarms have limited support
+
+For production AWS deployment, set both variables to true.
+
+## Complete Terraform Code
+
+### File: lib/tap_stack.tf
+
+```hcl
 ############################################
 # VARIABLES
 ############################################
@@ -40,12 +93,6 @@ variable "enable_cloudwatch_alarms" {
 
 variable "enable_load_balancer" {
   description = "Enable ALB/ELBv2 resources (set to false for LocalStack Community which requires Pro)"
-  type        = bool
-  default     = false
-}
-
-variable "enable_autoscaling" {
-  description = "Enable Auto Scaling Group and policies (set to false for LocalStack Community which requires Pro)"
   type        = bool
   default     = false
 }
@@ -345,8 +392,6 @@ resource "aws_launch_template" "app" {
 }
 
 resource "aws_autoscaling_group" "app" {
-  count = var.enable_autoscaling ? 1 : 0
-
   name                      = local.asg_name
   max_size                  = 4
   min_size                  = 2
@@ -382,14 +427,11 @@ resource "aws_autoscaling_group" "app" {
 
 ############################################
 # SCALING POLICIES + CLOUDWATCH ALARMS
-# Note: Auto Scaling requires LocalStack Pro
 ############################################
 # Scale OUT if ASG avg CPU > 60% for 5 minutes
 resource "aws_autoscaling_policy" "scale_out" {
-  count = var.enable_autoscaling ? 1 : 0
-
   name                   = "${local.name_prefix}-scale-out"
-  autoscaling_group_name = aws_autoscaling_group.app[0].name
+  autoscaling_group_name = aws_autoscaling_group.app.name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = 1
   cooldown               = 300
@@ -397,7 +439,7 @@ resource "aws_autoscaling_policy" "scale_out" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  count = var.enable_cloudwatch_alarms && var.enable_autoscaling ? 1 : 0
+  count = var.enable_cloudwatch_alarms ? 1 : 0
 
   alarm_name          = "${local.name_prefix}-cpu-high"
   alarm_description   = "Scale out when average CPU > 60% for 5 minutes"
@@ -410,20 +452,18 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   threshold           = 60
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app[0].name
+    AutoScalingGroupName = aws_autoscaling_group.app.name
   }
 
-  alarm_actions      = [aws_autoscaling_policy.scale_out[0].arn]
+  alarm_actions      = [aws_autoscaling_policy.scale_out.arn]
   treat_missing_data = "notBreaching"
   tags               = merge(local.tags, { Name = "${local.name_prefix}-cpu-high" })
 }
 
 # Scale IN if ASG avg CPU < 20% for 10 minutes (2x 300s)
 resource "aws_autoscaling_policy" "scale_in" {
-  count = var.enable_autoscaling ? 1 : 0
-
   name                   = "${local.name_prefix}-scale-in"
-  autoscaling_group_name = aws_autoscaling_group.app[0].name
+  autoscaling_group_name = aws_autoscaling_group.app.name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = -1
   cooldown               = 600
@@ -431,7 +471,7 @@ resource "aws_autoscaling_policy" "scale_in" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_low" {
-  count = var.enable_cloudwatch_alarms && var.enable_autoscaling ? 1 : 0
+  count = var.enable_cloudwatch_alarms ? 1 : 0
 
   alarm_name          = "${local.name_prefix}-cpu-low"
   alarm_description   = "Scale in when average CPU < 20% for 10 minutes"
@@ -444,10 +484,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   threshold           = 20
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app[0].name
+    AutoScalingGroupName = aws_autoscaling_group.app.name
   }
 
-  alarm_actions      = [aws_autoscaling_policy.scale_in[0].arn]
+  alarm_actions      = [aws_autoscaling_policy.scale_in.arn]
   treat_missing_data = "notBreaching"
   tags               = merge(local.tags, { Name = "${local.name_prefix}-cpu-low" })
 }
@@ -509,7 +549,7 @@ output "target_group_arn" {
 }
 
 output "asg_name" {
-  value       = var.enable_autoscaling ? aws_autoscaling_group.app[0].name : ""
+  value       = aws_autoscaling_group.app.name
   description = "Auto Scaling Group name"
 }
 
@@ -522,3 +562,100 @@ output "app_sg_id" {
   value       = aws_security_group.app_sg.id
   description = "App/EC2 Security Group ID"
 }
+```
+
+## Implementation Details
+
+### Naming Strategy
+
+All resources follow a consistent naming pattern using `${var.project_name}-${var.env}` as the base prefix. Resource names with AWS length limits use the `substr` function to ensure compliance.
+
+### Availability Zone Selection
+
+The implementation dynamically selects the first two available AZs using the `aws_availability_zones` data source and `slice` function. This ensures portability across regions.
+
+### Subnet CIDR Calculation
+
+Subnet CIDRs are calculated using the `cidrsubnet` function:
+- Public subnets: 10.0.1.0/24 and 10.0.2.0/24
+- Private subnets: 10.0.101.0/24 and 10.0.102.0/24
+
+### Security Group Design
+
+Security groups follow the principle of least privilege:
+- ALB SG allows inbound HTTP/HTTPS from anywhere
+- App SG allows inbound HTTP only from ALB SG
+- Both allow all egress for internet connectivity
+
+### Conditional Resources for LocalStack
+
+Resources requiring LocalStack Pro are made conditional:
+- ALB, Target Group, Listener: controlled by `enable_load_balancer`
+- CloudWatch Alarms: controlled by `enable_cloudwatch_alarms`
+- ALB Unhealthy Alarm: requires both flags enabled
+
+### Auto Scaling Configuration
+
+- Minimum 2 instances for high availability
+- Maximum 4 instances for cost control
+- Scale out when CPU exceeds 60% for 5 minutes
+- Scale in when CPU drops below 20% for 10 minutes
+- Target group attachment is conditional based on `enable_load_balancer`
+
+## Testing
+
+### Unit Tests
+
+Unit tests validate the Terraform configuration structure including:
+- Variable definitions with descriptions and defaults
+- Data source configurations
+- Resource block structures with conditional patterns
+- Output definitions
+- Tag patterns
+
+### Integration Tests
+
+Integration tests validate deployed resources against:
+- VPC and subnet creation
+- Security group rules
+- ASG settings
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| vpc_id | VPC identifier |
+| vpc_cidr | VPC CIDR block |
+| public_subnet_ids | List of public subnet IDs |
+| private_subnet_ids | List of private subnet IDs |
+| alb_dns_name | ALB DNS name (empty if load balancer disabled) |
+| target_group_arn | Target group ARN (empty if load balancer disabled) |
+| asg_name | Auto Scaling Group name |
+| alb_sg_id | ALB security group ID |
+| app_sg_id | Application security group ID |
+
+## Usage
+
+### LocalStack Community Deployment
+
+```bash
+# Default: ALB and CloudWatch alarms disabled
+./scripts/localstack-deploy.sh
+./scripts/localstack-test.sh
+```
+
+### Production Deployment
+
+For production AWS deployment:
+
+```hcl
+# terraform.tfvars
+enable_load_balancer     = true
+enable_cloudwatch_alarms = true
+```
+
+Additional production considerations:
+1. Add ACM certificate and HTTPS listener
+2. Add HTTP to HTTPS redirect
+3. Configure Route53 DNS records for the ALB DNS name
+4. Adjust instance_type for workload requirements

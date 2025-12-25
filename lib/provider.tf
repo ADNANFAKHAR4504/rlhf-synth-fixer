@@ -10,8 +10,7 @@ terraform {
     }
   }
 
-  # Backend disabled for LocalStack testing
-  # backend "s3" {}
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources

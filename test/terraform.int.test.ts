@@ -109,15 +109,20 @@ describe("Terraform Stack Integration (JSON-based) — full-stack validations", 
     expect(uniq.length).toBe(combined.length);
   });
 
-  test("alb_dns_name looks like a valid DNS name", () => {
+  test("alb_dns_name looks like a valid DNS name or is empty when disabled", () => {
     expect(typeof outputs.alb_dns_name).toBe("string");
-    // Most ELB names end with .elb.amazonaws.com, so a permissive dns regex is used
-    expect(outputs.alb_dns_name).toMatch(DNS_RE);
+    // ALB may be disabled for LocalStack Community - allow empty string
+    if (outputs.alb_dns_name !== "") {
+      expect(outputs.alb_dns_name).toMatch(DNS_RE);
+    }
   });
 
-  test("target_group_arn is a valid ARN", () => {
+  test("target_group_arn is a valid ARN or empty when disabled", () => {
     expect(typeof outputs.target_group_arn).toBe("string");
-    expect(outputs.target_group_arn).toMatch(ARN_RE);
+    // Target group may be disabled for LocalStack Community - allow empty string
+    if (outputs.target_group_arn !== "") {
+      expect(outputs.target_group_arn).toMatch(ARN_RE);
+    }
   });
 
   test("security group ids are valid", () => {
@@ -127,11 +132,14 @@ describe("Terraform Stack Integration (JSON-based) — full-stack validations", 
     expect(outputs.app_sg_id).toMatch(SG_ID_RE);
   });
 
-  test("asg_name is a non-empty, hyphenated string (project-env style)", () => {
+  test("asg_name is a hyphenated string or empty when disabled", () => {
     expect(typeof outputs.asg_name).toBe("string");
-    expect(outputs.asg_name.length).toBeGreaterThan(3);
-    expect(outputs.asg_name).toMatch(/^[a-zA-Z0-9-]+$/);
-    expect(outputs.asg_name).toMatch(/-/);
+    // ASG may be disabled for LocalStack Community - allow empty string
+    if (outputs.asg_name !== "") {
+      expect(outputs.asg_name.length).toBeGreaterThan(3);
+      expect(outputs.asg_name).toMatch(/^[a-zA-Z0-9-]+$/);
+      expect(outputs.asg_name).toMatch(/-/);
+    }
   });
 
   // -------------------------

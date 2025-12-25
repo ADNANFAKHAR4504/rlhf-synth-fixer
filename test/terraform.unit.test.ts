@@ -218,8 +218,8 @@ describe("TAP Stack Terraform Configuration (tap_stack.tf)", () => {
       assert.match(tf, /resource\s+"aws_lb_listener"\s+"http_forward"/, "http_forward listener missing");
       assert.match(
         tf,
-        /default_action\s*{[\s\S]*type\s*=\s*"forward"[\s\S]*target_group_arn\s*=\s*aws_lb_target_group\.app_tg\.arn[\s\S]*}/,
-        "HTTP listener should forward to app_tg"
+        /default_action\s*{[\s\S]*type\s*=\s*"forward"[\s\S]*target_group_arn\s*=\s*aws_lb_target_group\.app_tg\[0\]\.arn[\s\S]*}/,
+        "HTTP listener should forward to app_tg[0]"
       );
     });
   });
@@ -248,10 +248,16 @@ describe("TAP Stack Terraform Configuration (tap_stack.tf)", () => {
       );
       assert.match(
         tf,
-        /target_group_arns\s*=\s*\[\s*aws_lb_target_group\.app_tg\.arn\s*\]/,
-        "ASG should reference target group arn"
+        /target_group_arns\s*=\s*var\.enable_load_balancer\s*\?\s*\[aws_lb_target_group\.app_tg\[0\]\.arn\]\s*:\s*\[\]/,
+        "ASG should conditionally reference target group arn"
       );
       assert.match(tf, /desired_capacity\s*=\s*2/, "ASG should set desired_capacity = 2");
+      // ASG is conditional for LocalStack Community
+      assert.match(
+        tf,
+        /resource\s+"aws_autoscaling_group"\s+"app"\s*{[\s\S]*count\s*=\s*var\.enable_autoscaling/,
+        "ASG should be conditional on enable_autoscaling"
+      );
     });
   });
 
@@ -305,7 +311,7 @@ describe("TAP Stack Terraform Configuration (tap_stack.tf)", () => {
       );
       assert.match(
         tf,
-        /resource\s+"aws_cloudwatch_metric_alarm"\s+"cpu_high"[\s\S]*alarm_actions\s*=\s*\[\s*aws_autoscaling_policy\.scale_out\.arn\s*\]/,
+        /resource\s+"aws_cloudwatch_metric_alarm"\s+"cpu_high"[\s\S]*alarm_actions\s*=\s*\[\s*aws_autoscaling_policy\.scale_out\[0\]\.arn\s*\]/,
         "cpu_high alarm should trigger scale_out policy"
       );
 
