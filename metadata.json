@@ -6,14 +6,10 @@
   "po_id": "LS-trainr940",
   "team": "synth-2",
   "startedAt": "2025-08-22T11:20:00Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup",
-    "General Infrastructure Tooling QA",
-    "IaC Optimization",
-    "Infrastructure Analysis/Monitoring",
-    "Security Configuration as Code"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
@@ -28,5 +24,9 @@
     "Route Tables",
     "Elastic IP"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr940",
+    "pr": "Pr2027"
+  }
 }
