@@ -18,6 +18,7 @@ class TestTapStackIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up integration test environment."""
+        cls.is_localstack = os.environ.get('AWS_ENDPOINT_URL', '').find('localhost') >= 0
         cls.project_name = 'tap-integration-test'
         cls.test_environments = ['integration-test', 'integration-minimal', 'integration-full']
 
