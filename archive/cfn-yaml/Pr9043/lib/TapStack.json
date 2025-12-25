@@ -1,0 +1,701 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Infrastructure Compliance Validation System",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to ensure uniqueness across deployments",
+      "Default": "dev",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for compliance notifications",
+      "Default": "compliance-team@example.com",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    }
+  },
+  "Resources": {
+    "ComplianceKmsKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for compliance validation system encryption ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow Config to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                }
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ComplianceKmsKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/compliance-validation-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "ComplianceKmsKey"
+        }
+      }
+    },
+    "ConfigBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "config-compliance-data-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "ComplianceKmsKey",
+                    "Arn"
+                  ]
+                }
+              },
+              "BucketKeyEnabled": true
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldConfigData",
+              "Status": "Enabled",
+              "ExpirationInDays": 90,
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "config-bucket-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "ComplianceValidation"
+          }
+        ]
+      }
+    },
+    "ConfigBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ConfigBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSConfigBucketPermissionsCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ConfigBucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AWSConfigBucketExistenceCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:ListBucket",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ConfigBucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AWSConfigBucketPutObject",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${ConfigBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            },
+            {
+              "Sid": "DenyUnencryptedObjectUploads",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${ConfigBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "aws:kms"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ComplianceNotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "compliance-notifications-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Compliance Validation Notifications",
+        "KmsMasterKeyId": {
+          "Ref": "ComplianceKmsKey"
+        },
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "compliance-topic-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ComplianceNotificationTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "ComplianceNotificationTopic"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowConfigToPublish",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "SNS:Publish",
+              "Resource": {
+                "Ref": "ComplianceNotificationTopic"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ComplianceLambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/compliance-validator-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 14,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "ComplianceKmsKey",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "ComplianceLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "compliance-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSConfigRulesExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LambdaLogging",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ComplianceLambdaLogGroup",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ComplianceKmsKey",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "ConfigCompliance",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "config:PutEvaluations",
+                    "config:GetResourceConfigHistory"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:Describe*",
+                    "s3:GetEncryptionConfiguration",
+                    "s3:GetBucketPublicAccessBlock",
+                    "s3:GetBucketVersioning",
+                    "rds:Describe*",
+                    "kms:DescribeKey",
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "compliance-lambda-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "CustomComplianceValidatorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "compliance-validator-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "ComplianceLambdaRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "ComplianceNotificationTopic"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nfrom datetime import datetime\n\nconfig = boto3.client('config')\nec2 = boto3.client('ec2')\ns3 = boto3.client('s3')\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Custom compliance validator for AWS resources.\n    Evaluates resource configurations and returns compliance status.\n    \"\"\"\n    print(f\"Received event: {json.dumps(event)}\")\n\n    # Extract parameters from event\n    invoking_event = json.loads(event['invokingEvent'])\n    rule_parameters = json.loads(event.get('ruleParameters', '{}'))\n    configuration_item = invoking_event.get('configurationItem', {})\n\n    # Resource details\n    resource_type = configuration_item.get('resourceType')\n    resource_id = configuration_item.get('resourceId')\n\n    print(f\"Evaluating {resource_type}: {resource_id}\")\n\n    # Initialize compliance status\n    compliance_type = 'COMPLIANT'\n    annotation = 'Resource is compliant'\n\n    try:\n        # Evaluate based on resource type\n        if resource_type == 'AWS::S3::Bucket':\n            compliance_type, annotation = evaluate_s3_bucket(resource_id, configuration_item)\n        elif resource_type == 'AWS::EC2::SecurityGroup':\n            compliance_type, annotation = evaluate_security_group(resource_id, configuration_item)\n        elif resource_type == 'AWS::EC2::Instance':\n            compliance_type, annotation = evaluate_ec2_instance(resource_id, configuration_item)\n        else:\n            compliance_type = 'NOT_APPLICABLE'\n            annotation = f'No custom validation for {resource_type}'\n\n    except Exception as e:\n        print(f\"Error evaluating resource: {str(e)}\")\n        compliance_type = 'NON_COMPLIANT'\n        annotation = f'Error during evaluation: {str(e)}'\n\n    # Submit evaluation result\n    evaluation = {\n        'ComplianceResourceType': resource_type,\n        'ComplianceResourceId': resource_id,\n        'ComplianceType': compliance_type,\n        'Annotation': annotation,\n        'OrderingTimestamp': datetime.now()\n    }\n\n    response = config.put_evaluations(\n        Evaluations=[evaluation],\n        ResultToken=event['resultToken']\n    )\n\n    print(f\"Evaluation result: {compliance_type} - {annotation}\")\n    return response\n\ndef evaluate_s3_bucket(bucket_name, config_item):\n    \"\"\"Evaluate S3 bucket compliance\"\"\"\n    try:\n        # Check encryption\n        try:\n            s3.get_bucket_encryption(Bucket=bucket_name)\n        except s3.exceptions.ServerSideEncryptionConfigurationNotFoundError:\n            return 'NON_COMPLIANT', 'S3 bucket does not have encryption enabled'\n\n        # Check public access block\n        try:\n            public_access = s3.get_public_access_block(Bucket=bucket_name)\n            block_config = public_access['PublicAccessBlockConfiguration']\n            if not all([\n                block_config.get('BlockPublicAcls'),\n                block_config.get('BlockPublicPolicy'),\n                block_config.get('IgnorePublicAcls'),\n                block_config.get('RestrictPublicBuckets')\n            ]):\n                return 'NON_COMPLIANT', 'S3 bucket does not have all public access blocks enabled'\n        except:\n            return 'NON_COMPLIANT', 'S3 bucket does not have public access block configured'\n\n        # Check versioning\n        try:\n            versioning = s3.get_bucket_versioning(Bucket=bucket_name)\n            if versioning.get('Status') != 'Enabled':\n                return 'NON_COMPLIANT', 'S3 bucket does not have versioning enabled'\n        except:\n            return 'NON_COMPLIANT', 'Could not verify S3 bucket versioning'\n\n        return 'COMPLIANT', 'S3 bucket meets all compliance requirements'\n    except Exception as e:\n        return 'NON_COMPLIANT', f'Error evaluating S3 bucket: {str(e)}'\n\ndef evaluate_security_group(sg_id, config_item):\n    \"\"\"Evaluate Security Group compliance\"\"\"\n    try:\n        configuration = config_item.get('configuration', {})\n        ip_permissions = configuration.get('ipPermissions', [])\n\n        # Check for unrestricted inbound rules\n        for rule in ip_permissions:\n            for ip_range in rule.get('ipv4Ranges', []):\n                if ip_range.get('cidrIp') == '0.0.0.0/0':\n                    from_port = rule.get('fromPort', 0)\n                    to_port = rule.get('toPort', 65535)\n                    # Allow only specific ports to be open to internet\n                    if from_port not in [80, 443]:\n                        return 'NON_COMPLIANT', f'Security group has unrestricted access on port {from_port}'\n\n        return 'COMPLIANT', 'Security group has appropriate restrictions'\n    except Exception as e:\n        return 'NON_COMPLIANT', f'Error evaluating security group: {str(e)}'\n\ndef evaluate_ec2_instance(instance_id, config_item):\n    \"\"\"Evaluate EC2 instance compliance\"\"\"\n    try:\n        configuration = config_item.get('configuration', {})\n\n        # Check if instance has required tags\n        tags = configuration.get('tags', [])\n        required_tags = ['Environment', 'Owner', 'CostCenter']\n        existing_tag_keys = [tag.get('key') for tag in tags]\n\n        missing_tags = [tag for tag in required_tags if tag not in existing_tag_keys]\n        if missing_tags:\n            return 'NON_COMPLIANT', f'EC2 instance missing required tags: {\", \".join(missing_tags)}'\n\n        # Check if monitoring is enabled\n        monitoring = configuration.get('monitoring', {}).get('state')\n        if monitoring != 'enabled':\n            return 'NON_COMPLIANT', 'EC2 instance does not have detailed monitoring enabled'\n\n        return 'COMPLIANT', 'EC2 instance meets all compliance requirements'\n    except Exception as e:\n        return 'NON_COMPLIANT', f'Error evaluating EC2 instance: {str(e)}'\n"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "compliance-validator-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ComplianceLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "CustomComplianceValidatorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "config.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    },
+    "S3BucketEncryptionRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "s3-bucket-encryption-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that S3 buckets have encryption enabled",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::S3::Bucket"
+          ]
+        }
+      }
+    },
+    "S3BucketPublicAccessRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "s3-bucket-public-access-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that S3 buckets do not allow public access",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+        }
+      }
+    },
+    "RDSEncryptionRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "rds-encryption-enabled-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that RDS instances have encryption enabled",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::RDS::DBInstance"
+          ]
+        }
+      }
+    },
+    "EBSEncryptionRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "ec2-ebs-encryption-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that EBS volumes are encrypted",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "ENCRYPTED_VOLUMES"
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::EC2::Volume"
+          ]
+        }
+      }
+    },
+    "RequiredTagsRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "required-tags-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that resources have required tags",
+        "InputParameters": {
+          "tag1Key": "Environment",
+          "tag2Key": "Owner",
+          "tag3Key": "CostCenter"
+        },
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "REQUIRED_TAGS"
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::EC2::Instance",
+            "AWS::S3::Bucket",
+            "AWS::RDS::DBInstance"
+          ]
+        }
+      }
+    },
+    "VPCFlowLogsRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "vpc-flow-logs-enabled-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that VPC Flow Logs are enabled",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "VPC_FLOW_LOGS_ENABLED"
+        }
+      }
+    },
+    "CustomComplianceRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ComplianceLambdaPermission",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "custom-compliance-validation-${EnvironmentSuffix}"
+        },
+        "Description": "Custom compliance validation for resources",
+        "Source": {
+          "Owner": "CUSTOM_LAMBDA",
+          "SourceIdentifier": {
+            "Fn::GetAtt": [
+              "CustomComplianceValidatorFunction",
+              "Arn"
+            ]
+          },
+          "SourceDetails": [
+            {
+              "EventSource": "aws.config",
+              "MessageType": "ConfigurationItemChangeNotification"
+            },
+            {
+              "EventSource": "aws.config",
+              "MessageType": "OversizedConfigurationItemChangeNotification"
+            }
+          ]
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::S3::Bucket",
+            "AWS::EC2::SecurityGroup",
+            "AWS::EC2::Instance"
+          ]
+        }
+      }
+    },
+    "NonCompliantResourcesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "compliance-violations-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when non-compliant resources are detected",
+        "MetricName": "NonCompliantResources",
+        "Namespace": "AWS/Config",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "ComplianceNotificationTopic"
+          }
+        ]
+      }
+    },
+    "ConfigRecorderFailureAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "config-recorder-failure-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Config Recorder fails",
+        "MetricName": "ConfigurationRecorderError",
+        "Namespace": "AWS/Config",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "ComplianceNotificationTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ConfigBucketName": {
+      "Description": "S3 bucket for Config data storage",
+      "Value": {
+        "Ref": "ConfigBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ConfigBucket"
+        }
+      }
+    },
+    "ComplianceNotificationTopicArn": {
+      "Description": "SNS topic ARN for compliance notifications",
+      "Value": {
+        "Ref": "ComplianceNotificationTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-NotificationTopic"
+        }
+      }
+    },
+    "CustomComplianceFunctionArn": {
+      "Description": "Lambda function ARN for custom compliance validation",
+      "Value": {
+        "Fn::GetAtt": [
+          "CustomComplianceValidatorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ComplianceFunction"
+        }
+      }
+    },
+    "KmsKeyId": {
+      "Description": "KMS Key ID for encryption",
+      "Value": {
+        "Ref": "ComplianceKmsKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KmsKey"
+        }
+      }
+    },
+    "ComplianceRuleNames": {
+      "Description": "List of Config Rule names",
+      "Value": {
+        "Fn::Sub": "- ${S3BucketEncryptionRule}\n- ${S3BucketPublicAccessRule}\n- ${RDSEncryptionRule}\n- ${EBSEncryptionRule}\n- ${RequiredTagsRule}\n- ${VPCFlowLogsRule}\n- ${CustomComplianceRule}\n"
+      }
+    }
+  }
+}

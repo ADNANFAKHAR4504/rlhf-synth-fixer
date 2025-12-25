@@ -389,17 +389,105 @@ if [[ -d "lib" ]]; then
   fi
 fi
 
-# Check wave field
+# ═══════════════════════════════════════════════════════════════════════════════
+# STEP 2c: Prompt Quality Validation (for synthetic tasks)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📋 STEP 2c: Prompt Quality Validation"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [[ -f "lib/PROMPT.md" ]]; then
+  log_info "Validating prompt quality (Claude Review: Prompt Quality check)..."
+  
+  PROMPT_QUALITY_SCRIPT="$PROJECT_ROOT/.claude/scripts/claude-validate-prompt-quality.sh"
+  FIX_PROMPT_SCRIPT="$PROJECT_ROOT/.claude/scripts/fix-prompt-quality.sh"
+  
+  if [[ -x "$PROMPT_QUALITY_SCRIPT" ]]; then
+    # Run prompt quality validation
+    if bash "$PROMPT_QUALITY_SCRIPT" > /tmp/prompt_quality_output.log 2>&1; then
+      log_success "Prompt quality validation passed"
+    else
+      log_error "Prompt quality validation FAILED"
+      
+      # Show key failures
+      echo ""
+      grep -E "FAIL|detected|found" /tmp/prompt_quality_output.log 2>/dev/null | head -8 | while read -r line; do
+        echo "   $line"
+      done
+      echo ""
+      
+      # Attempt auto-fix if enabled
+      if [[ "$FIX_ERRORS" == "true" ]] && [[ -x "$FIX_PROMPT_SCRIPT" ]]; then
+        log_info "Attempting automatic prompt quality fix..."
+        
+        if bash "$FIX_PROMPT_SCRIPT" "lib/PROMPT.md" > /tmp/fix_prompt_output.log 2>&1; then
+          # Re-validate after fix
+          if bash "$PROMPT_QUALITY_SCRIPT" > /dev/null 2>&1; then
+            log_success "Prompt quality now PASSES after auto-fix"
+            log_fix "Applied prompt quality fixes to lib/PROMPT.md"
+            VALIDATION_PASSED=true
+          else
+            log_warning "Prompt quality still fails after auto-fix - manual rewrite needed"
+            echo ""
+            echo "   Common issues requiring manual intervention:"
+            echo "   - Rewrite sentences to remove parentheses (max 1 allowed)"
+            echo "   - Use natural phrasing instead of 'e.g.', 'i.e.'"
+            echo "   - Remove template-style brackets [placeholder]"
+            echo ""
+            echo "   See: .claude/prompts/claude-prompt-quality-review.md for examples"
+            echo ""
+          fi
+        else
+          log_warning "Prompt quality fix script encountered errors"
+          cat /tmp/fix_prompt_output.log 2>/dev/null | tail -10 || true
+        fi
+      else
+        log_warning "Auto-fix disabled or fix script not found"
+        echo "   Run: bash .claude/scripts/fix-prompt-quality.sh lib/PROMPT.md"
+      fi
+    fi
+  else
+    log_warning "Prompt quality validation script not found - skipping"
+  fi
+else
+  log_info "No lib/PROMPT.md found - skipping prompt quality check"
+fi
+
+# Check wave field - use wave lookup to determine correct wave from P0/P1 CSV
 WAVE=$(jq -r '.wave // ""' metadata.json 2>/dev/null || echo "")
+
+# Source wave lookup if available
+WAVE_LOOKUP_SCRIPT="$SCRIPT_DIR/wave-lookup.sh"
+EXPECTED_WAVE=""
+if [[ -f "$WAVE_LOOKUP_SCRIPT" ]]; then
+  source "$WAVE_LOOKUP_SCRIPT" 2>/dev/null || true
+  EXPECTED_WAVE=$(get_wave_for_task "metadata.json" 2>/dev/null || echo "")
+fi
+
 if [[ -z "$WAVE" ]] || [[ "$WAVE" == "null" ]]; then
   log_warning "Missing 'wave' field in metadata.json"
   if [[ "$FIX_ERRORS" == "true" ]]; then
-    log_fix "Setting wave to 'P1'"
-    jq '.wave = "P1"' metadata.json > metadata.json.tmp
+    # Use looked up wave if available, otherwise default to P1
+    FIX_WAVE="${EXPECTED_WAVE:-P1}"
+    log_fix "Setting wave to '$FIX_WAVE' (from CSV lookup or default)"
+    jq --arg wave "$FIX_WAVE" '.wave = $wave' metadata.json > metadata.json.tmp
     mv metadata.json.tmp metadata.json
+    VALIDATION_PASSED=true
   fi
 elif [[ ! "$WAVE" =~ ^(P0|P1)$ ]]; then
   log_error "Invalid wave value: '$WAVE' (must be P0 or P1)"
+elif [[ -n "$EXPECTED_WAVE" ]] && [[ "$WAVE" != "$EXPECTED_WAVE" ]]; then
+  log_warning "Wave mismatch: metadata has '$WAVE' but CSV says '$EXPECTED_WAVE'"
+  if [[ "$FIX_ERRORS" == "true" ]]; then
+    log_fix "Correcting wave to '$EXPECTED_WAVE' (from CSV reference)"
+    jq --arg wave "$EXPECTED_WAVE" '.wave = $wave' metadata.json > metadata.json.tmp
+    mv metadata.json.tmp metadata.json
+    VALIDATION_PASSED=true
+  fi
+else
+  log_success "Wave field is valid: $WAVE"
 fi
 
 echo ""
