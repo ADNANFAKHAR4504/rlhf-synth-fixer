@@ -855,28 +855,15 @@
           }
         ],
         "Logging": {
-          "ClusterLogging": [
-            {
-              "Enabled": true,
-              "Types": ["api"]
-            },
-            {
-              "Enabled": true,
-              "Types": ["audit"]
-            },
-            {
-              "Enabled": true,
-              "Types": ["authenticator"]
-            },
-            {
-              "Enabled": true,
-              "Types": ["controllerManager"]
-            },
-            {
-              "Enabled": true,
-              "Types": ["scheduler"]
-            }
-          ]
+          "ClusterLogging": {
+            "EnabledTypes": [
+              {"Type": "api"},
+              {"Type": "audit"},
+              {"Type": "authenticator"},
+              {"Type": "controllerManager"},
+              {"Type": "scheduler"}
+            ]
+          }
         },
         "Tags": [
           {
