@@ -162,7 +162,8 @@ describe('TapStack CloudFormation Integration Tests', () => {
         return;
       }
       const stackName = outputs.StackName;
-      expect(stackName).toMatch(/^TapStack[a-zA-Z0-9]+$/);
+      // LocalStack uses 'localstack-stack-' prefix, AWS uses 'TapStack' prefix
+      expect(stackName).toMatch(/^(TapStack[a-zA-Z0-9]+|localstack-stack-[a-zA-Z0-9]+)$/);
     });
   });
 
