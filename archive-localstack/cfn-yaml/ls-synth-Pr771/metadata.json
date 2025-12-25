@@ -3,19 +3,14 @@
   "language": "yaml",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "291838",
+  "po_id": "LS-291838",
   "team": "synth-2",
   "startedAt": "2025-08-08T12:52:51.863Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "chiragp-turing",
-  "dockerS3Location": "",
-  "wave": "P1",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
-  "subtask": "General Infrastructure Provisioning",
-  "region": "us-east-1",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
   "aws_services": [
     "Lambda",
     "API Gateway",
@@ -23,7 +18,5 @@
     "CloudWatch",
     "IAM"
   ],
-  "subject_labels": [
-    "General Infrastructure Tooling QA"
-  ]
+  "wave": "P0"
 }
