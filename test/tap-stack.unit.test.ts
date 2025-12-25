@@ -388,7 +388,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Type).toBe('AWS::RDS::DBInstance');
       expect(rds.Properties.DBInstanceClass).toBe('db.t3.small');
       expect(rds.Properties.Engine).toBe('mysql');
-      expect(rds.Properties.EngineVersion).toBe('8.0');
+      expect(rds.Properties.EngineVersion).toBe('8.0.44');
       expect(rds.Properties.MultiAZ).toBe(false);
       expect(rds.Properties.StorageEncrypted).toBe(false);
       expect(rds.Properties.BackupRetentionPeriod).toBe(1);
@@ -396,10 +396,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.EnablePerformanceInsights).toBe(false);
     });
 
-    test('RDS uses hardcoded credentials for LocalStack', () => {
+    test('RDS uses Secrets Manager for credentials', () => {
       const rds = template.Resources.ProdRdsInstance;
       expect(rds.Properties.MasterUsername).toBe('admin');
-      expect(rds.Properties.MasterUserPassword).toBe('TempPassword123!');
+      expect(rds.Properties.MasterUserPassword).toEqual({
+        'Fn::Sub': '{{resolve:secretsmanager:${ProdRdsPassword}}}',
+      });
     });
 
     test('RDS subnet group spans private subnets', () => {

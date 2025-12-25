@@ -441,9 +441,9 @@ Resources:
     Properties:
       DBInstanceClass: db.t3.small
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.44'
       MasterUsername: admin
-      MasterUserPassword: 'TempPassword123!'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProdRdsPassword}}}'
       AllocatedStorage: 20
       StorageType: gp2
       DBSubnetGroupName: !Ref ProdRdsSubnetGroup
