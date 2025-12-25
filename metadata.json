@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291955",
+  "team": "synth-2",
+  "startedAt": "2025-08-19T18:33:51.478Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "AutoScaling",
+    "ElasticLoadBalancing",
+    "RDS",
+    "S3",
+    "SecretsManager",
+    "IAM",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy"
+  ],
+  "wave": "P0"
+}
