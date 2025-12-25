@@ -1,0 +1,11 @@
+Create a single CloudFormation template using YAML that establishes a complete web application infrastructure with multi tier architecture and high availability. 
+
+The infrastructure should begin with establishing a Virtual Private Cloud that provides proper network isolation and segmentation. Within this VPC, you'll need to architect a subnet strategy that includes at least two public subnets and two private subnets, ensuring proper availability zone distribution for fault tolerance. This network foundation will support both current requirements and future expansion needs.
+
+For the compute layer, provision EC2 instances of type t2.micro in each of the public subnets, ensuring each instance has a dedicated Elastic IP address for consistent external connectivity. These instances should be managed by an Auto Scaling Group that maintains operational continuity by ensuring at least one instance remains running in each public subnet at all times. The instances will serve as web servers and need appropriate security configurations to accept HTTP traffic on port 80 from any internet source while restricting all other access.
+
+Storage requirements involve creating an S3 bucket with versioning capabilities enabled to track object modifications and support rollback scenarios. This bucket must enforce strict access controls, explicitly denying any form of public access. To facilitate secure communication between the EC2 instances and the S3 bucket, implement an IAM role with appropriate read and write permissions that the instances can assume, eliminating the need for embedded credentials.
+
+To handle traffic distribution and provide a single entry point for the web application, configure an Application Load Balancer or Classic Load Balancer that routes incoming requests across the EC2 instances in the public subnets. The load balancer should perform health checks to ensure traffic only routes to healthy instances, providing seamless failover capabilities.
+
+The final YAML file should pass AWS CloudFormation validation, follow infrastructure as code best practices, and create a fully functional web application infrastructure ready to serve HTTP traffic through the load balancer endpoint upon successful stack creation.

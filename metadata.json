@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-6898",
+  "team": "synth-2",
+  "startedAt": "2025-12-25T00:00:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "CloudFormation",
+    "CloudWatch",
+    "VPC",
+    "EC2",
+    "ASG",
+    "ALB",
+    "ELB",
+    "IAM",
+    "SSM"
+  ],
+  "wave": "P1",
+  "training_quality": 10
+}
