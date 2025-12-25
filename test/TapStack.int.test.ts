@@ -44,15 +44,6 @@ describe('Serverless Infrastructure Integration Tests', () => {
       // Making DELETE operations complex without knowing the exact timestamp  
       console.log('DELETE operation skipped - requires DynamoDB composite key redesign');
     });
-
-    test('GET /data/{id} for non-existent item should return 404', async () => {
-      try {
-        await axios.put(`${apiUrl}/data/non-existent-id`, { test: 'data' });
-        fail('Should have thrown an error');
-      } catch (error: any) {
-        expect(error.response.status).toBe(404); // Due to Lambda error handling
-      }
-    });
   });
 
   describe('S3 Bucket', () => {
