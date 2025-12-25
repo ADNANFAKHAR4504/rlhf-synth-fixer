@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291612",
+  "team": "synth-2",
+  "startedAt": "2025-08-14T05:47:21.215Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudTrail"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291612",
+    "pr": "Pr1180"
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}
