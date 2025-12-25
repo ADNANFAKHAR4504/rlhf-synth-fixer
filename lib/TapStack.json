@@ -29,6 +29,7 @@
                     "Parameters": [
                         "KeyPairName",
                         "InstanceType",
+                        "LatestAmiId",
                         "EnableDetailedMonitoring"
                     ]
                 },
@@ -91,6 +92,11 @@
                 "t3.large"
             ],
             "ConstraintDescription": "Must be a valid EC2 instance type"
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
+            "Description": "Latest Amazon Linux 2023 AMI from SSM Parameter Store"
         },
         "VPCCIDR": {
             "Description": "CIDR block for the VPC",
@@ -842,7 +848,9 @@
         "WebServerInstance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": "ami-12345678",
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
                 "InstanceType": {
                     "Ref": "InstanceType"
                 },
@@ -1162,6 +1170,9 @@
         "LogsToS3DeliveryStream": {
             "Type": "AWS::KinesisFirehose::DeliveryStream",
             "Properties": {
+                "DeliveryStreamName": {
+                    "Fn::Sub": "${AWS::StackName}-logs-to-s3"
+                },
                 "DeliveryStreamType": "DirectPut",
                 "ExtendedS3DestinationConfiguration": {
                     "BucketARN": {
@@ -1432,7 +1443,9 @@
                     {
                         "Fn::Sub": "ssh -i ${KeyPairName}.pem ec2-user@${ElasticIP}"
                     },
-                    "SSH key not configured - use Session Manager"
+                    {
+                        "Fn::Sub": "aws ssm start-session --target ${WebServerInstance} --region ${AWS::Region}"
+                    }
                 ]
             }
         },

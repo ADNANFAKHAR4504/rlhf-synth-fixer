@@ -1,6 +1,4 @@
-# Ideal Response
-
-```yaml
+```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Enterprise-ready foundational infrastructure for modern application deployment with comprehensive monitoring and security controls'
 
@@ -25,6 +23,7 @@ Metadata:
         Parameters:
           - KeyPairName
           - InstanceType
+          - LatestAmiId
           - EnableDetailedMonitoring
       - Label:
           default: "Alerting Configuration"
@@ -77,6 +76,11 @@ Parameters:
       - t3.large
     ConstraintDescription: Must be a valid EC2 instance type
   
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
+    Description: 'Latest Amazon Linux 2023 AMI from SSM Parameter Store'
+  
   VPCCIDR:
     Description: CIDR block for the VPC
     Type: String
@@ -113,8 +117,7 @@ Parameters:
     MinValue: 50
     MaxValue: 100
     ConstraintDescription: Must be between 50 and 100
-Type: String
-  
+
 
 # ==========================================
 # CONDITIONS
@@ -493,7 +496,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref AmiId
+      ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -732,6 +735,7 @@ Resources:
   LogsToS3DeliveryStream:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
+      DeliveryStreamName: !Sub '${AWS::StackName}-logs-to-s3'
       DeliveryStreamType: DirectPut
       ExtendedS3DestinationConfiguration:
         BucketARN: !GetAtt LoggingBucket.Arn
@@ -872,7 +876,7 @@ Outputs:
     Value: !If 
       - HasKeyPair
       - !Sub 'ssh -i ${KeyPairName}.pem ec2-user@${ElasticIP}'
-      - 'SSH key not configured - use Session Manager'
+      - !Sub 'aws ssm start-session --target ${WebServerInstance} --region ${AWS::Region}'
 
   GeneralPurposeBucketName:
     Description: Name of the general purpose S3 bucket
@@ -948,4 +952,5 @@ Outputs:
     Description: AWS Account ID
     Value: !Ref AWS::AccountId
     Export:
-      Name: !Sub '${AWS::StackName}-AccountId'```
+      Name: !Sub '${AWS::StackName}-AccountId'
+```
