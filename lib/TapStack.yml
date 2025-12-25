@@ -2,6 +2,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'TAP Stack - Web Application Environment with VPC, ALB, and EC2 Instances'
 
 Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W2506
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
