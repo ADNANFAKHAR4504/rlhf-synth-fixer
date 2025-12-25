@@ -329,7 +329,6 @@ describe('TapStack Security Infrastructure CloudFormation Template', () => {
       expect(template.Outputs.VPCId).toBeDefined();
       expect(template.Outputs.PublicSubnetId).toBeDefined();
       expect(template.Outputs.PrivateSubnetId).toBeDefined();
-      expect(template.Outputs.WebSecurityGroupId).toBeDefined();
       expect(template.Outputs.SecurityLogsBucketName).toBeDefined();
       expect(template.Outputs.CloudTrailArn).toBeDefined();
       expect(template.Outputs.TrustedServiceRoleArn).toBeDefined();

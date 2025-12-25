@@ -547,12 +547,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnetId'
 
-  WebSecurityGroupId:
-    Description: 'Web Security Group ID'
-    Value: !Ref WebSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-WebSecurityGroupId'
-
   InternetGatewayId:
     Description: 'Internet Gateway ID'
     Value: !Ref InternetGateway
