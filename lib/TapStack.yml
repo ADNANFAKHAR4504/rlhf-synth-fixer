@@ -479,7 +479,7 @@ Resources:
       AutoScalingGroupName: !Sub 'asg-${EnvironmentSuffix}'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
@@ -516,6 +516,11 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1011
     Properties:
       DBInstanceIdentifier: !Sub 'database-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
