@@ -42,15 +42,15 @@ This document details the issues found in the model's initial response (MODEL_RE
 - EnvironmentSuffix used in 40/55 resource names (73%)
 
 ### Architecture Compliance
-- VPC: 3 AZs, 9 subnets (3 public, 3 private, 3 database) ✓
-- Load Balancing: ALB with target groups ✓
-- Compute: Auto Scaling Group (2-6 instances, t3.medium/t3.large) ✓
-- Database: Aurora MySQL Multi-AZ, 1 writer + 2 read replicas, 7-day backup ✓
-- CDN: CloudFront with S3 and ALB origins ✓
-- Security: WAF with SQL injection + rate-limiting, Security Groups ✓
-- Secrets: Secrets Manager with 30-day rotation ✓
-- Storage: S3 versioning and lifecycle policies ✓
-- Monitoring: CloudWatch dashboard with metrics ✓
+- VPC: 3 AZs, 9 subnets (3 public, 3 private, 3 database)
+- Load Balancing: ALB with target groups
+- Compute: Auto Scaling Group (2-6 instances, t3.medium/t3.large)
+- Database: Aurora MySQL Multi-AZ, 1 writer + 2 read replicas, 7-day backup
+- CDN: CloudFront with S3 and ALB origins
+- Security: WAF with SQL injection + rate-limiting, Security Groups
+- Secrets: Secrets Manager with 30-day rotation
+- Storage: S3 versioning and lifecycle policies
+- Monitoring: CloudWatch dashboard with metrics
 
 ## Test Generation Issues
 
