@@ -323,7 +323,7 @@ Resources:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316
+        ImageId: ami-03cf127a
         InstanceType: t3.micro
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
@@ -353,7 +353,7 @@ Resources:
     Properties:
       LaunchTemplate:
         LaunchTemplateId: !Ref ProdLaunchTemplate
-        Version: !GetAtt ProdLaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
