@@ -2,10 +2,27 @@
 import fs from 'fs';
 import https from 'https';
 
-// Helper function to make HTTP requests
+// Helper function to make HTTP requests (supports LocalStack URLs)
 const makeRequest = (url: string, options: any = {}): Promise<any> => {
   return new Promise((resolve, reject) => {
-    const req = https.request(url, options, res => {
+    // Convert LocalStack URLs to localhost format
+    // From: https://{api-id}.execute-api.amazonaws.com:4566/{path}
+    // To: http://localhost:4566/restapis/{api-id}/{stage}/_user_request_/{path}
+    let requestUrl = url;
+    if (url.includes(':4566') && url.includes('execute-api.amazonaws.com')) {
+      const match = url.match(/https:\/\/([a-z0-9]+)\.execute-api\.amazonaws\.com:4566\/([^/]+)(.*)$/);
+      if (match) {
+        const apiId = match[1];
+        const stage = match[2];
+        const path = match[3] || '';
+        requestUrl = `http://localhost:4566/restapis/${apiId}/${stage}/_user_request_${path}`;
+      }
+    }
+
+    // Use http for localhost, https for AWS
+    const protocol = requestUrl.startsWith('http://') ? require('http') : https;
+
+    const req = protocol.request(requestUrl, options, res => {
       let data = '';
       res.on('data', chunk => (data += chunk));
       res.on('end', () => {
@@ -89,9 +106,12 @@ describe('TapStack Serverless API Integration Tests', () => {
 
     test('should have valid API Gateway URL format', () => {
       const apiUrl = outputs.ApiInvokeUrl;
-      expect(apiUrl).toMatch(
-        /^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/[a-z0-9]+$/
-      );
+      // Support both AWS and LocalStack URL formats
+      // AWS: https://{api-id}.execute-api.{region}.amazonaws.com/{stage}
+      // LocalStack: https://{api-id}.execute-api.amazonaws.com:4566/{stage}
+      const awsPattern = /^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/[a-z0-9]+$/;
+      const localstackPattern = /^https:\/\/[a-z0-9]+\.execute-api\.amazonaws\.com:4566\/[a-z0-9]+$/;
+      expect(apiUrl).toMatch(new RegExp(`(${awsPattern.source})|(${localstackPattern.source})`));
     });
 
     test('should have valid WAF ARN format', () => {
