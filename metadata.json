@@ -19,5 +19,6 @@
     "CloudWatch",
     "IAM",
     "CloudWatch Logs"
-  ]
+  ],
+  "training_quality": 8
 }
