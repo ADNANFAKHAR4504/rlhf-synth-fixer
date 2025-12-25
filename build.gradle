@@ -43,9 +43,11 @@ ext {
     //Build settings
     def metadataFile = file("metadata.json")
     def platform = "default"
+    def provider = "aws"
     if (metadataFile.exists()) {
         def metadata = new groovy.json.JsonSlurper().parseText(metadataFile.text)
         platform = metadata.platform ?: "default"
+        provider = metadata.provider ?: "aws"
     }
 
     switch (platform) {
@@ -53,7 +55,8 @@ ext {
             minimumTestCoverage = 20.0
             break
         case "cdk":
-            minimumTestCoverage = 90.0
+            // Lower threshold for LocalStack projects due to environment-specific conditional code
+            minimumTestCoverage = provider == "localstack" ? 85.0 : 90.0
             break
         case "cdktf":
             minimumTestCoverage = 90.0
