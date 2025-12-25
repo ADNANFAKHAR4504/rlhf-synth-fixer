@@ -3,19 +3,16 @@
   "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "trainr868",
+  "po_id": "LS-trainr868",
   "team": "synth-2",
   "wave": "P1",
   "startedAt": "2025-08-15T12:07:30+05:30",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
   "subject_labels": [
     "Web Application Deployment",
     "General Infrastructure Tooling QA",
-    "Security Configuration",
-    "Database Management",
-    "Network Configuration",
-    "Monitoring Setup",
-    "Performance Optimization"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "VPC",
@@ -29,17 +26,8 @@
     "IAM",
     "AutoScaling"
   ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "iamarpit-turing",
-  "dockerS3Location": "",
-  "localstack_migration": {
-    "migrated": true,
-    "migrated_at": "2025-12-25T03:03:00Z",
-    "original_pr": "Pr1299",
-    "deployment_success": true,
-    "excluded_services": ["VPN", "SecurityHub", "Config"]
+  "migrated_from": {
+    "po_id": "trainr868",
+    "pr": "Pr1299"
   }
 }
