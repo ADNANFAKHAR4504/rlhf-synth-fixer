@@ -75,14 +75,14 @@ AWS Lambda accounts have a default regional concurrency limit (typically 1000 co
 **Why This is Critical for Training**:
 
 This represents a common gap in LLM knowledge about AWS service limits and account-level constraints. The model understood:
-- Lambda concurrency concepts ✓
-- Reserved concurrency syntax ✓
-- Performance optimization needs ✓
+- Lambda concurrency concepts (yes)
+- Reserved concurrency syntax (yes)
+- Performance optimization needs (yes)
 
 But missed:
-- AWS account-level concurrency limits ✗
-- Minimum unreserved concurrency requirement ✗
-- Real-world account capacity constraints ✗
+- AWS account-level concurrency limits (no)
+- Minimum unreserved concurrency requirement (no)
+- Real-world account capacity constraints (no)
 
 **Training Recommendation**:
 
