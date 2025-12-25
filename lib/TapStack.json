@@ -848,7 +848,9 @@
         "WebServerInstance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": {"Ref": "AmiId"},
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
                 "InstanceType": {
                     "Ref": "InstanceType"
                 },

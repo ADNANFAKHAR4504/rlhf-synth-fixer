@@ -117,12 +117,6 @@ Parameters:
     MinValue: 50
     MaxValue: 100
     ConstraintDescription: Must be between 50 and 100
-  
-  AmiId:
-    Description: AMI ID for EC2 instance
-    Type: String
-    Default: ami-ff0fea8310386850e
-    ConstraintDescription: Must be a valid AMI ID
 
 
 # ==========================================
