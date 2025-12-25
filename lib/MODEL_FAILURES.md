@@ -41,4 +41,46 @@ This document lists common model failures and misconfigurations when generating 
 
 ---
 
+## LocalStack Compatibility Adjustments
+
+This section documents changes made for LocalStack deployment compatibility. These changes do not affect production AWS deployment functionality.
+
+### Category A: Unsupported Resources (Entire resource commented/removed)
+
+| Resource | LocalStack Status | Solution Applied | Production Status |
+|----------|------------------|------------------|-------------------|
+| CloudTrailLogsBucket (S3) | Timing issue | Commented out | Works in AWS |
+| CloudTrailLogsBucketPolicy | Depends on bucket | Commented out | Works in AWS |
+| SecurityAuditTrail (CloudTrail) | S3BucketDoesNotExistException | Commented out | Works in AWS |
+
+### Category B: Deep Functionality Limitations (Property/feature disabled)
+
+| Resource | Feature | LocalStack Limitation | Solution Applied | Production Status |
+|----------|---------|----------------------|------------------|-------------------|
+| CloudTrail | IsMultiRegionTrail | Limited functionality in LocalStack | Kept as-is, behavior is test-only | Fully functional in AWS |
+
+### Category C: Behavioral Differences (Works but behaves differently)
+
+| Resource | Feature | LocalStack Behavior | Production Behavior |
+|----------|---------|---------------------|---------------------|
+| IAM MFA Conditions | MFA enforcement | MFA conditions evaluated but not enforced | Full MFA enforcement |
+| CloudTrail | Log file validation | Validation not enforced | Full validation |
+| CloudTrail | Event data collection | Limited event capture | Full event capture |
+
+### Category D: Test-Specific Adjustments
+
+| Test File | Adjustment | Reason |
+|-----------|------------|--------|
+| Integration tests | Using LocalStack endpoints | AWS_ENDPOINT_URL set to localhost:4566 |
+| Integration tests | Account ID 000000000000 | LocalStack default account |
+| Integration tests | Region us-east-1 | LocalStack default region |
+
+### Infrastructure Fixes Applied
+
+| Fix | Description | Reason |
+|-----|-------------|--------|
+| Commented out CloudTrail resources | S3 bucket, bucket policy, and CloudTrail trail commented out | CloudTrail has timing issues in LocalStack - trail creation fails with S3BucketDoesNotExistException even with proper DependsOn |
+
+---
+
 *Update this document as new model failure scenarios are discovered or requirements change.*

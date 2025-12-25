@@ -258,6 +258,13 @@ Resources:
               - 'ssm:DescribeInstanceInformation'
             Resource: '*'
 
+  # ==================== CloudTrail Resources ====================
+  # LOCALSTACK INCOMPATIBILITY: CloudTrail has timing issues with S3 bucket creation
+  # in LocalStack. The trail creation fails with "S3BucketDoesNotExistException" even
+  # when the bucket is created in the same template with proper DependsOn.
+  # These resources are commented out in the LocalStack deployment (TapStack.yml).
+  # Uncomment for production AWS deployment where CloudTrail works correctly.
+
   # CloudTrail bucket policy for existing bucket
   CloudTrailLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
