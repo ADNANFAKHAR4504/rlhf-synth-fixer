@@ -28,9 +28,5 @@
     "AWS Security Groups",
     "AWS CloudWatch Logs"
   ],
-  "wave": "P1",
-  "migrated_from": {
-    "po_id": "291596",
-    "pr": "2057"
-  }
+  "wave": "P0"
 }
