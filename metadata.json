@@ -10,7 +10,6 @@
   "provider": "localstack",
   "subject_labels": [
     "Infrastructure Analysis/Monitoring",
-    "Security Configuration as Code",
     "General Infrastructure Tooling QA"
   ],
   "aws_services": [
