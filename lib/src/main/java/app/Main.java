@@ -12,13 +12,13 @@ import java.util.Optional;
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
  */
-class TapStackProps {
+final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(String environmentSuffix, StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String envSuffix, final StackProps props) {
+        this.environmentSuffix = envSuffix;
+        this.stackProps = props != null ? props : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -33,17 +33,17 @@ class TapStackProps {
         return new Builder();
     }
 
-    public static class Builder {
+    public static final class Builder {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String environmentSuffixParam) {
+            this.environmentSuffix = environmentSuffixParam;
             return this;
         }
 
-        public Builder stackProps(StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps stackPropsParam) {
+            this.stackProps = stackPropsParam;
             return this;
         }
 
@@ -59,7 +59,7 @@ class TapStackProps {
 class TapStack extends Stack {
     private final String environmentSuffix;
 
-    public TapStack(final Construct scope, final String id, final TapStackProps props) {
+    TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
         // Get environment suffix from props, context, or use 'dev' as default
@@ -118,7 +118,13 @@ public final class Main {
     private Main() {
         // Utility class should not be instantiated
     }
-    public static void main(final String[] args) {
+
+    /**
+     * Main entry point for the CDK application.
+     *
+     * @param args Command line arguments
+     */
+    static void main(final String[] args) {
         App app = new App();
 
         // Get environment suffix from context or default to 'dev'

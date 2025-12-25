@@ -3,27 +3,49 @@ package app;
 import software.amazon.awscdk.NestedStack;
 import software.amazon.awscdk.NestedStackProps;
 import software.amazon.awscdk.CfnOutput;
-import software.amazon.awscdk.CfnOutputProps;
 import software.amazon.awscdk.Tags;
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.elasticloadbalancingv2.*;
-import software.amazon.awscdk.services.autoscaling.*;
-import software.amazon.awscdk.services.iam.*;
-import software.amazon.awscdk.services.cloudwatch.*;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.IpAddresses;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.IMachineImage;
+import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.UserData;
+import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerAction;
+import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
+import software.amazon.awscdk.services.autoscaling.ElbHealthCheckOptions;
+import software.amazon.awscdk.services.autoscaling.CpuUtilizationScalingProps;
+import software.amazon.awscdk.services.autoscaling.StepScalingPolicy;
+import software.amazon.awscdk.services.autoscaling.ScalingInterval;
+import software.amazon.awscdk.services.autoscaling.AdjustmentType;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.cloudwatch.Metric;
 import software.constructs.Construct;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 
 /**
- * Props for CloudEnvironmentStack
+ * Props for CloudEnvironmentStack.
  */
-class CloudEnvironmentStackProps {
+final class CloudEnvironmentStackProps {
     private final String environmentSuffix;
 
-    private CloudEnvironmentStackProps(String environmentSuffix) {
-        this.environmentSuffix = environmentSuffix;
+    private CloudEnvironmentStackProps(final String envSuffix) {
+        this.environmentSuffix = envSuffix;
     }
 
     public String getEnvironmentSuffix() {
@@ -34,11 +56,11 @@ class CloudEnvironmentStackProps {
         return new Builder();
     }
 
-    public static class Builder {
+    public static final class Builder {
         private String environmentSuffix;
 
-        public Builder environmentSuffix(String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String environmentSuffixParam) {
+            this.environmentSuffix = environmentSuffixParam;
             return this;
         }
 
@@ -66,8 +88,8 @@ public class CloudEnvironmentStack extends NestedStack {
 
         // Detect LocalStack environment
         String awsEndpoint = System.getenv("AWS_ENDPOINT_URL");
-        this.isLocalStack = awsEndpoint != null &&
-            (awsEndpoint.contains("localhost") || awsEndpoint.contains("4566"));
+        this.isLocalStack = awsEndpoint != null
+            && (awsEndpoint.contains("localhost") || awsEndpoint.contains("4566"));
 
         // Create VPC with public and private subnets across 2 AZs
         this.vpc = createVpc();
@@ -136,7 +158,7 @@ public class CloudEnvironmentStack extends NestedStack {
         return sg;
     }
 
-    private SecurityGroup createEc2SecurityGroup(SecurityGroup albSecurityGroup) {
+    private SecurityGroup createEc2SecurityGroup(final SecurityGroup albSecurityGroup) {
         SecurityGroup sg = SecurityGroup.Builder.create(this, "Ec2SecurityGroup")
                 .securityGroupName("ec2-sg-" + environmentSuffix)
                 .vpc(vpc)
@@ -150,7 +172,7 @@ public class CloudEnvironmentStack extends NestedStack {
         return sg;
     }
 
-    private ApplicationLoadBalancer createApplicationLoadBalancer(SecurityGroup securityGroup) {
+    private ApplicationLoadBalancer createApplicationLoadBalancer(final SecurityGroup securityGroup) {
         return ApplicationLoadBalancer.Builder.create(this, "CloudEnvironmentALB")
                 .loadBalancerName("robust-cloud-alb-" + environmentSuffix)
                 .vpc(vpc)
@@ -163,7 +185,7 @@ public class CloudEnvironmentStack extends NestedStack {
                 .build();
     }
 
-    private AutoScalingGroup createAutoScalingGroup(SecurityGroup securityGroup) {
+    private AutoScalingGroup createAutoScalingGroup(final SecurityGroup securityGroup) {
         // Get the latest Amazon Linux 2023 AMI
         IMachineImage amazonLinux = MachineImage.latestAmazonLinux2023();
 
