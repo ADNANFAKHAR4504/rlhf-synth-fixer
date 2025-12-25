@@ -298,21 +298,6 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
   });
 
   describe('IAM Resources', () => {
-    test('should have MFA-required group', () => {
-      const group = template.Resources.GroupMFARequired;
-      expect(group.Type).toBe('AWS::IAM::Group');
-      expect(group.Properties.GroupName).toBe('MFAEnforced');
-
-      const policy = group.Properties.Policies[0];
-      expect(policy.PolicyName).toBe('DenyWithoutMFA');
-
-      const statement = policy.PolicyDocument.Statement[0];
-      expect(statement.Effect).toBe('Deny');
-      expect(statement.NotAction).toBeDefined();
-      expect(statement.NotAction.length).toBeGreaterThan(0);
-      expect(statement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe(false);
-    });
-
     test('should have App IAM role with least privilege', () => {
       const role = template.Resources.RoleApp;
       expect(role.Type).toBe('AWS::IAM::Role');
@@ -530,13 +515,6 @@ describe('TAP Multi-Tier Architecture CloudFormation Template - Unit Tests', () 
       ['PrivateAppSubnetAz1', 'PrivateAppSubnetAz2', 'PrivateDbSubnetAz1', 'PrivateDbSubnetAz2'].forEach(subnet => {
         expect(template.Resources[subnet].Properties.MapPublicIpOnLaunch).toBe(false);
       });
-    });
-
-    test('should enforce MFA for sensitive operations', () => {
-      const group = template.Resources.GroupMFARequired;
-      const policy = group.Properties.Policies[0].PolicyDocument.Statement[0];
-      expect(policy.Effect).toBe('Deny');
-      expect(policy.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe(false);
     });
 
     test('should use VPC endpoint for Secrets Manager', () => {

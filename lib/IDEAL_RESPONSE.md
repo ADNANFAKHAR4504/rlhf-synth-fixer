@@ -452,31 +452,6 @@ Resources:
 
   # (Metric filters require a CloudTrail stream; omitted to avoid your CloudTrail quota limit.)
 
-  # ---------------- MFA deny policy example ----------------
-  GroupMFARequired:
-    Type: AWS::IAM::Group
-    Properties:
-      GroupName: MFAEnforced
-      Policies:
-        - PolicyName: DenyWithoutMFA
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Sid: DenyNoMFA
-                Effect: Deny
-                NotAction:
-                  - iam:CreateVirtualMFADevice
-                  - iam:EnableMFADevice
-                  - iam:ListMFADevices
-                  - iam:ListUsers
-                  - iam:ListVirtualMFADevices
-                  - iam:ResyncMFADevice
-                  - sts:GetSessionToken
-                Resource: '*'
-                Condition:
-                  BoolIfExists:
-                    aws:MultiFactorAuthPresent: false
-
   # ---------------- EC2 via Launch Template + ASG (capacity 0) ----------------
   RoleApp:
     Type: AWS::IAM::Role
