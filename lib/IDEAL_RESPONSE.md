@@ -24,13 +24,10 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: Whether deploying to LocalStack (affects RDS configuration)
-  KeyPairName:
-    Type: String
-    Default: localstack-key
-    Description: Name of the EC2 Key Pair for instances
 
 Conditions:
   IsLocalStack: !Equals [!Ref UseLocalStack, 'true']
+  IsNotLocalStack: !Not [!Equals [!Ref UseLocalStack, 'true']]
 
 Resources:
 
@@ -594,15 +591,12 @@ Resources:
   # Update RDS to use credentials from Secrets Manager and security group
   FinancialDB:
     Type: AWS::RDS::DBInstance
-    Condition: !Not [!Ref IsLocalStack]
-    DependsOn:
-    - FinancialDBSubnetGroup
-    - RDSSecurityGroup
+    Condition: IsNotLocalStack
     Properties:
-      DBInstanceClass: db.t3.micro
+      DBInstanceClass: db.t3.medium
       AllocatedStorage: 20
       Engine: postgres
-      EngineVersion: '13.13'
+      EngineVersion: '17.2'
       DBName: financialdb
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:username}}']]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}']]
@@ -628,13 +622,13 @@ Resources:
     Type: AWS::RDS::DBInstance
     Condition: IsLocalStack
     Properties:
-      DBInstanceClass: db.t2.micro
+      DBInstanceClass: db.t3.medium
       AllocatedStorage: 20
       Engine: postgres
-      EngineVersion: '11.22'
+      EngineVersion: '17.2'
       DBName: financialdb
       MasterUsername: dbadmin
-      MasterUserPassword: password123
+      MasterUserPassword: !Sub "localstack-${EnvironmentSuffix}-password"
       StorageEncrypted: false
       PubliclyAccessible: false
       BackupRetentionPeriod: 0
