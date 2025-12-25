@@ -1,0 +1,23 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291430",
+  "team": "synth-2",
+  "startedAt": "2025-08-07T10:15:43.021Z",
+  "subtask": "Networking & Content Delivery",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "InternetGateway",
+    "NATGateway",
+    "SecurityGroups",
+    "RouteTables"
+  ],
+  "wave": "P0"
+}
