@@ -21,7 +21,7 @@
     "IAM",
     "CloudTrail"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "Pr1204",
     "pr": "Pr1204"
