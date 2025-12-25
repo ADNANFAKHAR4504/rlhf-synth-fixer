@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "js",
+  "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "LS-trainr150",
