@@ -60,9 +60,9 @@ Parameters:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-0e2c86481225d3c51  # Latest Amazon Linux 2 AMI
+      AMI: ami-0e2c86481225d3c51 # Latest Amazon Linux 2 AMI
     us-west-2:
-      AMI: ami-04c82466a6fab80eb  # Latest Amazon Linux 2 AMI
+      AMI: ami-04c82466a6fab80eb # Latest Amazon Linux 2 AMI
 
 Resources:
   # Database Password Secret
