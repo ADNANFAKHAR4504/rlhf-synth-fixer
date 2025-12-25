@@ -388,7 +388,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Type).toBe('AWS::RDS::DBInstance');
       expect(rds.Properties.DBInstanceClass).toBe('db.t3.small');
       expect(rds.Properties.Engine).toBe('mysql');
-      expect(rds.Properties.EngineVersion).toBe('8.0.42');
+      expect(rds.Properties.EngineVersion).toBe('8.0');
       expect(rds.Properties.MultiAZ).toBe(false);
       expect(rds.Properties.StorageEncrypted).toBe(false);
       expect(rds.Properties.BackupRetentionPeriod).toBe(1);
@@ -396,13 +396,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.EnablePerformanceInsights).toBe(false);
     });
 
-    test('RDS uses Secrets Manager for credentials', () => {
+    test('RDS uses hardcoded credentials for LocalStack', () => {
       const rds = template.Resources.ProdRdsInstance;
       expect(rds.Properties.MasterUsername).toBe('admin');
-      expect(rds.Properties.MasterUserPassword).toEqual({
-        'Fn::Sub':
-          '{{resolve:secretsmanager:${ProdRdsPassword}:SecretString:password}}',
-      });
+      expect(rds.Properties.MasterUserPassword).toBe('TempPassword123!');
     });
 
     test('RDS subnet group spans private subnets', () => {
@@ -414,10 +411,10 @@ describe('TapStack CloudFormation Template', () => {
       ]);
     });
 
-    test('RDS has deletion policy for snapshots', () => {
+    test('RDS has deletion policy for LocalStack', () => {
       const rds = template.Resources.ProdRdsInstance;
-      expect(rds.DeletionPolicy).toBe('Snapshot');
-      expect(rds.UpdateReplacePolicy).toBe('Snapshot');
+      expect(rds.DeletionPolicy).toBe('Delete');
+      expect(rds.UpdateReplacePolicy).toBe('Delete');
     });
 
     test('RDS does not have explicit names', () => {

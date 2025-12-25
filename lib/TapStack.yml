@@ -441,9 +441,9 @@ Resources:
     Properties:
       DBInstanceClass: db.t3.small
       Engine: mysql
-      EngineVersion: '8.0.42'
+      EngineVersion: '8.0'
       MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProdRdsPassword}:SecretString:password}}'
+      MasterUserPassword: 'TempPassword123!'
       AllocatedStorage: 20
       StorageType: gp2
       DBSubnetGroupName: !Ref ProdRdsSubnetGroup
@@ -459,8 +459,8 @@ Resources:
           Value: 'prod-rds-instance'
         - Key: Environment
           Value: !Ref Environment
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
 
   # RDS Monitoring Role
   ProdRdsMonitoringRole:
