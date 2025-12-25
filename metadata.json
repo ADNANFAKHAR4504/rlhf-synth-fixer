@@ -21,5 +21,6 @@
   ],
   "po_id": "101912522",
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 9
 }
