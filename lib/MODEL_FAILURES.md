@@ -294,6 +294,48 @@ const commonTags = {
 6. **Testing Strategy**: Comprehensive unit and integration tests catch issues early
 7. **Documentation**: Clear documentation of infrastructure decisions aids maintenance
 
+## LocalStack Compatibility Adjustments
+
+The following modifications were made to ensure LocalStack Community Edition compatibility. These are intentional architectural decisions, not bugs.
+
+| Feature | LocalStack Limitation | Solution Applied | Production Status |
+|---------|----------------------|------------------|-------------------|
+| RDS Multi-AZ | Not fully supported in Community | Single-AZ for LocalStack, Multi-AZ conditional | Enabled in AWS |
+| ElastiCache Serverless | Pro-only feature | Removed conditionally for LocalStack | Enabled in AWS |
+| NAT Gateway | EIP allocation limited | Conditional deployment based on environment | Enabled in AWS |
+| Application Load Balancer | Basic support only | Simplified for LocalStack testing | Full config in AWS |
+| Auto Scaling | Limited support | Mock responses for integration tests | Enabled in AWS |
+| I8g Instances | Not available in LocalStack | Use t3.micro for LocalStack | I8g in AWS |
+| SSL Certificates | Limited ACM support | Self-signed for LocalStack | ACM in AWS |
+| CloudWatch Logs | Basic support | Simplified log groups | Full config in AWS |
+
+### Environment Detection Pattern Used
+
+```typescript
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+                     process.env.LOCALSTACK === 'true';
+```
+
+### Services Verified Working in LocalStack
+
+- VPC (full support)
+- EC2 (basic support with t3.micro instances)
+- S3 (full support)
+- RDS (basic support, single-AZ only)
+- IAM (basic support)
+- Security Groups (full support)
+- Target Groups (basic support)
+- Application Load Balancer (basic support)
+- CloudWatch Logs (basic support)
+
+### Services Requiring Conditional Deployment
+
+- ElastiCache Serverless (Pro-only, removed for Community)
+- NAT Gateway (limited EIP allocation)
+- Multi-AZ RDS (simplified to single-AZ)
+- I8g Instances (use t3.micro in LocalStack)
+
 ## Conclusion
 
 The infrastructure has been successfully refactored from a non-deployable state to a production-ready, highly available web application stack. All critical issues have been resolved, and the solution now follows AWS best practices for security, reliability, and operational excellence. The comprehensive test suite ensures ongoing quality and catches regressions early.

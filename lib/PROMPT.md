@@ -1,15 +1,15 @@
-I need to deploy a highly available web application on AWS using infrastructure as code. Here are the requirements:
+I need to deploy a highly available web application on AWS where all components work together. Here's how the architecture should connect:
 
-I want to set up an auto-scaling web application stack that can handle varying traffic loads. The application should use EC2 instances spread across two availability zones for high availability. I need a PostgreSQL database with multi-AZ setup for data persistence.
+Start with an Application Load Balancer that handles incoming traffic and distributes it across EC2 instances in two availability zones. The ALB should terminate SSL and forward requests to the web servers.
 
-For static content, I want to use S3 with versioning enabled so I can track changes to assets. All resources should be deployed in the us-east-1 region.
+The EC2 instances run the application and need to connect to three backend services. First, they access an RDS PostgreSQL database with multi-AZ replication for data persistence. Second, they pull static assets from an S3 bucket with versioning enabled. Third, they use ElastiCache Serverless for caching frequently accessed data to reduce database load.
 
-The infrastructure should include proper SSL termination using an Application Load Balancer. I also need CloudWatch logging configured with 30 days retention for monitoring and debugging.
+For security, set up IAM roles that allow EC2 instances to authenticate with S3 and ElastiCache without hardcoded credentials. Grant the instances access to write logs to CloudWatch.
 
-For security, please set up IAM roles so EC2 instances can securely access other AWS services without hardcoded credentials.
+Configure CloudWatch to collect logs from the EC2 instances with 30 day retention. The application logs should flow from EC2 to CloudWatch Logs for monitoring and debugging.
 
-Since this is for production use, I want to leverage some newer AWS capabilities. Please include Amazon ElastiCache Serverless for caching to improve application performance, and use the latest EC2 I8g instances if suitable for the workload.
+The auto-scaling group should monitor CloudWatch metrics and automatically add or remove EC2 instances based on CPU utilization. Use I8g instances if they fit the workload profile.
 
-All resources need to be properly tagged for cost tracking and resource management. The code should be modular and well-organized.
+Deploy everything in us-east-1 with proper VPC configuration. Tag all resources for cost tracking.
 
-Please provide the infrastructure code with one code block per file needed.
+Please provide the complete Pulumi TypeScript infrastructure code with one code block per file.
