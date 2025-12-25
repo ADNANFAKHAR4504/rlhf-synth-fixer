@@ -4,7 +4,7 @@ I need help building a serverless web API that can handle variable traffic loads
 
 Here's what I'm trying to accomplish:
 
-I want to create a REST API that can handle multiple types of requests (GET, POST, PUT, DELETE). The Lambda function needs to be able to read from and write to a DynamoDB table. Since I don't know how much traffic this will get, I'd prefer using DynamoDB's on-demand billing so I don't have to guess at capacity.
+I want to create a REST API that can handle multiple types of requests like GET, POST, PUT, and DELETE. The Lambda function needs to be able to read from and write to a DynamoDB table. Since I don't know how much traffic this will get, I'd prefer using DynamoDB's on-demand billing so I don't have to guess at capacity.
 
 For security, I need the Lambda to get sensitive config through environment variables rather than hardcoding anything. The function should only have the minimum permissions it needs to work with DynamoDB.
 
@@ -19,7 +19,7 @@ Since this is a serverless application, I think AWS SAM would make the CloudForm
 This should all be deployed to us-west-2, and I prefer using a naming pattern like projectName-environment-resourceType to keep things organized.
 
 Could you create a CloudFormation YAML template called 'serverless-infrastructure.yml' that sets up this architecture? I'm specifically looking for:
-- Lambda function (Node.js or Python runtime)
+- Lambda function with Node.js or Python runtime
 - API Gateway REST API with CORS support
 - DynamoDB table with on-demand capacity
 - Proper IAM roles and policies
