@@ -19,7 +19,7 @@ Parameters:
     ConstraintDescription: Must be a valid EC2 instance type
 
   AMIId:
-    Type: String
+    Type: AWS::EC2::Image::Id
     Default: ami-03cf127a
     Description: AMI ID for the EC2 instance (use LocalStack default AMI for testing)
     ConstraintDescription: Must be a valid AMI ID
