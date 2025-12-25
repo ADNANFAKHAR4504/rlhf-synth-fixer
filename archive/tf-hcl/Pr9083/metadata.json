@@ -11,10 +11,23 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "CloudWatch",
+    "Auto Scaling"
+  ],
   "wave": "P0",
   "migrated_from": {
     "po_id": "291272",
     "pr": "Pr1337"
-  }
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
