@@ -563,12 +563,8 @@
                     "s3:ListBucket"
                   ],
                   "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:s3:::*"
-                    },
-                    {
-                      "Fn::Sub": "arn:aws:s3:::*/*"
-                    }
+                    "arn:aws:s3:::*",
+                    "arn:aws:s3:::*/*"
                   ]
                 }
               ]
@@ -637,9 +633,7 @@
           "Ref": "EC2InstanceProfile"
         },
         "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -c default -s\n"
-          }
+          "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -c default -s\n"
         },
         "Tags": [
           {
@@ -694,9 +688,7 @@
           "Ref": "EC2InstanceProfile"
         },
         "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -c default -s\n"
-          }
+          "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -c default -s\n"
         },
         "Tags": [
           {
