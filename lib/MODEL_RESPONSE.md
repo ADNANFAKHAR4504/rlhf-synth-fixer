@@ -516,7 +516,7 @@ Resources:
                         <p><strong>Environment:</strong> ${Environment}</p>
                         <p><strong>Instance ID:</strong> <span id="instance-id">Loading...</span></p>
                         <p><strong>Availability Zone:</strong> <span id="az">Loading...</span></p>
-                        <p><strong>Status:</strong> <span class="status">✅ Healthy</span></p>
+                        <p><strong>Status:</strong> <span class="status"> Healthy</span></p>
                         <p><strong>Project:</strong> IaC - AWS Nova Model Breaking</p>
                         <p><strong>Stack:</strong> ${AWS::StackName}</p>
                     </div>
