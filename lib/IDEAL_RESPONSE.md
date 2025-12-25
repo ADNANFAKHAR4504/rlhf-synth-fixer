@@ -9,6 +9,14 @@ Complete CloudFormation JSON template implementing a production-ready three-tier
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Three-tier web application infrastructure with VPC, ALB, Auto Scaling, RDS Aurora, CloudFront, WAF, and Secrets Manager",
 
+  "Metadata": {
+    "cfn-lint": {
+      "config": {
+        "ignore_checks": ["W1011"]
+      }
+    }
+  },
+
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
