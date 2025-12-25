@@ -531,18 +531,18 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '${SSMParameterPrefix}/database/password'
-      Type: SecureString
+      Type: String
       Value: ChangeMe123!
-      Description: Database password (encrypted)
+      Description: Database password
       Tags: { Environment: !Ref Environment, ProjectName: !Ref ProjectName }
 
   APIKeyParameter:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '${SSMParameterPrefix}/api/key'
-      Type: SecureString
+      Type: String
       Value: api-key-placeholder
-      Description: API key for external services (encrypted)
+      Description: API key for external services
       Tags: { Environment: !Ref Environment, ProjectName: !Ref ProjectName }
 
   # -------------------- S3 Buckets --------------------
