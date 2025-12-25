@@ -1,51 +1,19 @@
-Hi! I need help creating secure AWS infrastructure using Terraform HCL (not CDKTF).
+Hi, I need help setting up production AWS infrastructure using Terraform HCL. We're building a healthcare application that needs to be HIPAA compliant.
 
-I'm working on a production system that needs to be HIPAA compliant and follow security best practices. Here's what I need:
+**The Architecture I Need:**
 
-The Setup:
+I want to build a 3-tier architecture where the load balancer sits in front of EC2 instances that talk to a PostgreSQL database. The load balancer should distribute traffic to the auto-scaled EC2 instances, which then connect to the RDS database through a private network. All logs from the instances and VPC should flow into CloudWatch log groups that are encrypted with KMS.
 
-Deploy everything in us-west-2
-Use HashiCorp Vault for all secrets (no hardcoded passwords!)
-Everything should be named like "nova-prod-{resource}"
-Tag all resources with Environment=prod and Owner=CloudEngineering
-Infrastructure I need:
+**Network Setup**: Deploy to us-west-2 using a VPC with CIDR block 10.0.0.0/16. Set up 2 public subnets for the load balancer, 2 private subnets for the application tier, and 2 private subnets for the database. Spread these across 2 availability zones. The load balancer needs to sit in the public subnets and route traffic to the EC2 instances in the private app subnets. The database should live in the private database subnets.
 
-A VPC (10.0.0.0/16) with proper network segmentation (2 public, 2 private app, and 2 private DB subnets across 2 AZs)
-An Application Load Balancer with HTTPS only (redirect HTTP to HTTPS) and WAF v2 protection
-Auto-scaling EC2 instances (t3.micro, min=2, max=4) running nginx with self-signed TLS cert
-A PostgreSQL 15 RDS database (db.t3.micro, Multi-AZ, encrypted, 7-day backups)
-Proper security groups that only allow necessary traffic between tiers
-S3 bucket for logs with KMS encryption, versioning, and block public access
-CloudWatch log groups for application logs and VPC flow logs
-Security Requirements:
+**Load Balancing and Security Groups**: Create an Application Load Balancer in the public subnets that handles all incoming traffic on port 80 and 443. Configure it to redirect HTTP to HTTPS. The ALB security group should allow inbound traffic on ports 80 and 443 from approved CIDRs stored in Vault. This security group should be able to communicate with the application security group on port 443.
 
-Create and use a KMS CMK for encrypting everything (EBS, S3, RDS)
-Implement least-privilege IAM policies
-WAF v2 with AWS managed rules (CommonRuleSet, KnownBadInputsRuleSet, SQLiRuleSet)
-All traffic must be encrypted in transit (TLS/HTTPS)
-ALB security group: Allow 80/443 only from Vault-stored allowlist CIDRs
-App security group: Allow 443 only from ALB security group
-RDS security group: Allow 5432 only from App security group
-VPC Flow Logs to CloudWatch
-Vault Integration:
+**Application Layer**: Set up auto-scaling EC2 instances in the private app subnets. The group should maintain 2 instances but scale up to 4 under load. Each instance runs nginx with a self-signed TLS certificate. The application security group should allow inbound HTTPS traffic only from the load balancer security group.
 
-Use Vault provider (>= 3.20) with data.vault_kv_secret_v2
-Read allowed_ingress_cidrs from kv/app/ingress
-Read acm_certificate_arn from kv/app/acm
-Read db_master_password from kv/db/primary
-Assume AWS credentials are injected via environment
-Outputs I need (all values):
+**Database Layer**: Create a PostgreSQL 15 RDS instance in the private database subnets. Enable Multi-AZ for redundancy. The RDS security group should allow inbound traffic on port 5432 only from the application security group. The EC2 instances need to be able to connect to the database through this security group rule.
 
-VPC: ID, CIDR, ARN
-Subnets: All IDs, CIDRs, AZs for public/private-app/private-db
-Networking: Internet Gateway ID, NAT Gateway IDs and IPs, Route Table IDs
-Security Groups: IDs and names for ALB, App, RDS
-ALB: DNS name, ARN, Zone ID, Target Group ARN, Listener ARNs
-Auto Scaling: ASG name, Launch Template ID and version
-RDS: Instance ID, endpoint, address, port, database name, username, engine version, instance class, storage, AZ, multi-AZ status, backup window, subnet group
-KMS: CMK ID and ARN
-S3: Logs bucket name and ARN
-CloudWatch: Log group names and ARNs for app and VPC flow logs
-WAF: WebACL ID and ARN
-IAM: All role and policy ARNs
-Connection strings: Database connection string
+**Data Protection and Logging**: Create a KMS customer master key that encrypts EBS volumes on the EC2 instances, the RDS database, and the S3 logs bucket. Set up an S3 bucket to store application and ALB logs with versioning enabled and public access blocked. Configure CloudWatch log groups for application logs and VPC flow logs, both encrypted with the KMS key. The EC2 instances should send their logs to CloudWatch using the KMS-encrypted log groups.
+
+**Configuration and Secrets**: Use Vault provider to integrate with HashiCorp Vault. Pull the allowed ingress CIDRs from kv/app/ingress for the ALB security group, fetch the ACM certificate ARN from kv/app/acm, and read the RDS password from kv/db/primary. Assume AWS credentials are already set via environment variables. All resources should be named nova-prod followed by the resource type. Tag everything with Environment set to prod and Owner set to CloudEngineering.
+
+**Outputs I Need**: Provide the VPC ID, CIDR block, and ARN. For subnets, return IDs, CIDR blocks, and availability zones for all three subnet types. Include the Internet Gateway ID, NAT Gateway IDs and their public IPs, and route table IDs. Provide security group IDs and names for all three groups. From the load balancer, give the DNS name, ARN, zone ID, target group ARN, and listener ARNs. From auto-scaling, provide the ASG name, launch template ID, and latest version. From RDS, return the instance ID, endpoint, address, port, database name, username, engine version, instance class, storage, availability zone, multi-AZ status, and backup window. Include the KMS key ID and ARN, S3 bucket details, CloudWatch log group details, WAF WebACL ID and ARN, and all IAM role ARNs.
