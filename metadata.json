@@ -26,5 +26,9 @@
     "AWS Systems Manager",
     "VPC Flow Logs"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr479cdkjava",
+    "pr": "Pr2285"
+  }
 }
