@@ -53,3 +53,12 @@ stack = TapStack(
     args=TapStackArgs(environment_suffix=environment_suffix),
     opts=ResourceOptions(provider=provider)
 )
+
+# Export key infrastructure outputs
+pulumi.export('vpc_id', stack.vpc_id)
+pulumi.export('public_subnet_ids', stack.public_subnet_ids)
+pulumi.export('private_subnet_ids', stack.private_subnet_ids)
+pulumi.export('bucket_name', stack.bucket_name)
+pulumi.export('lambda_name', stack.lambda_name)
+pulumi.export('environment_suffix', environment_suffix)
+pulumi.export('region', os.getenv('AWS_REGION', 'us-east-1'))
