@@ -155,8 +155,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.MyAppS3AccessLogsBucket).toBeDefined();
       const bucket = template.Resources.MyAppS3AccessLogsBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.DeletionPolicy).toBe('Delete');
-      expect(bucket.UpdateReplacePolicy).toBe('Delete'); // LocalStack testing - easy cleanup
+      expect(bucket.DeletionPolicy).toBe('Retain');
+      expect(bucket.UpdateReplacePolicy).toBe('Retain'); // Production-grade protection per PROMPT requirement
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
     });
@@ -165,8 +165,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.MyAppS3Bucket).toBeDefined();
       const bucket = template.Resources.MyAppS3Bucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.DeletionPolicy).toBe('Delete');
-      expect(bucket.UpdateReplacePolicy).toBe('Delete'); // LocalStack testing - easy cleanup
+      expect(bucket.DeletionPolicy).toBe('Retain');
+      expect(bucket.UpdateReplacePolicy).toBe('Retain'); // Production-grade protection per PROMPT requirement
       expect(bucket.Properties.LoggingConfiguration.DestinationBucketName).toEqual({ Ref: 'MyAppS3AccessLogsBucket' });
     });
 
@@ -260,13 +260,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.MyAppRDSInstance).toBeDefined();
       const rds = template.Resources.MyAppRDSInstance;
       expect(rds.Type).toBe('AWS::RDS::DBInstance');
-      expect(rds.DeletionPolicy).toBe('Delete');
-      expect(rds.UpdateReplacePolicy).toBe('Delete'); // LocalStack compatibility
+      expect(rds.DeletionPolicy).toBe('Retain');
+      expect(rds.UpdateReplacePolicy).toBe('Retain'); // Production-grade protection per PROMPT requirement
       expect(rds.Properties.Engine).toBe('postgres');
       expect(rds.Properties.EngineVersion).toBe('16.6');
       expect(rds.Properties.DBInstanceClass).toBe('db.t3.medium');
       expect(rds.Properties.StorageEncrypted).toBe(true);
-      expect(rds.Properties.MultiAZ).toBe(false); // LocalStack compatibility
+      expect(rds.Properties.MultiAZ).toBe(true); // Multi-AZ for failover protection per PROMPT requirement
       expect(rds.Properties.DeletionProtection).toBe(false);
     });
 
