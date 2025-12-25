@@ -181,7 +181,8 @@ describe("AWS Infrastructure Unit Tests", () => {
     expect(raw).toContain("port              = \"80\"");
     expect(raw).toContain("protocol          = \"HTTP\"");
     expect(raw).toContain("type             = \"forward\"");
-    expect(raw).toContain("target_group_arn = aws_lb_target_group.main.arn");
+    // Updated for conditional resource syntax with count
+    expect(raw).toContain("target_group_arn = aws_lb_target_group.main[0].arn");
   });
 
   it("has Auto Scaling Group with proper configuration", () => {
@@ -189,7 +190,8 @@ describe("AWS Infrastructure Unit Tests", () => {
     expect(raw).toContain("desired_capacity    = var.desired_capacity");
     expect(raw).toContain("max_size            = var.max_size");
     expect(raw).toContain("min_size            = var.min_size");
-    expect(raw).toContain("target_group_arns   = [aws_lb_target_group.main.arn]");
+    // Updated for conditional resource syntax - uses ternary for LocalStack compatibility
+    expect(raw).toContain("target_group_arns   = var.enable_alb ? [aws_lb_target_group.main[0].arn] : []");
     expect(raw).toContain("vpc_zone_identifier = aws_subnet.private[*].id");
     expect(raw).toContain("version = \"$Latest\"");
   });

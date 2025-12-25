@@ -1,8 +1,11 @@
 /**
  * AWS Infrastructure Project - Integration Tests
- * 
+ *
  * These tests validate live AWS resources and infrastructure outputs
  * in a real environment, including live AWS resource validation.
+ *
+ * Note: This configuration supports both AWS and LocalStack deployments.
+ * ALB and ASG are conditionally created based on enable_alb/enable_asg variables.
  */
 
 import {
@@ -51,12 +54,24 @@ let elbClient: ElasticLoadBalancingV2Client;
 let region: string;
 
 function loadOutputs() {
-  const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-  
-  if (!fs.existsSync(p)) {
-    throw new Error("Outputs file not found at cfn-outputs/all-outputs.json. Please run terraform apply first.");
+  // Try multiple possible output file locations
+  const possiblePaths = [
+    path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
+    path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
+  ];
+
+  let p: string | undefined;
+  for (const candidatePath of possiblePaths) {
+    if (fs.existsSync(candidatePath)) {
+      p = candidatePath;
+      break;
+    }
   }
-  
+
+  if (!p) {
+    throw new Error("Outputs file not found. Please run terraform apply first. Searched: " + possiblePaths.join(", "));
+  }
+
   try {
     const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Outputs;
 
@@ -90,7 +105,7 @@ function loadOutputs() {
     };
 
     if (missing.length) {
-      throw new Error(`Missing required outputs in cfn-outputs/all-outputs.json: ${missing.join(", ")}`);
+      throw new Error(`Missing required outputs: ${missing.join(", ")}`);
     }
     return o;
   } catch (error) {
@@ -104,10 +119,12 @@ function loadOutputs() {
 async function initializeLiveTesting() {
   // Auto-discover region from VPC ID if not set
   region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
-  
-  // Initialize AWS clients
-  ec2Client = new EC2Client({ region });
-  elbClient = new ElasticLoadBalancingV2Client({ region });
+
+  // Initialize AWS clients with LocalStack endpoint if available
+  const endpoint = process.env.AWS_ENDPOINT_URL || undefined;
+
+  ec2Client = new EC2Client({ region, endpoint });
+  elbClient = new ElasticLoadBalancingV2Client({ region, endpoint });
 
   // Test connectivity with a simple API call - only if VPC ID looks real
   if (OUT.vpcId && OUT.vpcId.startsWith('vpc-') && OUT.vpcId !== 'vpc-0123456789abcdef0') {
@@ -142,6 +159,16 @@ async function retry<T>(fn: () => Promise<T>, attempts = 3, baseMs = 1000): Prom
 function hasRealInfrastructure(): boolean {
   // Check if we have real infrastructure by looking for non-mock VPC ID
   return OUT.vpcId && OUT.vpcId.startsWith('vpc-') && OUT.vpcId !== 'vpc-0123456789abcdef0';
+}
+
+function isAlbEnabled(): boolean {
+  // Check if ALB is enabled (not a placeholder string)
+  return OUT.loadBalancerDns && !OUT.loadBalancerDns.includes("disabled");
+}
+
+function isAsgEnabled(): boolean {
+  // Check if ASG is enabled (not a placeholder string)
+  return OUT.asgName && !OUT.asgName.includes("disabled");
 }
 
 /** ===================== Jest Config ===================== */
@@ -197,22 +224,36 @@ describe("Infrastructure Outputs Validation", () => {
     });
   });
 
-  test("Load balancer DNS name is present and has valid format", () => {
+  test("Load balancer DNS name is present", () => {
     expect(OUT.loadBalancerDns).toBeDefined();
     expect(typeof OUT.loadBalancerDns).toBe("string");
-    expect(OUT.loadBalancerDns).toMatch(/\.elb\.amazonaws\.com$/);
+    // ALB may be disabled for LocalStack compatibility
+    if (isAlbEnabled()) {
+      expect(OUT.loadBalancerDns).toMatch(/\.elb\.amazonaws\.com$/);
+    } else {
+      expect(OUT.loadBalancerDns).toContain("disabled");
+    }
   });
 
-  test("Load balancer ARN is present and has valid format", () => {
+  test("Load balancer ARN is present", () => {
     expect(OUT.loadBalancerArn).toBeDefined();
     expect(typeof OUT.loadBalancerArn).toBe("string");
-    expect(OUT.loadBalancerArn).toMatch(/^arn:aws:elasticloadbalancing:/);
+    // ALB may be disabled for LocalStack compatibility
+    if (isAlbEnabled()) {
+      expect(OUT.loadBalancerArn).toMatch(/^arn:aws:elasticloadbalancing:/);
+    } else {
+      expect(OUT.loadBalancerArn).toContain("disabled");
+    }
   });
 
   test("Auto Scaling Group name is present", () => {
     expect(OUT.asgName).toBeDefined();
     expect(typeof OUT.asgName).toBe("string");
     expect(OUT.asgName.length).toBeGreaterThan(0);
+    // ASG may be disabled for LocalStack compatibility
+    if (!isAsgEnabled()) {
+      expect(OUT.asgName).toContain("disabled");
+    }
   });
 
   test("NAT Gateway IPs are present and have valid format", () => {
@@ -228,7 +269,7 @@ describe("Infrastructure Outputs Validation", () => {
     expect(OUT.securityGroupIds).toBeDefined();
     expect(OUT.securityGroupIds.alb).toBeDefined();
     expect(OUT.securityGroupIds.ec2).toBeDefined();
-    
+
     // Accept both real AWS security group IDs and mock data format
     expect(OUT.securityGroupIds.alb).toMatch(/^(sg-[a-f0-9]+|sg-mock-[a-z0-9-]+)$/);
     expect(OUT.securityGroupIds.ec2).toMatch(/^(sg-[a-f0-9]+|sg-mock-[a-z0-9-]+)$/);
@@ -259,14 +300,14 @@ describe("Live AWS Resource Validation", () => {
       VpcIds: [OUT.vpcId]
     });
     const response = await retry(() => ec2Client.send(command));
-    
+
     expect(response.Vpcs).toBeDefined();
     expect(response.Vpcs!.length).toBeGreaterThan(0);
-    
+
     const vpc = response.Vpcs![0];
     expect(vpc.State).toBe('available');
     expect(vpc.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
-    
+
     // Check for required tags
     const envTag = vpc.Tags?.find(tag => tag.Key === 'Environment');
     expect(envTag?.Value).toBeDefined();
@@ -283,10 +324,10 @@ describe("Live AWS Resource Validation", () => {
       SubnetIds: OUT.publicSubnets
     });
     const response = await retry(() => ec2Client.send(command));
-    
+
     expect(response.Subnets).toBeDefined();
     expect(response.Subnets!.length).toBe(OUT.publicSubnets.length);
-    
+
     response.Subnets!.forEach(subnet => {
       expect(subnet.State).toBe('available');
       expect(subnet.MapPublicIpOnLaunch).toBe(true);
@@ -305,10 +346,10 @@ describe("Live AWS Resource Validation", () => {
       SubnetIds: OUT.privateSubnets
     });
     const response = await retry(() => ec2Client.send(command));
-    
+
     expect(response.Subnets).toBeDefined();
     expect(response.Subnets!.length).toBe(OUT.privateSubnets.length);
-    
+
     response.Subnets!.forEach(subnet => {
       expect(subnet.State).toBe('available');
       expect(subnet.MapPublicIpOnLaunch).toBe(false);
@@ -333,15 +374,15 @@ describe("Live AWS Resource Validation", () => {
       ]
     });
     const response = await retry(() => ec2Client.send(command));
-    
+
     expect(response.SecurityGroups).toBeDefined();
     expect(response.SecurityGroups!.length).toBeGreaterThan(0);
-    
+
     // Check that no security group allows all traffic from 0.0.0.0/0 except for legitimate purposes
     response.SecurityGroups!.forEach(sg => {
-      const dangerousRules = sg.IpPermissions?.filter(rule => 
-        rule.IpRanges?.some(range => 
-          range.CidrIp === '0.0.0.0/0' && 
+      const dangerousRules = sg.IpPermissions?.filter(rule =>
+        rule.IpRanges?.some(range =>
+          range.CidrIp === '0.0.0.0/0' &&
           range.Description !== 'SSH access' &&
           // Allow ALB ingress rules (port 80/443) and egress rules
           !(rule.FromPort === 80 && rule.ToPort === 80) &&
@@ -354,6 +395,13 @@ describe("Live AWS Resource Validation", () => {
   }, 30000);
 
   test("Load balancer exists and is accessible", async () => {
+    // Skip if ALB is disabled for LocalStack
+    if (!isAlbEnabled()) {
+      console.log('Skipping ALB test - ALB disabled for LocalStack compatibility');
+      expect(true).toBe(true);
+      return;
+    }
+
     if (!hasRealInfrastructure()) {
       console.log('Skipping live test - infrastructure not deployed');
       expect(true).toBe(true);
@@ -362,11 +410,11 @@ describe("Live AWS Resource Validation", () => {
 
     const command = new DescribeLoadBalancersCommand({});
     const response = await retry(() => elbClient.send(command));
-    
-    const alb = response.LoadBalancers?.find(lb => 
+
+    const alb = response.LoadBalancers?.find(lb =>
       lb.DNSName === OUT.loadBalancerDns
     );
-    
+
     expect(alb).toBeDefined();
     expect(alb!.State!.Code).toBe('active');
   }, 30000);

@@ -1,3 +1,56 @@
+# AWS Infrastructure Setup with Terraform - Ideal Response
+
+## Overview
+
+This Terraform configuration creates a production-ready AWS environment designed for high availability and scalability. The infrastructure includes:
+
+- VPC with public and private subnets across 2 Availability Zones
+- NAT Gateways with Elastic IPs for secure outbound connectivity from private subnets
+- Application Load Balancer for traffic distribution (conditionally created)
+- Auto Scaling Group with CPU-based scaling policies (conditionally created)
+- Security Groups for ALB and EC2 instances
+- CloudWatch Alarms for monitoring and auto-scaling triggers
+- Proper resource tagging and naming conventions
+
+## Architecture
+
+### Network Layer
+- **VPC**: Single VPC with configurable CIDR block (default: 10.0.0.0/16)
+- **Public Subnets**: 2 subnets across different AZs with public IP auto-assignment
+- **Private Subnets**: 2 subnets across different AZs for compute resources
+- **Internet Gateway**: Enables internet access for public subnets
+- **NAT Gateways**: 2 NAT gateways (one per AZ) with dedicated Elastic IPs
+
+### Compute Layer
+- **Launch Template**: Configurable instance type with user data for Apache installation
+- **Auto Scaling Group**: CPU-based scaling with configurable min/max/desired capacity
+- **EC2 Instances**: Amazon Linux 2 instances in private subnets
+
+### Load Balancing
+- **Application Load Balancer**: Internet-facing ALB in public subnets
+- **Target Group**: HTTP target group with health checks
+- **Listener**: HTTP listener on port 80
+
+### Security
+- **ALB Security Group**: Allows inbound HTTP (80) and HTTPS (443) from anywhere
+- **EC2 Security Group**: Allows HTTP/HTTPS only from ALB security group
+- **IAM Role**: EC2 instance role with instance profile
+
+### Monitoring
+- **CloudWatch Alarms**: CPU utilization alarms for scale-up and scale-down triggers
+
+## LocalStack Compatibility
+
+This configuration is designed to work with both AWS and LocalStack. The following resources are conditionally created based on feature flags:
+
+- **ALB/Target Group/Listener**: Controlled by `enable_alb` variable (default: false)
+- **ASG/Scaling Policies/CloudWatch Alarms**: Controlled by `enable_asg` variable (default: false)
+
+LocalStack Community Edition does not support ELBv2 (ALB/NLB) or Auto Scaling. Set these variables to `true` for actual AWS deployments.
+
+## File: lib/tap_stack.tf
+
+```hcl
 # =============================================================================
 # AWS INFRASTRUCTURE SETUP WITH TERRAFORM
 # =============================================================================
@@ -635,3 +688,85 @@ output "cost_estimation" {
     total_estimated = (length(aws_nat_gateway.main) * 45.00) + 16.20 + (var.desired_capacity * 8.47)
   }
 }
+```
+
+## Implementation Details
+
+### Unique Naming Strategy
+Resources use a consistent naming pattern: `${project_name}-${environment_suffix}` (e.g., `tap-stack-dev`). For resources with length restrictions, a shorter prefix `tap-${environment_suffix}` is used.
+
+### LocalStack Compatibility
+The following AWS services are NOT supported in LocalStack Community Edition:
+- ELBv2 (Application Load Balancer, Network Load Balancer)
+- Auto Scaling Groups
+- CloudWatch Alarms (limited support)
+
+These resources are conditionally created using the `enable_alb` and `enable_asg` variables.
+
+### High Availability Design
+- Resources are distributed across 2 Availability Zones
+- NAT Gateways are deployed in each public subnet for redundancy
+- Private subnets have dedicated route tables pointing to their respective NAT Gateway
+
+### Security Best Practices
+- EC2 instances are isolated in private subnets
+- Security groups follow the principle of least privilege
+- EC2 security group only allows traffic from the ALB security group
+- All resources have consistent tagging for cost tracking and management
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| vpc_id | The ID of the created VPC |
+| public_subnet_ids | List of public subnet IDs |
+| private_subnet_ids | List of private subnet IDs |
+| alb_dns_name | DNS name of the Application Load Balancer |
+| alb_arn | ARN of the Application Load Balancer |
+| asg_name | Name of the Auto Scaling Group |
+| nat_gateway_ips | List of NAT Gateway Elastic IPs |
+| security_group_ids | Map of security group IDs (alb, ec2) |
+| cost_estimation | Estimated monthly cost breakdown |
+
+## Usage
+
+### LocalStack Deployment
+```bash
+# Default configuration (ALB and ASG disabled)
+terraform init
+terraform apply
+```
+
+### AWS Deployment
+```bash
+# Enable ALB and ASG for production
+terraform init
+terraform apply -var="enable_alb=true" -var="enable_asg=true"
+```
+
+### Custom Configuration
+```bash
+terraform apply \
+  -var="environment=staging" \
+  -var="instance_type=t3.small" \
+  -var="min_size=2" \
+  -var="max_size=10" \
+  -var="desired_capacity=4"
+```
+
+## Testing
+
+### Unit Tests
+Unit tests validate the Terraform configuration structure including:
+- Variable definitions and defaults
+- Resource configurations
+- Security group rules
+- Naming conventions
+- Output definitions
+
+### Integration Tests
+Integration tests validate deployed resources:
+- VPC and subnet creation
+- NAT Gateway functionality
+- Security group configurations
+- Route table associations
