@@ -46,7 +46,7 @@ Non-functional / Constraints
 • Output format: Single YAML CloudFormation template only with no nested stacks or multiple files.
 • No hardcoded region-dependent AMI IDs; prefer SSM parameter store or accept AMI param.
 • Everything should be deployable from CloudFormation console: no manual post-deploy actions required to make the stack succeed.
-• Minimize broad permissions by avoiding Resource: "*" - use specific ARNs or !Sub with resource names created in the stack.
+• Minimize broad permissions by avoiding wildcard in Resource field - use specific ARNs or !Sub with resource names created in the stack.
 • For testing: the template must work in a fresh test account with limits permitting in us-east-1 or any specified region.
 
 ---
