@@ -21,7 +21,7 @@
     "EC2",
     "Logs"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "284210",
     "pr": "Pr533"
