@@ -92,6 +92,31 @@ variable "environment_suffix" {
   default     = "dev"
 }
 
+# LocalStack compatibility feature flags
+variable "enable_alb" {
+  description = "Enable ALB - set to false for LocalStack free tier"
+  type        = bool
+  default     = true
+}
+
+variable "enable_rds" {
+  description = "Enable RDS - set to false for LocalStack free tier"
+  type        = bool
+  default     = true
+}
+
+variable "enable_asg" {
+  description = "Enable ASG - set to false for LocalStack free tier"
+  type        = bool
+  default     = true
+}
+
+variable "enable_nat_gateway" {
+  description = "Enable NAT Gateway - set to false for LocalStack free tier"
+  type        = bool
+  default     = true
+}
+
 # =============================================================================
 # Locals
 # =============================================================================
@@ -186,7 +211,7 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_eip" "nat" {
-  count  = length(aws_subnet.public)
+  count  = var.enable_nat_gateway ? length(aws_subnet.public) : 0
   domain = "vpc"
 
   tags = merge(local.common_tags, {
@@ -197,7 +222,7 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "main" {
-  count         = length(aws_subnet.public)
+  count         = var.enable_nat_gateway ? length(aws_subnet.public) : 0
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
@@ -222,13 +247,16 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table" "private" {
-  count = length(aws_nat_gateway.main)
+  count = length(var.private_subnet_cidrs)
 
   vpc_id = aws_vpc.main.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  dynamic "route" {
+    for_each = var.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.main[count.index].id
+    }
   }
 
   tags = merge(local.common_tags, {
@@ -462,7 +490,7 @@ resource "aws_iam_role" "instance_role" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = { Service = "ec2.amazonaws.com" }
         Action    = "sts:AssumeRole"
       }
@@ -503,9 +531,9 @@ resource "aws_iam_role_policy" "ssm_parameter_access" {
         Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/app/${local.name_prefix}/*"
       },
       {
-        Sid    = "KmsDecryptForParameters"
-        Effect = "Allow"
-        Action = ["kms:Decrypt"]
+        Sid      = "KmsDecryptForParameters"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
         Resource = data.aws_kms_key.ssm.arn
       }
     ]
@@ -599,10 +627,12 @@ EOF
 # =============================================================================
 
 resource "aws_autoscaling_group" "app" {
+  count = var.enable_asg ? 1 : 0
+
   name                      = "${local.name_prefix}-asg"
   vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.app.arn]
-  health_check_type         = "ELB"
+  target_group_arns         = var.enable_alb ? [aws_lb_target_group.app[0].arn] : []
+  health_check_type         = var.enable_alb ? "ELB" : "EC2"
   health_check_grace_period = 300
 
   min_size         = var.asg_min_size
@@ -646,6 +676,8 @@ resource "aws_autoscaling_group" "app" {
 # =============================================================================
 
 resource "aws_lb" "app" {
+  count = var.enable_alb ? 1 : 0
+
   name               = local.alb_name
   internal           = false
   load_balancer_type = "application"
@@ -679,6 +711,8 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
+  count = var.enable_alb ? 1 : 0
+
   name     = local.tg_name
   port     = 80
   protocol = "HTTP"
@@ -702,13 +736,15 @@ resource "aws_lb_target_group" "app" {
 }
 
 resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.app.arn
+  count = var.enable_alb ? 1 : 0
+
+  load_balancer_arn = aws_lb.app[0].arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    target_group_arn = aws_lb_target_group.app[0].arn
   }
 
   tags = merge(local.common_tags, {
@@ -721,6 +757,8 @@ resource "aws_lb_listener" "app" {
 # =============================================================================
 
 resource "aws_db_subnet_group" "app" {
+  count = var.enable_rds ? 1 : 0
+
   name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
 
@@ -730,6 +768,8 @@ resource "aws_db_subnet_group" "app" {
 }
 
 resource "aws_db_instance" "app" {
+  count = var.enable_rds ? 1 : 0
+
   identifier = "${local.name_prefix}-rds"
 
   allocated_storage     = 20
@@ -738,7 +778,7 @@ resource "aws_db_instance" "app" {
   storage_encrypted     = true
 
   engine         = "postgres"
-  engine_version = "15.14"  # <- use numeric minor; console shows as 15.14.R1
+  engine_version = "15.14" # <- use numeric minor; console shows as 15.14.R1
   instance_class = var.db_instance_class
 
   db_name  = var.db_name
@@ -746,19 +786,19 @@ resource "aws_db_instance" "app" {
   password = random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.app.name
+  db_subnet_group_name   = aws_db_subnet_group.app[0].name
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  auto_minor_version_upgrade = true   # will move to 15.14.Rx patch automatically
+  auto_minor_version_upgrade = true # will move to 15.14.Rx patch automatically
   deletion_protection        = false
   skip_final_snapshot        = true
   final_snapshot_identifier  = "${local.name_prefix}-rds-final-snapshot"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
-  multi_az                        = false  # LocalStack: Multi-AZ not fully supported
+  multi_az                        = false # LocalStack: Multi-AZ not fully supported
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-rds" })
 }
@@ -784,17 +824,37 @@ output "private_subnet_ids" {
 
 output "alb_dns_name" {
   description = "DNS name of the load balancer"
-  value       = aws_lb.app.dns_name
+  value       = var.enable_alb ? aws_lb.app[0].dns_name : ""
 }
 
 output "asg_name" {
   description = "Name of the Auto Scaling Group"
-  value       = aws_autoscaling_group.app.name
+  value       = var.enable_asg ? aws_autoscaling_group.app[0].name : ""
 }
 
 output "rds_endpoint" {
   description = "RDS instance endpoint"
-  value       = aws_db_instance.app.endpoint
+  value       = var.enable_rds ? aws_db_instance.app[0].endpoint : ""
+}
+
+output "enable_alb" {
+  description = "Whether ALB is enabled"
+  value       = var.enable_alb
+}
+
+output "enable_rds" {
+  description = "Whether RDS is enabled"
+  value       = var.enable_rds
+}
+
+output "enable_asg" {
+  description = "Whether ASG is enabled"
+  value       = var.enable_asg
+}
+
+output "enable_nat_gateway" {
+  description = "Whether NAT Gateway is enabled"
+  value       = var.enable_nat_gateway
 }
 
 output "ssm_parameter_arns" {
@@ -818,5 +878,5 @@ output "security_group_ids" {
 
 output "alb_url" {
   description = "URL of the Application Load Balancer"
-  value       = "http://${aws_lb.app.dns_name}"
+  value       = var.enable_alb ? "http://${aws_lb.app[0].dns_name}" : ""
 }

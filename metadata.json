@@ -25,5 +25,9 @@
     "Security Groups",
     "KMS"
   ],
-  "wave": "P1"
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "LS-291318",
+    "pr": "Pr1280"
+  }
 }
