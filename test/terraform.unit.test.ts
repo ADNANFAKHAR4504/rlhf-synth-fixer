@@ -175,14 +175,16 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(content).toMatch(/engine\s*=\s*"mysql"/);
     });
 
-    test("enables encryption", () => {
+    test("enables encryption conditionally", () => {
       const content = readTerraformFile("rds.tf");
-      expect(content).toMatch(/storage_encrypted\s*=\s*true/);
+      // Check that encryption is configured (conditionally for LocalStack)
+      expect(content).toMatch(/storage_encrypted\s*=\s*local\.is_localstack\s*\?\s*false\s*:\s*true/);
     });
 
-    test("configures backup retention", () => {
+    test("configures backup retention conditionally", () => {
       const content = readTerraformFile("rds.tf");
-      expect(content).toMatch(/backup_retention_period\s*=\s*7/);
+      // Check that backup retention is configured (conditionally for LocalStack)
+      expect(content).toMatch(/backup_retention_period\s*=\s*local\.is_localstack\s*\?\s*0\s*:\s*7/);
     });
 
     test("uses Secrets Manager for password", () => {

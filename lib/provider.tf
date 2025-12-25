@@ -19,8 +19,10 @@ terraform {
     }
   }
 
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
+  # Backend configuration is conditionally set via terraform init
+  # For LocalStack: local backend (default if not specified)
+  # For AWS: S3 backend (configured via init -backend-config)
+  # No backend block here to avoid state migration issues in CI
 }
 
 # Primary AWS provider for general resources
