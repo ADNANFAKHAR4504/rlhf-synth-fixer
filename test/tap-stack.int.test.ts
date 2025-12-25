@@ -376,7 +376,7 @@ describe('TapStack Integration Tests', () => {
 
       const db = response.DBInstances![0];
 
-      expect(db.BackupRetentionPeriod).toBe(1);
+      expect(db.BackupRetentionPeriod).toBe(7);
       expect(db.PreferredBackupWindow).toBeDefined();
       expect(db.PreferredMaintenanceWindow).toBeDefined();
     }, 30000);
