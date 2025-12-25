@@ -112,26 +112,34 @@ describe('TapStack CloudFormation Integration Tests', () => {
         }
       }
 
-      // If not found, try ENVIRONMENT_SUFFIX
+      // If not found, try ENVIRONMENT_SUFFIX with both patterns
       if (!stackName && process.env.ENVIRONMENT_SUFFIX) {
-        const testStackName = `TapStack${process.env.ENVIRONMENT_SUFFIX}`;
-        try {
-          const describeResponse = await cfnClient.send(
-            new DescribeStacksCommand({ StackName: testStackName })
-          );
-          if (describeResponse.Stacks && describeResponse.Stacks.length > 0) {
-            const status = describeResponse.Stacks[0].StackStatus;
-            if (status === 'CREATE_COMPLETE' || status === 'UPDATE_COMPLETE') {
-              stackName = testStackName;
-              console.log(`✅ Using stack from ENVIRONMENT_SUFFIX: ${stackName}`);
+        const testStackNames = [
+          `TapStack${process.env.ENVIRONMENT_SUFFIX}`,
+          `localstack-stack-${process.env.ENVIRONMENT_SUFFIX}`
+        ];
+
+        for (const testStackName of testStackNames) {
+          try {
+            const describeResponse = await cfnClient.send(
+              new DescribeStacksCommand({ StackName: testStackName })
+            );
+            if (describeResponse.Stacks && describeResponse.Stacks.length > 0) {
+              const status = describeResponse.Stacks[0].StackStatus;
+              if (status === 'CREATE_COMPLETE' || status === 'UPDATE_COMPLETE') {
+                stackName = testStackName;
+                console.log(`✅ Using stack from ENVIRONMENT_SUFFIX: ${stackName}`);
+                break;
+              }
             }
+          } catch (error) {
+            // Stack not found, try next pattern
+            continue;
           }
-        } catch (error) {
-          // Stack not found, continue to discovery
         }
       }
 
-      // Fallback: List all stacks and find TapStack*
+      // Fallback: List all stacks and find TapStack* or localstack-stack-*
       if (!stackName) {
         const listResponse = await cfnClient.send(
           new ListStacksCommand({
@@ -146,13 +154,13 @@ describe('TapStack CloudFormation Integration Tests', () => {
         const tapStacks =
           listResponse.StackSummaries?.filter(
             (stack) =>
-              stack.StackName?.startsWith('TapStack') &&
+              (stack.StackName?.startsWith('TapStack') || stack.StackName?.startsWith('localstack-stack-')) &&
               stack.StackStatus !== 'DELETE_COMPLETE'
           ) || [];
 
         if (tapStacks.length === 0) {
           throw new Error(
-            'No TapStack found. Please deploy the stack first.'
+            'No TapStack or localstack-stack found. Please deploy the stack first.'
           );
         }
 
