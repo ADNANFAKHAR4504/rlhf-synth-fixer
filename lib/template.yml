@@ -385,8 +385,7 @@ Resources:
     Type: AWS::EC2::FlowLog
     Properties:
       ResourceType: VPC
-      ResourceIds:
-        - !Ref VPC
+      ResourceId: !Ref VPC
       TrafficType: ALL
       LogDestinationType: cloud-watch-logs
       LogGroupName: !Ref VPCFlowLogsLogGroup
@@ -407,8 +406,6 @@ Resources:
       SecurityGroupIngress:
         - { IpProtocol: tcp, FromPort: 80,  ToPort: 80,  CidrIp: 0.0.0.0/0 }
         - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
-      SecurityGroupEgress:
-        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, DestinationSecurityGroupId: !Ref EC2SecurityGroup, Description: 'Allow ALB to communicate with EC2 on port 80' }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-alb-sg' }
         - { Key: Environment, Value: !Ref EnvironmentParameter }
@@ -424,12 +421,10 @@ Resources:
       GroupDescription: Security group for EC2 instances
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, SourceSecurityGroupId: !Ref ALBSecurityGroup }
         - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref AllowedCIDR }
       SecurityGroupEgress:
         - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0, Description: 'Allow HTTP for package updates' }
         - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: 'Allow HTTPS for package updates' }
-        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, DestinationSecurityGroupId: !Ref RDSSecurityGroup, Description: 'Allow EC2 to connect to RDS' }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-ec2-sg' }
         - { Key: Environment, Value: !Ref EnvironmentParameter }
@@ -439,6 +434,27 @@ Resources:
         - { Key: Owner, Value: DevOps }
         - { Key: Service, Value: Security }
 
+  # Separate ingress/egress rules to avoid circular dependencies
+  ALBToEC2Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ALBSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      DestinationSecurityGroupId: !Ref EC2SecurityGroup
+      Description: 'Allow ALB to communicate with EC2 on port 80'
+
+  EC2FromALBIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EC2SecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Description: 'Allow traffic from ALB'
+
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -446,7 +462,6 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: 'Allow HTTPS for S3 and SSM access' }
-        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, DestinationSecurityGroupId: !Ref RDSSecurityGroup, Description: 'Allow Lambda to connect to RDS' }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-lambda-sg' }
         - { Key: Environment, Value: !Ref EnvironmentParameter }
@@ -461,9 +476,6 @@ Resources:
     Properties:
       GroupDescription: Security group for RDS database
       VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref LambdaSecurityGroup, Description: 'Allow Lambda access to RDS' }
-        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref EC2SecurityGroup, Description: 'Allow EC2 access to RDS' }
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-rds-sg' }
         - { Key: Environment, Value: !Ref EnvironmentParameter }
@@ -472,6 +484,47 @@ Resources:
         - { Key: CostCenter, Value: Engineering }
         - { Key: Owner, Value: DevOps }
         - { Key: Service, Value: Security }
+
+  # Separate ingress/egress rules to avoid circular dependencies
+  LambdaToRDSEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      DestinationSecurityGroupId: !Ref RDSSecurityGroup
+      Description: 'Allow Lambda to connect to RDS'
+
+  RDSFromLambdaIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Description: 'Allow Lambda access to RDS'
+
+  EC2ToRDSEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref EC2SecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      DestinationSecurityGroupId: !Ref RDSSecurityGroup
+      Description: 'Allow EC2 to connect to RDS'
+
+  RDSFromEC2Ingress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Description: 'Allow EC2 access to RDS'
 
   # -------------------- SSM Parameters --------------------
   DBPasswordParameter:
