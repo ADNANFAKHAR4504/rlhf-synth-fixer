@@ -858,7 +858,23 @@
           "ClusterLogging": [
             {
               "Enabled": true,
-              "Types": ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+              "Types": ["api"]
+            },
+            {
+              "Enabled": true,
+              "Types": ["audit"]
+            },
+            {
+              "Enabled": true,
+              "Types": ["authenticator"]
+            },
+            {
+              "Enabled": true,
+              "Types": ["controllerManager"]
+            },
+            {
+              "Enabled": true,
+              "Types": ["scheduler"]
             }
           ]
         },
