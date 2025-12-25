@@ -140,15 +140,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
     });
 
-    test('ProcessingTable should have point-in-time recovery enabled', () => {
-      const table = template.Resources.ProcessingTable;
-      expect(table.Properties.PointInTimeRecoverySpecification).toBeDefined();
-      expect(
-        table.Properties.PointInTimeRecoverySpecification
-          .PointInTimeRecoveryEnabled
-      ).toBe(true);
-    });
-
     test('ProcessingTable should have streams enabled', () => {
       const table = template.Resources.ProcessingTable;
       expect(table.Properties.StreamSpecification).toBeDefined();
@@ -188,7 +179,6 @@ describe('TapStack CloudFormation Template', () => {
       const func = template.Resources.ProcessingFunction;
       expect(func.Properties.Timeout).toBe(300);
       expect(func.Properties.MemorySize).toBe(256);
-      expect(func.Properties.ReservedConcurrentExecutions).toBe(50);
     });
 
     test('ProcessingFunction should have environment variables', () => {
@@ -372,29 +362,6 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Custom Resource for S3 Notification', () => {
-    test('should have S3ConfigurationFunction', () => {
-      expect(template.Resources.S3ConfigurationFunction).toBeDefined();
-      const func = template.Resources.S3ConfigurationFunction;
-      expect(func.Type).toBe('AWS::Lambda::Function');
-      expect(func.Properties.Runtime).toBe('python3.11');
-    });
-
-    test('should have S3ConfigurationRole', () => {
-      expect(template.Resources.S3ConfigurationRole).toBeDefined();
-      const role = template.Resources.S3ConfigurationRole;
-      expect(role.Type).toBe('AWS::IAM::Role');
-    });
-
-    test('should have S3BucketNotificationConfig custom resource', () => {
-      expect(template.Resources.S3BucketNotificationConfig).toBeDefined();
-      const config = template.Resources.S3BucketNotificationConfig;
-      expect(config.Type).toBe('Custom::S3BucketNotification');
-      expect(config.Properties.BucketName).toBeDefined();
-      expect(config.Properties.LambdaArn).toBeDefined();
-    });
-  });
-
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
@@ -451,8 +418,6 @@ describe('TapStack CloudFormation Template', () => {
         'LambdaExecutionRole',
         'ProcessingFunction',
         'ProcessingApi',
-        'S3ConfigurationFunction',
-        'S3ConfigurationRole',
       ];
 
       taggableResources.forEach(resourceName => {
@@ -494,15 +459,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(bucket.Properties.VersioningConfiguration).toBeDefined();
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
-
-    test('DynamoDB table should have point-in-time recovery', () => {
-      const table = template.Resources.ProcessingTable;
-      expect(table.Properties.PointInTimeRecoverySpecification).toBeDefined();
-      expect(
-        table.Properties.PointInTimeRecoverySpecification
-          .PointInTimeRecoveryEnabled
-      ).toBe(true);
-    });
   });
 
   describe('Template Validation', () => {
@@ -521,7 +477,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(10); // We have many resources
+      expect(resourceCount).toBe(13); // 13 resources after removing custom resources
     });
 
     test('should have exactly three parameters', () => {

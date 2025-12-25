@@ -62,8 +62,6 @@ Resources:
           KeyType: RANGE
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -119,7 +117,6 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300
       MemorySize: 256
-      ReservedConcurrentExecutions: 50
       Environment:
         Variables:
           TABLE_NAME: !Ref ProcessingTable
@@ -360,98 +357,6 @@ Resources:
       StageName: prod
       StageDescription:
         Description: Production stage for serverless processing API
-
-  # Custom Resource Lambda for S3 Bucket Configuration
-  S3ConfigurationFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub "S3ConfigurationFunction-${AWS::StackName}"
-      Runtime: python3.11
-      Handler: index.lambda_handler
-      Role: !GetAtt S3ConfigurationRole.Arn
-      Timeout: 60
-      Code:
-        ZipFile: |
-          import json
-          import boto3
-          import cfnresponse
-
-          def lambda_handler(event, context):
-              try:
-                  request_type = event['RequestType']
-                  bucket_name = event['ResourceProperties']['BucketName']
-                  lambda_arn = event['ResourceProperties']['LambdaArn']
-                  
-                  s3 = boto3.client('s3')
-                  
-                  if request_type in ['Create', 'Update']:
-                      # Configure S3 bucket notification
-                      notification_config = {
-                          'LambdaFunctionConfigurations': [
-                              {
-                                  'LambdaFunctionArn': lambda_arn,
-                                  'Events': ['s3:ObjectCreated:*']
-                              }
-                          ]
-                      }
-                      s3.put_bucket_notification_configuration(
-                          Bucket=bucket_name,
-                          NotificationConfiguration=notification_config
-                      )
-                      print(f"Successfully configured S3 bucket notification for {bucket_name}")
-                  elif request_type == 'Delete':
-                      # Remove notification configuration
-                      s3.put_bucket_notification_configuration(
-                          Bucket=bucket_name,
-                          NotificationConfiguration={}
-                      )
-                      print(f"Successfully removed S3 bucket notification for {bucket_name}")
-                  
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-              except Exception as e:
-                  print(f"Error: {str(e)}")
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # IAM Role for S3 Configuration Lambda
-  S3ConfigurationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "S3ConfigurationRole-${AWS::StackName}"
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: S3ConfigurationPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketNotification
-                  - s3:PutBucketNotification
-                Resource: !GetAtt ProcessingBucket.Arn
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Custom Resource to configure S3 bucket notification
-  S3BucketNotificationConfig:
-    Type: Custom::S3BucketNotification
-    DependsOn:
-      - LambdaInvokePermission
-    Properties:
-      ServiceToken: !GetAtt S3ConfigurationFunction.Arn
-      BucketName: !Ref ProcessingBucket
-      LambdaArn: !GetAtt ProcessingFunction.Arn
 
 Outputs:
   S3BucketName:

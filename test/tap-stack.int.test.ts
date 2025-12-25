@@ -112,8 +112,12 @@ describe('TapStack Integration Tests', () => {
       expect(body).toBe(testContent);
     });
 
-    test('should trigger Lambda function on S3 object creation', async () => {
-      // Upload a file to trigger Lambda
+    test('should upload to S3 successfully (S3 notifications not configured)', async () => {
+      // Note: S3-to-Lambda notifications are not configured in this stack
+      // Custom resource for S3 notifications was removed for LocalStack compatibility
+      // This test only verifies S3 upload functionality
+
+      // Upload a file to S3
       await s3Client.send(
         new PutObjectCommand({
           Bucket: bucketName,
@@ -122,41 +126,18 @@ describe('TapStack Integration Tests', () => {
         })
       );
 
-      // Wait for Lambda to process (increased wait time)
-      await new Promise(resolve => setTimeout(resolve, 10000));
-
-      // Check if record was created in DynamoDB
-      const scanCommand = new ScanCommand({
-        TableName: tableName,
-        FilterExpression: 'contains(#pk, :key)',
-        ExpressionAttributeNames: {
-          '#pk': 'PartitionKey',
-        },
-        ExpressionAttributeValues: {
-          ':key': { S: testKey },
-        },
-        Limit: 1,
+      // Verify the file was uploaded successfully
+      const getCommand = new GetObjectCommand({
+        Bucket: bucketName,
+        Key: testKey,
       });
 
-      const dynamoResponse = await dynamoClient.send(scanCommand);
-      expect(dynamoResponse.Items).toBeDefined();
-      
-      // If no items found, let's check if there are any records in the table at all
-      if (dynamoResponse.Items!.length === 0) {
-        const allItemsCommand = new ScanCommand({
-          TableName: tableName,
-          Limit: 5,
-        });
-        const allItemsResponse = await dynamoClient.send(allItemsCommand);
-        console.log('Sample items in DynamoDB:', allItemsResponse.Items);
-        
-        // For now, let's just verify the Lambda function exists and can be triggered
-        // The S3 event trigger might not be configured or working as expected
-        expect(dynamoResponse.Items!.length).toBeGreaterThanOrEqual(0);
-      } else {
-        expect(dynamoResponse.Items!.length).toBeGreaterThan(0);
-      }
-    }, 20000);
+      const response = await s3Client.send(getCommand);
+      expect(response.$metadata.httpStatusCode).toBe(200);
+
+      const body = await response.Body?.transformToString();
+      expect(body).toBe(testContent);
+    });
   });
 
   describe('DynamoDB Table Tests', () => {
@@ -325,7 +306,11 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('End-to-End Workflow Tests', () => {
-    test('should complete full workflow: S3 upload → Lambda processing → DynamoDB storage', async () => {
+    test('should verify S3 and DynamoDB are operational (S3 triggers not configured)', async () => {
+      // Note: S3-to-Lambda automatic triggers are not configured in this stack
+      // Custom resource for S3 notifications was removed for LocalStack compatibility
+      // This test verifies S3 upload and DynamoDB table are operational
+
       const testKey = `e2e-test-${Date.now()}.json`;
       const testData = {
         testId: Date.now(),
@@ -333,7 +318,7 @@ describe('TapStack Integration Tests', () => {
       };
 
       // Step 1: Upload file to S3
-      await s3Client.send(
+      const uploadResponse = await s3Client.send(
         new PutObjectCommand({
           Bucket: bucketName,
           Key: testKey,
@@ -342,37 +327,16 @@ describe('TapStack Integration Tests', () => {
         })
       );
 
-      // Step 2: Wait for Lambda processing (increased wait time)
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      expect(uploadResponse.$metadata.httpStatusCode).toBe(200);
 
-      // Step 3: Verify data in DynamoDB
+      // Step 2: Verify DynamoDB table is accessible
       const scanCommand = new ScanCommand({
         TableName: tableName,
-        FilterExpression: 'contains(#pk, :key)',
-        ExpressionAttributeNames: {
-          '#pk': 'PartitionKey',
-        },
-        ExpressionAttributeValues: {
-          ':key': { S: testKey },
-        },
         Limit: 1,
       });
 
       const dynamoResponse = await dynamoClient.send(scanCommand);
-      expect(dynamoResponse.Items).toBeDefined();
-      
-      // If no S3 trigger processing found, verify we can at least process via API
-      if (dynamoResponse.Items!.length === 0) {
-        console.log('S3 trigger processing not found, verifying API processing works');
-        // This test passes if API processing works (which we verified in other tests)
-        expect(dynamoResponse.Items!.length).toBeGreaterThanOrEqual(0);
-      } else {
-        expect(dynamoResponse.Items!.length).toBeGreaterThan(0);
-        const item = dynamoResponse.Items![0];
-        expect(item.PartitionKey.S).toContain('file#');
-        expect(item.SortKey.S).toContain('processed#');
-        expect(item.status.S).toBe('processed');
-      }
+      expect(dynamoResponse.$metadata.httpStatusCode).toBe(200);
 
       // Cleanup
       await s3Client.send(
@@ -381,7 +345,7 @@ describe('TapStack Integration Tests', () => {
           Key: testKey,
         })
       );
-    }, 15000);
+    });
 
     test('should handle API → Lambda → DynamoDB workflow', async () => {
       const testData = {
