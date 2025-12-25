@@ -57,7 +57,7 @@ Resources:
   S3KMSAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/s3-bucket-encryption-${EnvironmentSuffix}'
+      AliasName: !Sub 'alias/s3-bucket-encryption-${AWS::StackName}-${EnvironmentSuffix}'
       TargetKeyId: !Ref S3KMSKey
 
   ### 2. Example S3 Bucket Encrypted with KMS ###
@@ -81,7 +81,7 @@ Resources:
   MyAppSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub 'MyAppPassword-${EnvironmentSuffix}'
+      Name: !Sub 'MyAppPassword-${AWS::StackName}-${EnvironmentSuffix}'
       Description: !Sub 'Password for my application (${EnvironmentSuffix})'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'

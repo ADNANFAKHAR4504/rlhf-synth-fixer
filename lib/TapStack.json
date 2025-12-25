@@ -76,7 +76,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/s3-bucket-encryption-${EnvironmentSuffix}"
+                    "Fn::Sub": "alias/s3-bucket-encryption-${AWS::StackName}-${EnvironmentSuffix}"
                 },
                 "TargetKeyId": {
                     "Ref": "S3KMSKey"
@@ -121,7 +121,7 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "MyAppPassword-${EnvironmentSuffix}"
+                    "Fn::Sub": "MyAppPassword-${AWS::StackName}-${EnvironmentSuffix}"
                 },
                 "Description": {
                     "Fn::Sub": "Password for my application (${EnvironmentSuffix})"
