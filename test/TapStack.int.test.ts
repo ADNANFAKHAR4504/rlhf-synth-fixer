@@ -43,7 +43,10 @@ describe('CloudFormation Stack Integration Tests', () => {
 
     test('should have Load Balancer DNS output', () => {
       expect(outputs.LoadBalancerDNS).toBeDefined();
-      expect(outputs.LoadBalancerDNS).toContain('elb.amazonaws.com');
+      expect(
+        outputs.LoadBalancerDNS.includes('elb.amazonaws.com') ||
+        outputs.LoadBalancerDNS.includes('elb.localhost.localstack.cloud')
+      ).toBeTruthy();
     });
 
     test('should have Load Balancer ARN output', () => {
@@ -131,7 +134,10 @@ describe('CloudFormation Stack Integration Tests', () => {
     test('Load Balancer DNS should be accessible', () => {
       expect(outputs.LoadBalancerDNS).toBeTruthy();
       expect(outputs.LoadBalancerDNS.length).toBeGreaterThan(0);
-      expect(outputs.LoadBalancerDNS).toContain('.elb.amazonaws.com');
+      expect(
+        outputs.LoadBalancerDNS.includes('.elb.amazonaws.com') ||
+        outputs.LoadBalancerDNS.includes('.elb.localhost.localstack.cloud')
+      ).toBeTruthy();
     });
 
     test('Load Balancer ARN should match DNS naming', () => {
