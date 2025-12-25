@@ -1255,7 +1255,7 @@ aws cloudformation validate-template \
   --template-body file://${TEMPLATE_FILE} \
   --region ${AWS_REGION} > /dev/null
 
-echo "✓ Template validation passed"
+echo "Template validation passed"
 echo ""
 
 # Deploy stack
@@ -1274,7 +1274,7 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM
 
 echo ""
-echo "✓ Stack deployment completed"
+echo "Stack deployment completed"
 echo ""
 
 # Display outputs
@@ -1417,19 +1417,19 @@ echo "Validating CloudFormation template structure..."
 
 # Check JSON validity
 jq empty ${TEMPLATE_FILE}
-echo "✓ JSON syntax valid"
+echo "JSON syntax valid"
 
 # Validate with CloudFormation
 aws cloudformation validate-template \
   --template-body file://${TEMPLATE_FILE} \
   --region ${AWS_REGION} > /dev/null
 
-echo "✓ CloudFormation template valid"
+echo "CloudFormation template valid"
 
 # Check for required sections
 for section in "AWSTemplateFormatVersion" "Description" "Parameters" "Conditions" "Resources" "Outputs"; do
   if jq -e ".${section}" ${TEMPLATE_FILE} > /dev/null; then
-    echo "✓ Section ${section} present"
+    echo "Section ${section} present"
   else
     echo "✗ Missing section: ${section}"
     exit 1
@@ -1438,7 +1438,7 @@ done
 
 # Check environmentSuffix usage
 SUFFIX_COUNT=$(jq 'path(.. | select(. == "EnvironmentSuffix")) | length' ${TEMPLATE_FILE} | wc -l)
-echo "✓ EnvironmentSuffix referenced ${SUFFIX_COUNT} times"
+echo "EnvironmentSuffix referenced ${SUFFIX_COUNT} times"
 
 echo ""
 echo "All validations passed!"
