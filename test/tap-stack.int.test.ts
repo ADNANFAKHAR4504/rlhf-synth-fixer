@@ -358,8 +358,8 @@ describe('TapStack Integration Tests', () => {
 
       expect(db.DBInstanceStatus).toMatch(/available|backing-up|modifying/);
       expect(db.Engine).toBe('postgres');
-      // LocalStack may use different Postgres versions (15.x, 16.x, 17.x)
-      expect(db.EngineVersion).toMatch(/^(15|16|17)\./);
+      // Template specifies EngineVersion 15.8
+      expect(db.EngineVersion).toMatch(/^15\./);
       expect(db.DBInstanceClass).toBe('db.t3.micro');
       // MultiAZ and StorageEncrypted are false in the CloudFormation template
       expect(db.MultiAZ).toBe(false);
@@ -376,7 +376,7 @@ describe('TapStack Integration Tests', () => {
 
       const db = response.DBInstances![0];
 
-      expect(db.BackupRetentionPeriod).toBe(7);
+      expect(db.BackupRetentionPeriod).toBe(1);
       expect(db.PreferredBackupWindow).toBeDefined();
       expect(db.PreferredMaintenanceWindow).toBeDefined();
     }, 30000);

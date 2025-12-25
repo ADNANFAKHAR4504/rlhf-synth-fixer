@@ -630,6 +630,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub 'rds-postgres-${EnvironmentSuffix}'
       Engine: postgres
+      EngineVersion: '15.8'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: 20
       StorageType: gp2
@@ -641,7 +642,7 @@ Resources:
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       MultiAZ: false
-      BackupRetentionPeriod: !Ref DBBackupRetentionPeriod
+      BackupRetentionPeriod: 1
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       PubliclyAccessible: false

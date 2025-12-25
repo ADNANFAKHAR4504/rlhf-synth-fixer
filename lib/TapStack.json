@@ -1112,6 +1112,7 @@
                     "Fn::Sub": "rds-postgres-${EnvironmentSuffix}"
                 },
                 "Engine": "postgres",
+                "EngineVersion": "15.8",
                 "DBInstanceClass": {
                     "Ref": "DBInstanceClass"
                 },
@@ -1136,9 +1137,7 @@
                     }
                 ],
                 "MultiAZ": false,
-                "BackupRetentionPeriod": {
-                    "Ref": "DBBackupRetentionPeriod"
-                },
+                "BackupRetentionPeriod": 1,
                 "PreferredBackupWindow": "03:00-04:00",
                 "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
                 "PubliclyAccessible": false,
