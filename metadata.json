@@ -2,19 +2,13 @@
   "po_id": "trainr914",
   "platform": "cfn",
   "language": "yaml",
-  "task_type": "Security Configuration as Code",
-  "region": "us-east-1",
   "team": "synth-2",
   "startedAt": "2025-08-20T00:00:00.000Z",
   "complexity": "hard",
-  "task_description": "Configure security settings across multiple AWS accounts using CloudFormation YAML. Implement IAM roles with least privileges, enable MFA for IAM users, and encrypt data at rest using AWS KMS.",
-  "subtask": "Security and Compliance Implementation",
+  "turn_type": "multi",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security Configuration",
-    "Access Control",
-    "IaC Optimization",
-    "General Infrastructure Tooling QA",
-    "Performance Optimization"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "IAM",
