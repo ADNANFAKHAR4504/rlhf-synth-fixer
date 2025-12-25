@@ -297,16 +297,8 @@ class TapStack extends Stack {
                         .build())
                 .billing(software.amazon.awscdk.services.dynamodb.Billing.provisioned(
                         software.amazon.awscdk.services.dynamodb.ThroughputProps.builder()
-                                .readCapacity(software.amazon.awscdk.services.dynamodb.Capacity.autoscaled(
-                                        software.amazon.awscdk.services.dynamodb.AutoscaledCapacityOptions.builder()
-                                                .minCapacity(5)
-                                                .maxCapacity(10)
-                                                .build()))
-                                .writeCapacity(software.amazon.awscdk.services.dynamodb.Capacity.autoscaled(
-                                        software.amazon.awscdk.services.dynamodb.AutoscaledCapacityOptions.builder()
-                                                .minCapacity(5)
-                                                .maxCapacity(10)
-                                                .build()))
+                                .readCapacity(software.amazon.awscdk.services.dynamodb.Capacity.fixed(5))
+                                .writeCapacity(software.amazon.awscdk.services.dynamodb.Capacity.fixed(5))
                                 .build()))
                 .build());
 
