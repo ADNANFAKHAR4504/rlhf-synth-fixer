@@ -162,3 +162,4 @@ is_localstack = (
 - Test coverage: 92%
 
 **The LocalStack migration preserves all core functionality while adapting only the features not supported by Community Edition.**
+
