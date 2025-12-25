@@ -86,6 +86,10 @@ GITHUB_API_CALLS=0
 GITHUB_API_LIMIT=25  # Per minute (leave buffer)
 GITHUB_API_RESET_TIME=0
 
+# Auto-pick configuration
+AUTO_PICK_LABELS=${AUTO_PICK_LABELS:-"Synth-2,localstack"}  # Labels required for auto-pick
+AUTO_PICK_MAX=${AUTO_PICK_MAX:-20}  # Maximum PRs to auto-pick
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -133,6 +137,95 @@ log_debug() {
 setup_directories() {
   mkdir -p "$WORKTREE_BASE"
   mkdir -p "$LOG_DIR"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUTO-PICK: Fetch PRs with specific labels from GitHub
+# ═══════════════════════════════════════════════════════════════════════════════
+
+fetch_labeled_prs() {
+  local labels="$1"
+  local max_prs="${2:-$AUTO_PICK_MAX}"
+  
+  log_info "Fetching open PRs with labels: $labels"
+  
+  # Convert comma-separated labels to GitHub CLI format
+  local label_args=""
+  IFS=',' read -ra LABEL_ARRAY <<< "$labels"
+  for label in "${LABEL_ARRAY[@]}"; do
+    label_args="$label_args --label \"$label\""
+  done
+  
+  # Fetch PRs with all specified labels
+  local prs
+  prs=$(eval "gh pr list --repo \"$GITHUB_REPO\" --state open $label_args --limit $max_prs --json number,title,labels --jq '.[].number'" 2>/dev/null || echo "")
+  
+  if [[ -z "$prs" ]]; then
+    log_warning "No open PRs found with labels: $labels"
+    return 1
+  fi
+  
+  # Count and display
+  local pr_count
+  pr_count=$(echo "$prs" | wc -l | tr -d ' ')
+  log_success "Found $pr_count open PRs with labels: $labels"
+  
+  echo "$prs"
+}
+
+fetch_labeled_prs_detailed() {
+  local labels="$1"
+  local max_prs="${2:-$AUTO_PICK_MAX}"
+  
+  log_info "Fetching open PRs with labels: $labels"
+  log_info "Repository: $GITHUB_REPO"
+  
+  # Build label filter for gh CLI
+  local label_filter=""
+  IFS=',' read -ra LABEL_ARRAY <<< "$labels"
+  for label in "${LABEL_ARRAY[@]}"; do
+    # Trim whitespace
+    label=$(echo "$label" | xargs)
+    label_filter="$label_filter --label \"$label\""
+  done
+  
+  log_debug "Label filter: $label_filter"
+  
+  # Fetch PRs
+  local pr_data
+  pr_data=$(eval "gh pr list --repo \"$GITHUB_REPO\" --state open $label_filter --limit $max_prs --json number,title,headRefName,labels" 2>/dev/null || echo "[]")
+  
+  if [[ "$pr_data" == "[]" ]] || [[ -z "$pr_data" ]]; then
+    log_warning "No open PRs found with ALL labels: $labels"
+    echo ""
+    echo "To check available PRs with individual labels:"
+    for label in "${LABEL_ARRAY[@]}"; do
+      label=$(echo "$label" | xargs)
+      local count
+      count=$(gh pr list --repo "$GITHUB_REPO" --state open --label "$label" --json number --jq 'length' 2>/dev/null || echo "0")
+      echo "  - Label '$label': $count open PRs"
+    done
+    return 1
+  fi
+  
+  # Display found PRs
+  local pr_count
+  pr_count=$(echo "$pr_data" | jq 'length')
+  
+  echo ""
+  echo "┌─────────────────────────────────────────────────────────────────────────────┐"
+  echo "│  📋 AUTO-PICKED PRs (Labels: $labels)"
+  echo "├─────────────────────────────────────────────────────────────────────────────┤"
+  
+  echo "$pr_data" | jq -r '.[] | "│  #\(.number | tostring | . + "      " | .[0:6]) \(.title | .[0:60])"'
+  
+  echo "├─────────────────────────────────────────────────────────────────────────────┤"
+  echo "│  Total: $pr_count PRs"
+  echo "└─────────────────────────────────────────────────────────────────────────────┘"
+  echo ""
+  
+  # Return just the PR numbers
+  echo "$pr_data" | jq -r '.[].number'
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -470,27 +563,28 @@ get_common_errors() {
 get_pr_priority_score() {
   local pr="$1"
   local score=50  # Default score
-  
+
   # Check if compatibility check script exists
   if [[ -x "$COMPATIBILITY_CHECK" ]]; then
     local check_result
-    check_result=$("$COMPATIBILITY_CHECK" --json "Pr$pr" 2>/dev/null || echo "{}")
-    
+    # Sanitize output by removing control characters before parsing
+    check_result=$("$COMPATIBILITY_CHECK" --json "Pr$pr" 2>/dev/null | tr -d '\000-\037' || echo "{}")
+
     if [[ -n "$check_result" ]]; then
       score=$(echo "$check_result" | jq -r '.score // 50' 2>/dev/null || echo "50")
     fi
   fi
-  
+
   # Adjust based on past error patterns
   if [[ -f "$ERROR_PATTERNS_FILE" ]]; then
     local past_failures
     past_failures=$(jq --arg pr "$pr" '[.patterns[] | select(.pr == $pr)] | length' "$ERROR_PATTERNS_FILE" 2>/dev/null || echo "0")
-    
+
     if [[ $past_failures -gt 0 ]]; then
       score=$((score - past_failures * 10))
     fi
   fi
-  
+
   echo "$score"
 }
 
@@ -612,11 +706,14 @@ update_pr_status() {
   local result="${3:-null}"
   local failure_type="${4:-null}"
   
-  # Use file locking for concurrent access
+  # Use file locking for concurrent access (if available)
   local lock_file="${STATUS_FILE}.lock"
-  
+
   (
-    flock -w 10 200 || exit 1
+    # Try to use flock if available, otherwise continue without locking
+    if command -v flock &>/dev/null; then
+      flock -w 10 200 || exit 1
+    fi
     
     if [[ -f "$STATUS_FILE" ]]; then
       local timestamp
@@ -1017,6 +1114,8 @@ TEST_LOCAL_DEPLOY=false
 SMART_ORDER=false
 VERBOSE=false
 NOTIFY=true
+AUTO_PICK=false
+AUTO_PICK_LABELS_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -1063,6 +1162,18 @@ while [[ $# -gt 0 ]]; do
       NOTIFY=false
       shift
       ;;
+    --auto-pick)
+      AUTO_PICK=true
+      shift
+      ;;
+    --labels)
+      AUTO_PICK_LABELS_ARG="$2"
+      shift 2
+      ;;
+    --max-pick)
+      AUTO_PICK_MAX="$2"
+      shift 2
+      ;;
     --help|-h)
       echo "Usage: $0 [options] <pr1> <pr2> <pr3> ..."
       echo ""
@@ -1072,6 +1183,9 @@ while [[ $# -gt 0 ]]; do
       echo "  --status, -s          Show status of current batch"
       echo "  --failed-only         Re-process only failed PRs from last batch"
       echo "  --from-file, -f FILE  Read PR numbers from file (one per line)"
+      echo "  --auto-pick           Auto-pick open PRs with required labels (Synth-2,localstack)"
+      echo "  --labels LABELS       Custom labels for auto-pick (comma-separated, default: Synth-2,localstack)"
+      echo "  --max-pick N          Maximum PRs to auto-pick (default: 20)"
       echo "  --wait-cicd           Wait for CI/CD to complete for each PR"
       echo "  --max-concurrent, -j  Maximum parallel processes (default: $MAX_CONCURRENT)"
       echo "  --resume              Resume from last checkpoint"
@@ -1086,6 +1200,9 @@ while [[ $# -gt 0 ]]; do
       echo "  $0 --from-file prs.txt --smart-order"
       echo "  $0 --resume --failed-only"
       echo "  $0 --max-concurrent 10 --test-deploy 7179 7180 7181"
+      echo "  $0 --auto-pick                              # Pick PRs with Synth-2 AND localstack labels"
+      echo "  $0 --auto-pick --labels 'Synth-2,localstack,cdk'  # Custom labels"
+      echo "  $0 --auto-pick --max-pick 10 --smart-order  # Pick 10 PRs, order by success probability"
       echo "  $0 --status"
       exit 0
       ;;
@@ -1156,6 +1273,40 @@ if [[ "$RESUME" == "true" ]]; then
   fi
 fi
 
+# Handle --auto-pick flag
+if [[ "$AUTO_PICK" == "true" ]]; then
+  # Use custom labels if provided, otherwise use default
+  PICK_LABELS="${AUTO_PICK_LABELS_ARG:-$AUTO_PICK_LABELS}"
+  
+  log_info "Auto-picking PRs with labels: $PICK_LABELS"
+  
+  # Fetch PRs with required labels
+  PICKED_PRS=$(fetch_labeled_prs_detailed "$PICK_LABELS" "$AUTO_PICK_MAX")
+  FETCH_EXIT_CODE=$?
+  
+  if [[ $FETCH_EXIT_CODE -ne 0 ]] || [[ -z "$PICKED_PRS" ]]; then
+    log_error "Failed to auto-pick PRs"
+    echo ""
+    echo "Make sure PRs have BOTH labels:"
+    echo "  - Synth-2"
+    echo "  - localstack"
+    echo ""
+    echo "To add labels to a PR:"
+    echo "  gh pr edit <PR_NUMBER> --add-label 'Synth-2' --add-label 'localstack'"
+    exit 2
+  fi
+  
+  # Add picked PRs to the list
+  while IFS= read -r pr; do
+    [[ -z "$pr" ]] && continue
+    if [[ "$pr" =~ ^[0-9]+$ ]]; then
+      PRS+=("$pr")
+    fi
+  done <<< "$PICKED_PRS"
+  
+  log_success "Auto-picked ${#PRS[@]} PRs"
+fi
+
 # Handle --from-file flag
 if [[ -n "$FROM_FILE" ]]; then
   if [[ -f "$FROM_FILE" ]]; then
@@ -1216,6 +1367,7 @@ echo "📁 Worktree base:  $WORKTREE_BASE"
 echo "📝 Log directory:  $LOG_DIR"
 echo ""
 echo "Features enabled:"
+[[ "$AUTO_PICK" == "true" ]] && echo "  ✓ Auto-pick PRs (labels: ${PICK_LABELS:-$AUTO_PICK_LABELS})"
 [[ "$TEST_LOCAL_DEPLOY" == "true" ]] && echo "  ✓ Local deployment testing"
 [[ "$SMART_ORDER" == "true" ]] && echo "  ✓ Smart ordering"
 [[ "$RESUME" == "true" ]] && echo "  ✓ Resume from checkpoint"

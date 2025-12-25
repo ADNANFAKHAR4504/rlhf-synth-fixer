@@ -51,6 +51,135 @@ Based on the output from Step 0.2, follow the appropriate review section:
 
 ---
 
+## LocalStack Compatibility Considerations
+
+**🚨 CRITICAL - READ THIS CAREFULLY FOR LOCALSTACK PRs 🚨**
+
+For PRs that deploy to LocalStack (branch names starting with `ls-` or containing `localstack`):
+
+### THE GOLDEN RULE FOR LOCALSTACK MIGRATIONS
+
+**LocalStack Community Edition does NOT support all AWS features. When code is modified to work with LocalStack, these are NOT bugs - they are REQUIRED compatibility adaptations.**
+
+**DO NOT:**
+- ❌ Penalize for missing services that LocalStack doesn't support
+- ❌ Flag commented-out code for unsupported features as "incomplete"
+- ❌ Reduce score for simplified IAM policies
+- ❌ Fail the PR because CloudFront/Route53/WAF/EKS are removed
+- ❌ Mark conditional deployments (`isLocalStack ? X : Y`) as problems
+
+**DO:**
+- ✅ Check that MODEL_FAILURES.md documents the LocalStack adaptations
+- ✅ Verify the code structure is sound (ignoring unsupported services)
+- ✅ Score based on what IS implemented, not what's disabled for LocalStack
+- ✅ Give score ≥8 if the implemented services work correctly
+
+### Fair Scoring for LocalStack PRs
+
+When scoring a LocalStack PR, evaluate ONLY what can work in LocalStack:
+
+1. **Ignore unsupported services** - Don't penalize for missing CloudFront, Route53, EKS, etc.
+2. **Score the implemented services** - If S3, Lambda, DynamoDB work correctly, that's good code
+3. **Document adaptations = Category B** - Properly documented LocalStack changes are ±0 (not penalties)
+4. **Focus on code quality** - Judge the code that IS there, not what's disabled
+
+A well-documented LocalStack PR with working supported services should score ≥8.
+
+### Detecting LocalStack PRs
+
+Check if this is a LocalStack migration:
+```bash
+# Check branch name
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [[ "$BRANCH_NAME" == ls-* ]] || [[ "$BRANCH_NAME" == *localstack* ]]; then
+  echo "LOCALSTACK_MIGRATION=true"
+else
+  echo "LOCALSTACK_MIGRATION=false"
+fi
+```
+
+### Acceptable LocalStack Adaptations (DO NOT PENALIZE)
+
+The following modifications are **ACCEPTABLE** and should **NOT** reduce the training quality score when properly documented in MODEL_FAILURES.md:
+
+| Adaptation Type | Example | Why Acceptable |
+|-----------------|---------|----------------|
+| **Conditional feature deployment** | `natGateways: isLocalStack ? 0 : 2` | Best practice for multi-environment |
+| **Pro-only service removal** | Removing EKS, AppSync, Cognito-idp | Not available in LocalStack Community |
+| **Simplified IAM policies** | Using basic IAM instead of complex policies | LocalStack IAM is simplified |
+| **Disabled NAT Gateways** | `natGateways: 0` | EIP allocation issues in LocalStack |
+| **Removed CloudFront/Route53/WAF** | Conditional or removed | Not supported in Community Edition |
+| **Disabled autoDeleteObjects** | Removed from S3 buckets | Lambda custom resources cause issues |
+| **Conditional KMS encryption** | Using default encryption vs KMS keys | LocalStack KMS is basic |
+
+### How to Score LocalStack Adaptations
+
+1. **If using conditional patterns** (`isLocalStack` checks):
+   - Treat as **Category B** (moderate improvement) - shows environment awareness
+   - Example: `const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost')`
+
+2. **If documented in MODEL_FAILURES.md with table format**:
+   - **DO NOT penalize** for "missing services"
+   - Count documented LocalStack changes as **intentional architectural decisions**
+
+3. **If simply commented out without documentation**:
+   - Treat as **Category C** (minor fix needed) - needs documentation
+   - Recommend adding LocalStack compatibility section to MODEL_FAILURES.md
+
+### Required MODEL_FAILURES.md Documentation
+
+For LocalStack PRs, verify MODEL_FAILURES.md contains a section like:
+
+```markdown
+## LocalStack Compatibility Adjustments
+
+| Feature | LocalStack Limitation | Solution Applied | Production Status |
+|---------|----------------------|------------------|-------------------|
+| NAT Gateway | EIP allocation fails | Conditional: `natGateways: 0` | Enabled in AWS |
+| CloudTrail | Limited support | Disabled | Enabled in AWS |
+```
+
+**If this section exists and is complete**: Do not apply "missing services" penalties.
+
+**If this section is missing**: Deduct 1 point and recommend adding it.
+
+### Services Known to Have LocalStack Limitations
+
+Reference `.claude/config/localstack.yaml` for the official compatibility list:
+
+- **Pro-only (remove/mock)**: EKS, AppSync, Amplify, SageMaker, Cognito-idp
+- **Limited (simplify)**: ECS, RDS, EC2, ElastiCache
+- **Not supported (remove)**: CloudFront, Route53, WAF, ACM
+
+### NEVER FAIL a LocalStack PR for These Issues
+
+If any of these appear in a LocalStack PR, they are **EXPECTED** - do NOT penalize:
+
+| Issue Found | Why It's Expected | Correct Action |
+|-------------|-------------------|----------------|
+| CloudFront removed/commented | Not supported in LocalStack | ✅ Accept |
+| Route53 removed/commented | Not supported in LocalStack | ✅ Accept |
+| WAF/WAFv2 removed/commented | Not supported in LocalStack | ✅ Accept |
+| ACM certificates removed | Not supported in LocalStack | ✅ Accept |
+| EKS removed/commented | Pro-only feature | ✅ Accept |
+| AppSync removed/commented | Pro-only feature | ✅ Accept |
+| Cognito-idp simplified/removed | Limited in Community | ✅ Accept |
+| NAT Gateways = 0 | EIP allocation fails | ✅ Accept |
+| VPC Lattice removed | Not supported | ✅ Accept |
+| CloudTrail disabled | Limited support | ✅ Accept |
+| AWS Config disabled | One recorder limit | ✅ Accept |
+| GuardDuty disabled | Not supported | ✅ Accept |
+| Macie disabled | Not supported | ✅ Accept |
+| autoDeleteObjects removed | Lambda custom resources fail | ✅ Accept |
+| Simplified IAM policies | LocalStack IAM is basic | ✅ Accept |
+| `isLocalStack` conditionals | Environment detection | ✅ Accept (Category B) |
+| Public subnets instead of private | No NAT Gateway available | ✅ Accept |
+| Default encryption vs KMS | LocalStack KMS is basic | ✅ Accept |
+
+**If you see these in a LocalStack PR and MODEL_FAILURES.md documents them → Score should be ≥8**
+
+---
+
 ## CI/CD Pipeline Review (task type: cicd-pipeline)
 
 Follow `.claude/prompts/cicd-pipeline-review.md` for complete scoring criteria.

@@ -31,6 +31,29 @@ Process and fix multiple LocalStack PRs in parallel with optimized caching, temp
 ## Usage
 
 ```bash
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUTO-PICK: Automatically fetch PRs with required labels (RECOMMENDED)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Auto-pick open PRs with labels "Synth-2" AND "localstack"
+/localstack-batch-fix --auto-pick
+
+# Auto-pick with smart ordering (easiest PRs first)
+/localstack-batch-fix --auto-pick --smart-order
+
+# Auto-pick with custom labels
+/localstack-batch-fix --auto-pick --labels "Synth-2,localstack,cdk"
+
+# Auto-pick with limit
+/localstack-batch-fix --auto-pick --max-pick 10
+
+# Combine: auto-pick, smart order, test locally before push
+/localstack-batch-fix --auto-pick --smart-order --test-deploy
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MANUAL: Specify PRs directly
+# ═══════════════════════════════════════════════════════════════════════════════
+
 # Fix up to 20 PRs in parallel
 /localstack-batch-fix 7179 7180 7181 7182 7183 7184 7185 7186 7187 7188 7189 7190 7191 7192 7193 7194 7195 7196 7197 7198
 
@@ -49,22 +72,22 @@ Process and fix multiple LocalStack PRs in parallel with optimized caching, temp
 # Wait for CI/CD after each fix
 /localstack-batch-fix --wait-cicd PR1 PR2 ...
 
-# NEW: Resume from last checkpoint
+# Resume from last checkpoint
 /localstack-batch-fix --resume
 
-# NEW: Test local deployment before pushing
+# Test local deployment before pushing
 /localstack-batch-fix --test-deploy PR1 PR2 ...
 
-# NEW: Order PRs by success probability
+# Order PRs by success probability
 /localstack-batch-fix --smart-order PR1 PR2 ...
 
-# NEW: Combine features
+# Combine features
 /localstack-batch-fix --smart-order --test-deploy --from-file prs.txt
 
-# NEW: Verbose output
+# Verbose output
 /localstack-batch-fix --verbose PR1 PR2 ...
 
-# NEW: Disable notifications
+# Disable notifications
 /localstack-batch-fix --no-notify PR1 PR2 ...
 ```
 
@@ -72,16 +95,19 @@ Process and fix multiple LocalStack PRs in parallel with optimized caching, temp
 
 | Option | Description |
 |--------|-------------|
+| `--auto-pick` | **NEW**: Auto-fetch open PRs with labels "Synth-2" AND "localstack" |
+| `--labels` | Custom labels for auto-pick (comma-separated, default: `Synth-2,localstack`) |
+| `--max-pick` | Maximum PRs to auto-pick (default: 20) |
 | `--status`, `-s` | Show status of current batch |
 | `--failed-only` | Re-process only failed PRs from last batch |
 | `--from-file`, `-f` | Read PR numbers from file (one per line) |
 | `--wait-cicd` | Wait for CI/CD to complete for each PR |
 | `--max-concurrent`, `-j` | Maximum parallel processes (default: 20) |
-| `--resume` | **NEW**: Resume from last checkpoint |
-| `--test-deploy` | **NEW**: Test local deployment before pushing |
-| `--smart-order` | **NEW**: Order PRs by success probability |
-| `--verbose`, `-v` | **NEW**: Verbose output |
-| `--no-notify` | **NEW**: Disable notifications |
+| `--resume` | Resume from last checkpoint |
+| `--test-deploy` | Test local deployment before pushing |
+| `--smart-order` | Order PRs by success probability |
+| `--verbose`, `-v` | Verbose output |
+| `--no-notify` | Disable notifications |
 | `--help`, `-h` | Show help |
 
 ## Pre-Requisites

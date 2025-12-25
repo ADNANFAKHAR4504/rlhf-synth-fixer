@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912210",
+  "team": "synth-2",
+  "startedAt": "2025-11-11T14:08:28.066Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "KMS",
+    "S3",
+    "IAM",
+    "CodeBuild",
+    "CodePipeline",
+    "CodeDeploy",
+    "CodeCommit",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch Logs",
+    "ECS"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,2724 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Hub-and-Spoke Network Architecture with AWS Transit Gateway",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "HubVpcCidr",
+                        "Spoke1VpcCidr",
+                        "Spoke2VpcCidr"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "HubVpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for Hub VPC",
+            "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\/16)$"
+        },
+        "Spoke1VpcCidr": {
+            "Type": "String",
+            "Default": "10.1.0.0/16",
+            "Description": "CIDR block for Spoke VPC 1",
+            "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\/16)$"
+        },
+        "Spoke2VpcCidr": {
+            "Type": "String",
+            "Default": "10.2.0.0/16",
+            "Description": "CIDR block for Spoke VPC 2",
+            "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\/16)$"
+        }
+    },
+    "Resources": {
+        "HubVpc": {
+            "Type": "AWS::EC2::VPC",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "HubVpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "HubInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "HubIgwAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "InternetGatewayId": {
+                    "Ref": "HubInternetGateway"
+                }
+            }
+        },
+        "HubPublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "HubVpcCidr"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-public-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "HubPublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "HubVpcCidr"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-public-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "HubPublicSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "HubVpcCidr"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-public-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "HubNatGateway1Eip": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "HubIgwAttachment",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-nat-eip-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "HubNatGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "HubNatGateway1Eip",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-nat-gateway-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "HubNatGateway2Eip": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "HubIgwAttachment",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-nat-eip-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "HubNatGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "HubNatGateway2Eip",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-nat-gateway-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "HubNatGateway3Eip": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "HubIgwAttachment",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-nat-eip-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "HubNatGateway3": {
+            "Type": "AWS::EC2::NatGateway",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "HubNatGateway3Eip",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet3"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-nat-gateway-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "HubPublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-public-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "HubPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "HubIgwAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "HubPublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "HubInternetGateway"
+                }
+            }
+        },
+        "HubPublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "HubPublicRouteTable"
+                }
+            }
+        },
+        "HubPublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "HubPublicRouteTable"
+                }
+            }
+        },
+        "HubPublicSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "HubPublicRouteTable"
+                }
+            }
+        },
+        "Spoke1Vpc": {
+            "Type": "AWS::EC2::VPC",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "Spoke1VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "Spoke1PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "Spoke1VpcCidr"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "Spoke1PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "Spoke1VpcCidr"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "Spoke1PrivateSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "Spoke1VpcCidr"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-private-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "Spoke1PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-private-rt-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke1PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-private-rt-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke1PrivateRouteTable3": {
+            "Type": "AWS::EC2::RouteTable",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-private-rt-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke1PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "Spoke1PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "Spoke1PrivateRouteTable1"
+                }
+            }
+        },
+        "Spoke1PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "Spoke1PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "Spoke1PrivateRouteTable2"
+                }
+            }
+        },
+        "Spoke1PrivateSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "Spoke1PrivateSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "Spoke1PrivateRouteTable3"
+                }
+            }
+        },
+        "Spoke2Vpc": {
+            "Type": "AWS::EC2::VPC",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "Spoke2VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "Spoke2PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "Spoke2VpcCidr"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "Spoke2PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "Spoke2VpcCidr"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "Spoke2PrivateSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "Spoke2VpcCidr"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-private-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "Spoke2PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-private-rt-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke2PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-private-rt-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke2PrivateRouteTable3": {
+            "Type": "AWS::EC2::RouteTable",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-private-rt-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke2PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "Spoke2PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "Spoke2PrivateRouteTable1"
+                }
+            }
+        },
+        "Spoke2PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "Spoke2PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "Spoke2PrivateRouteTable2"
+                }
+            }
+        },
+        "Spoke2PrivateSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "Spoke2PrivateSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "Spoke2PrivateRouteTable3"
+                }
+            }
+        },
+        "TransitGateway": {
+            "Type": "AWS::EC2::TransitGateway",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "Hub and spoke transit gateway for ${EnvironmentSuffix}"
+                },
+                "DefaultRouteTableAssociation": "disable",
+                "DefaultRouteTablePropagation": "disable",
+                "DnsSupport": "enable",
+                "VpnEcmpSupport": "enable",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-spoke-tgw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "HubTgwAttachment": {
+            "Type": "AWS::EC2::TransitGatewayAttachment",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "HubPublicSubnet1"
+                    },
+                    {
+                        "Ref": "HubPublicSubnet2"
+                    },
+                    {
+                        "Ref": "HubPublicSubnet3"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-tgw-attachment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke1TgwAttachment": {
+            "Type": "AWS::EC2::TransitGatewayAttachment",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "Spoke1PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "Spoke1PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "Spoke1PrivateSubnet3"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-tgw-attachment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke2TgwAttachment": {
+            "Type": "AWS::EC2::TransitGatewayAttachment",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "Spoke2PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "Spoke2PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "Spoke2PrivateSubnet3"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-tgw-attachment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "HubTgwRouteTable": {
+            "Type": "AWS::EC2::TransitGatewayRouteTable",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-tgw-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "SpokeTgwRouteTable": {
+            "Type": "AWS::EC2::TransitGatewayRouteTable",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke-tgw-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "HubTgwRouteTableAssociation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "HubTgwAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "HubTgwRouteTable"
+                }
+            }
+        },
+        "Spoke1TgwRouteTableAssociation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "Spoke1TgwAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "SpokeTgwRouteTable"
+                }
+            }
+        },
+        "Spoke2TgwRouteTableAssociation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "Spoke2TgwAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "SpokeTgwRouteTable"
+                }
+            }
+        },
+        "HubTgwRouteTablePropagationSpoke1": {
+            "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "Spoke1TgwAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "HubTgwRouteTable"
+                }
+            }
+        },
+        "HubTgwRouteTablePropagationSpoke2": {
+            "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "Spoke2TgwAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "HubTgwRouteTable"
+                }
+            }
+        },
+        "SpokeTgwRouteTablePropagationHub": {
+            "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "HubTgwAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "SpokeTgwRouteTable"
+                }
+            }
+        },
+        "HubRouteToSpokes": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "HubTgwAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "HubPublicRouteTable"
+                },
+                "DestinationCidrBlock": "10.0.0.0/8",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "Spoke1RouteToTgw1": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "Spoke1TgwAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "Spoke1PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "Spoke1RouteToTgw2": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "Spoke1TgwAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "Spoke1PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "Spoke1RouteToTgw3": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "Spoke1TgwAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "Spoke1PrivateRouteTable3"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "Spoke2RouteToTgw1": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "Spoke2TgwAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "Spoke2PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "Spoke2RouteToTgw2": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "Spoke2TgwAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "Spoke2PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "Spoke2RouteToTgw3": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "Spoke2TgwAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "Spoke2PrivateRouteTable3"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "HttpsSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "https-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Allow HTTPS traffic between all VPCs",
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "10.0.0.0/8",
+                        "Description": "HTTPS from all VPCs"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "10.0.0.0/8",
+                        "Description": "HTTPS to all VPCs"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "https-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "SshFromHubSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "ssh-from-hub-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Allow SSH from hub to spokes only",
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "HubVpcCidr"
+                        },
+                        "Description": "SSH from hub VPC only"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "ssh-from-hub-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "Spoke1HttpsSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "spoke1-https-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Allow HTTPS traffic for Spoke 1",
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "10.0.0.0/8",
+                        "Description": "HTTPS from all VPCs"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-https-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke1SshSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "spoke1-ssh-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Allow SSH from hub VPC to Spoke 1",
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "HubVpcCidr"
+                        },
+                        "Description": "SSH from hub VPC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-ssh-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke2HttpsSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "spoke2-https-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Allow HTTPS traffic for Spoke 2",
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "10.0.0.0/8",
+                        "Description": "HTTPS from all VPCs"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-https-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke2SshSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "spoke2-ssh-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Allow SSH from hub VPC to Spoke 2",
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "HubVpcCidr"
+                        },
+                        "Description": "SSH from hub VPC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-ssh-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "HubVpcEndpointSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "hub-vpce-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for VPC endpoints in Hub",
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": {
+                            "Ref": "HubVpcCidr"
+                        },
+                        "Description": "HTTPS from Hub VPC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-vpce-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "HubSsmEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssm"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "HubPublicSubnet1"
+                    },
+                    {
+                        "Ref": "HubPublicSubnet2"
+                    },
+                    {
+                        "Ref": "HubPublicSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "HubVpcEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "HubSsmMessagesEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssmmessages"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "HubPublicSubnet1"
+                    },
+                    {
+                        "Ref": "HubPublicSubnet2"
+                    },
+                    {
+                        "Ref": "HubPublicSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "HubVpcEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "HubEc2MessagesEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ec2messages"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "HubPublicSubnet1"
+                    },
+                    {
+                        "Ref": "HubPublicSubnet2"
+                    },
+                    {
+                        "Ref": "HubPublicSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "HubVpcEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "Spoke1VpcEndpointSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "spoke1-vpce-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for VPC endpoints in Spoke 1",
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": {
+                            "Ref": "Spoke1VpcCidr"
+                        },
+                        "Description": "HTTPS from Spoke 1 VPC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-vpce-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "Spoke1SsmEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssm"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "Spoke1PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "Spoke1PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "Spoke1PrivateSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "Spoke1VpcEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "Spoke1SsmMessagesEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssmmessages"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "Spoke1PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "Spoke1PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "Spoke1PrivateSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "Spoke1VpcEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "Spoke1Ec2MessagesEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ec2messages"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "Spoke1PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "Spoke1PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "Spoke1PrivateSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "Spoke1VpcEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "Spoke2VpcEndpointSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "spoke2-vpce-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for VPC endpoints in Spoke 2",
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": {
+                            "Ref": "Spoke2VpcCidr"
+                        },
+                        "Description": "HTTPS from Spoke 2 VPC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-vpce-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "Spoke2SsmEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssm"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "Spoke2PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "Spoke2PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "Spoke2PrivateSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "Spoke2VpcEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "Spoke2SsmMessagesEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssmmessages"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "Spoke2PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "Spoke2PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "Spoke2PrivateSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "Spoke2VpcEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "Spoke2Ec2MessagesEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ec2messages"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "Spoke2PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "Spoke2PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "Spoke2PrivateSubnet3"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "Spoke2VpcEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "FlowLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "flow-logs-${AWS::AccountId}-${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "flow-logs-bucket-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": "internal"
+                    }
+                ]
+            }
+        },
+        "FlowLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "FlowLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSLogDeliveryWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${FlowLogsBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSLogDeliveryAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "FlowLogsBucket",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "HubVpcFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "HubVpc"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "s3",
+                "LogDestination": {
+                    "Fn::GetAtt": [
+                        "FlowLogsBucket",
+                        "Arn"
+                    ]
+                },
+                "LogFormat": "${account-id} ${action} ${bytes} ${dstaddr} ${dstport} ${end} ${flow-direction} ${instance-id} ${interface-id} ${log-status} ${packets} ${pkt-dst-aws-service} ${pkt-dstaddr} ${pkt-src-aws-service} ${pkt-srcaddr} ${protocol} ${region} ${srcaddr} ${srcport} ${start} ${sublocation-id} ${sublocation-type} ${subnet-id} ${tcp-flags} ${traffic-path} ${type} ${version} ${vpc-id}",
+                "DestinationOptions": {
+                    "FileFormat": "parquet",
+                    "HiveCompatiblePartitions": false,
+                    "PerHourPartition": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-vpc-flow-log-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke1VpcFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "Spoke1Vpc"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "s3",
+                "LogDestination": {
+                    "Fn::GetAtt": [
+                        "FlowLogsBucket",
+                        "Arn"
+                    ]
+                },
+                "LogFormat": "${account-id} ${action} ${bytes} ${dstaddr} ${dstport} ${end} ${flow-direction} ${instance-id} ${interface-id} ${log-status} ${packets} ${pkt-dst-aws-service} ${pkt-dstaddr} ${pkt-src-aws-service} ${pkt-srcaddr} ${protocol} ${region} ${srcaddr} ${srcport} ${start} ${sublocation-id} ${sublocation-type} ${subnet-id} ${tcp-flags} ${traffic-path} ${type} ${version} ${vpc-id}",
+                "DestinationOptions": {
+                    "FileFormat": "parquet",
+                    "HiveCompatiblePartitions": false,
+                    "PerHourPartition": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke1-vpc-flow-log-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        },
+        "Spoke2VpcFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "Spoke2Vpc"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "s3",
+                "LogDestination": {
+                    "Fn::GetAtt": [
+                        "FlowLogsBucket",
+                        "Arn"
+                    ]
+                },
+                "LogFormat": "${account-id} ${action} ${bytes} ${dstaddr} ${dstport} ${end} ${flow-direction} ${instance-id} ${interface-id} ${log-status} ${packets} ${pkt-dst-aws-service} ${pkt-dstaddr} ${pkt-src-aws-service} ${pkt-srcaddr} ${protocol} ${region} ${srcaddr} ${srcport} ${start} ${sublocation-id} ${sublocation-type} ${subnet-id} ${tcp-flags} ${traffic-path} ${type} ${version} ${vpc-id}",
+                "DestinationOptions": {
+                    "FileFormat": "parquet",
+                    "HiveCompatiblePartitions": false,
+                    "PerHourPartition": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke2-vpc-flow-log-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "networking"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "HubVpcId": {
+            "Description": "Hub VPC ID",
+            "Value": {
+                "Ref": "HubVpc"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubVpcId"
+                }
+            }
+        },
+        "HubPublicSubnet1Id": {
+            "Description": "Hub Public Subnet 1 ID",
+            "Value": {
+                "Ref": "HubPublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubPublicSubnet1Id"
+                }
+            }
+        },
+        "HubPublicSubnet2Id": {
+            "Description": "Hub Public Subnet 2 ID",
+            "Value": {
+                "Ref": "HubPublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubPublicSubnet2Id"
+                }
+            }
+        },
+        "HubPublicSubnet3Id": {
+            "Description": "Hub Public Subnet 3 ID",
+            "Value": {
+                "Ref": "HubPublicSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubPublicSubnet3Id"
+                }
+            }
+        },
+        "Spoke1VpcId": {
+            "Description": "Spoke 1 VPC ID",
+            "Value": {
+                "Ref": "Spoke1Vpc"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Spoke1VpcId"
+                }
+            }
+        },
+        "Spoke1PrivateSubnet1Id": {
+            "Description": "Spoke 1 Private Subnet 1 ID",
+            "Value": {
+                "Ref": "Spoke1PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Spoke1PrivateSubnet1Id"
+                }
+            }
+        },
+        "Spoke1PrivateSubnet2Id": {
+            "Description": "Spoke 1 Private Subnet 2 ID",
+            "Value": {
+                "Ref": "Spoke1PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Spoke1PrivateSubnet2Id"
+                }
+            }
+        },
+        "Spoke1PrivateSubnet3Id": {
+            "Description": "Spoke 1 Private Subnet 3 ID",
+            "Value": {
+                "Ref": "Spoke1PrivateSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Spoke1PrivateSubnet3Id"
+                }
+            }
+        },
+        "Spoke2VpcId": {
+            "Description": "Spoke 2 VPC ID",
+            "Value": {
+                "Ref": "Spoke2Vpc"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Spoke2VpcId"
+                }
+            }
+        },
+        "Spoke2PrivateSubnet1Id": {
+            "Description": "Spoke 2 Private Subnet 1 ID",
+            "Value": {
+                "Ref": "Spoke2PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Spoke2PrivateSubnet1Id"
+                }
+            }
+        },
+        "Spoke2PrivateSubnet2Id": {
+            "Description": "Spoke 2 Private Subnet 2 ID",
+            "Value": {
+                "Ref": "Spoke2PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Spoke2PrivateSubnet2Id"
+                }
+            }
+        },
+        "Spoke2PrivateSubnet3Id": {
+            "Description": "Spoke 2 Private Subnet 3 ID",
+            "Value": {
+                "Ref": "Spoke2PrivateSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Spoke2PrivateSubnet3Id"
+                }
+            }
+        },
+        "TransitGatewayId": {
+            "Description": "Transit Gateway ID",
+            "Value": {
+                "Ref": "TransitGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TransitGatewayId"
+                }
+            }
+        },
+        "HubTgwRouteTableId": {
+            "Description": "Hub Transit Gateway Route Table ID",
+            "Value": {
+                "Ref": "HubTgwRouteTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubTgwRouteTableId"
+                }
+            }
+        },
+        "SpokeTgwRouteTableId": {
+            "Description": "Spoke Transit Gateway Route Table ID",
+            "Value": {
+                "Ref": "SpokeTgwRouteTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SpokeTgwRouteTableId"
+                }
+            }
+        },
+        "HubPublicRouteTableId": {
+            "Description": "Hub Public Route Table ID",
+            "Value": {
+                "Ref": "HubPublicRouteTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubPublicRouteTableId"
+                }
+            }
+        },
+        "Spoke1PrivateRouteTable1Id": {
+            "Description": "Spoke 1 Private Route Table 1 ID",
+            "Value": {
+                "Ref": "Spoke1PrivateRouteTable1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Spoke1PrivateRouteTable1Id"
+                }
+            }
+        },
+        "Spoke2PrivateRouteTable1Id": {
+            "Description": "Spoke 2 Private Route Table 1 ID",
+            "Value": {
+                "Ref": "Spoke2PrivateRouteTable1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Spoke2PrivateRouteTable1Id"
+                }
+            }
+        },
+        "HttpsSecurityGroupId": {
+            "Description": "HTTPS Security Group ID",
+            "Value": {
+                "Ref": "HttpsSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HttpsSecurityGroupId"
+                }
+            }
+        },
+        "SshFromHubSecurityGroupId": {
+            "Description": "SSH from Hub Security Group ID",
+            "Value": {
+                "Ref": "SshFromHubSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SshFromHubSecurityGroupId"
+                }
+            }
+        },
+        "FlowLogsBucketName": {
+            "Description": "VPC Flow Logs S3 Bucket Name",
+            "Value": {
+                "Ref": "FlowLogsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FlowLogsBucketName"
+                }
+            }
+        },
+        "HubNatGateway1Id": {
+            "Description": "Hub NAT Gateway 1 ID",
+            "Value": {
+                "Ref": "HubNatGateway1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubNatGateway1Id"
+                }
+            }
+        },
+        "HubNatGateway2Id": {
+            "Description": "Hub NAT Gateway 2 ID",
+            "Value": {
+                "Ref": "HubNatGateway2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubNatGateway2Id"
+                }
+            }
+        },
+        "HubNatGateway3Id": {
+            "Description": "Hub NAT Gateway 3 ID",
+            "Value": {
+                "Ref": "HubNatGateway3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubNatGateway3Id"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}
