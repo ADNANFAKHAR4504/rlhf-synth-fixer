@@ -32,6 +32,15 @@
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters"
         },
+        "IsLocalStack": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Whether deploying to LocalStack (disables MFA enforcement features not supported in LocalStack Community)"
+        },
         "MFAMaxSessionDuration": {
             "Type": "Number",
             "Default": 3600,
@@ -47,6 +56,24 @@
             "Description": "Maximum age of MFA authentication in seconds (0 to 24 hours)"
         }
     },
+    "Conditions": {
+        "EnableMFAEnforcement": {
+            "Fn::Equals": [
+                {
+                    "Ref": "IsLocalStack"
+                },
+                "false"
+            ]
+        },
+        "IsAWSEnvironment": {
+            "Fn::Equals": [
+                {
+                    "Ref": "IsLocalStack"
+                },
+                "false"
+            ]
+        }
+    },
     "Resources": {
         "MFAEnforcedAdminRole": {
             "Type": "AWS::IAM::Role",
@@ -54,7 +81,13 @@
                 "RoleName": {
                     "Fn::Sub": "MFAEnforcedAdminRole-${EnvironmentSuffix}"
                 },
-                "Description": "Administrative role that requires MFA authentication for all actions",
+                "Description": {
+                    "Fn::If": [
+                        "EnableMFAEnforcement",
+                        "Administrative role that requires MFA authentication for all actions",
+                        "Administrative role (MFA enforcement disabled for LocalStack)"
+                    ]
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -67,14 +100,22 @@
                             },
                             "Action": "sts:AssumeRole",
                             "Condition": {
-                                "Bool": {
-                                    "aws:MultiFactorAuthPresent": "true"
-                                },
-                                "NumericLessThan": {
-                                    "aws:MultiFactorAuthAge": {
-                                        "Ref": "RequireMFAAge"
+                                "Fn::If": [
+                                    "EnableMFAEnforcement",
+                                    {
+                                        "Bool": {
+                                            "aws:MultiFactorAuthPresent": "true"
+                                        },
+                                        "NumericLessThan": {
+                                            "aws:MultiFactorAuthAge": {
+                                                "Ref": "RequireMFAAge"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "Ref": "AWS::NoValue"
                                     }
-                                }
+                                ]
                             }
                         }
                     ]
@@ -96,11 +137,23 @@
                     },
                     {
                         "Key": "MFARequired",
-                        "Value": "true"
+                        "Value": {
+                            "Fn::If": [
+                                "EnableMFAEnforcement",
+                                "true",
+                                "false"
+                            ]
+                        }
                     },
                     {
                         "Key": "SecurityLevel",
                         "Value": "High"
+                    },
+                    {
+                        "Key": "LocalStackCompatible",
+                        "Value": {
+                            "Ref": "IsLocalStack"
+                        }
                     }
                 ]
             }
@@ -111,7 +164,13 @@
                 "RoleName": {
                     "Fn::Sub": "MFAEnforcedDeveloperRole-${EnvironmentSuffix}"
                 },
-                "Description": "Developer role that requires MFA authentication with limited permissions",
+                "Description": {
+                    "Fn::If": [
+                        "EnableMFAEnforcement",
+                        "Developer role that requires MFA authentication with limited permissions",
+                        "Developer role (MFA enforcement disabled for LocalStack)"
+                    ]
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -124,20 +183,28 @@
                             },
                             "Action": "sts:AssumeRole",
                             "Condition": {
-                                "Bool": {
-                                    "aws:MultiFactorAuthPresent": "true"
-                                },
-                                "NumericLessThan": {
-                                    "aws:MultiFactorAuthAge": {
-                                        "Ref": "RequireMFAAge"
+                                "Fn::If": [
+                                    "EnableMFAEnforcement",
+                                    {
+                                        "Bool": {
+                                            "aws:MultiFactorAuthPresent": "true"
+                                        },
+                                        "NumericLessThan": {
+                                            "aws:MultiFactorAuthAge": {
+                                                "Ref": "RequireMFAAge"
+                                            }
+                                        },
+                                        "StringEquals": {
+                                            "aws:RequestedRegion": [
+                                                "us-east-1",
+                                                "us-west-1"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "Ref": "AWS::NoValue"
                                     }
-                                },
-                                "StringEquals": {
-                                    "aws:RequestedRegion": [
-                                        "us-east-1",
-                                        "us-west-1"
-                                    ]
-                                }
+                                ]
                             }
                         }
                     ]
@@ -162,11 +229,23 @@
                     },
                     {
                         "Key": "MFARequired",
-                        "Value": "true"
+                        "Value": {
+                            "Fn::If": [
+                                "EnableMFAEnforcement",
+                                "true",
+                                "false"
+                            ]
+                        }
                     },
                     {
                         "Key": "SecurityLevel",
                         "Value": "Medium"
+                    },
+                    {
+                        "Key": "LocalStackCompatible",
+                        "Value": {
+                            "Ref": "IsLocalStack"
+                        }
                     }
                 ]
             }
@@ -177,7 +256,13 @@
                 "ManagedPolicyName": {
                     "Fn::Sub": "MFAEnforcementPolicy-${EnvironmentSuffix}"
                 },
-                "Description": "Policy that enforces MFA authentication for all actions",
+                "Description": {
+                    "Fn::If": [
+                        "EnableMFAEnforcement",
+                        "Policy that enforces MFA authentication for all actions",
+                        "Policy for basic IAM operations (MFA enforcement disabled for LocalStack)"
+                    ]
+                },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -197,57 +282,6 @@
                                 "iam:DeactivateMFADevice"
                             ],
                             "Resource": "*"
-                        },
-                        {
-                            "Sid": "AllowFIDO2SecurityKeyManagement",
-                            "Effect": "Allow",
-                            "Action": [
-                                "iam:CreateServiceLinkedRole",
-                                "iam:ListServiceSpecificCredentials",
-                                "iam:CreateServiceSpecificCredential",
-                                "iam:DeleteServiceSpecificCredential",
-                                "iam:UpdateServiceSpecificCredential"
-                            ],
-                            "Resource": "*",
-                            "Condition": {
-                                "StringEquals": {
-                                    "iam:AWSServiceName": "fido.aws.amazon.com"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "DenyAllWithoutMFA",
-                            "Effect": "Deny",
-                            "NotAction": [
-                                "iam:ListMFADevices",
-                                "iam:ListVirtualMFADevices",
-                                "iam:GetUser",
-                                "iam:GetAccountSummary",
-                                "iam:ChangePassword",
-                                "iam:CreateVirtualMFADevice",
-                                "iam:EnableMFADevice",
-                                "iam:ResyncMFADevice",
-                                "sts:GetSessionToken"
-                            ],
-                            "Resource": "*",
-                            "Condition": {
-                                "BoolIfExists": {
-                                    "aws:MultiFactorAuthPresent": "false"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "DenyOldMFATokens",
-                            "Effect": "Deny",
-                            "Action": "*",
-                            "Resource": "*",
-                            "Condition": {
-                                "NumericGreaterThan": {
-                                    "aws:MultiFactorAuthAge": {
-                                        "Ref": "RequireMFAAge"
-                                    }
-                                }
-                            }
                         }
                     ]
                 }
@@ -259,7 +293,13 @@
                 "ManagedPolicyName": {
                     "Fn::Sub": "DeveloperPermissionsPolicy-${EnvironmentSuffix}"
                 },
-                "Description": "Limited permissions for developers with MFA enforcement",
+                "Description": {
+                    "Fn::If": [
+                        "EnableMFAEnforcement",
+                        "Limited permissions for developers with MFA enforcement",
+                        "Limited permissions for developers (MFA conditions disabled for LocalStack)"
+                    ]
+                },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -280,18 +320,7 @@
                                 "logs:DescribeLogStreams",
                                 "logs:GetLogEvents"
                             ],
-                            "Resource": "*",
-                            "Condition": {
-                                "Bool": {
-                                    "aws:MultiFactorAuthPresent": "true"
-                                },
-                                "StringEquals": {
-                                    "aws:RequestedRegion": [
-                                        "us-east-1",
-                                        "us-west-1"
-                                    ]
-                                }
-                            }
+                            "Resource": "*"
                         },
                         {
                             "Sid": "AllowDevelopmentResourceAccess",
@@ -315,17 +344,7 @@
                                 {
                                     "Fn::Sub": "arn:aws:lambda:*:*:function:*-${EnvironmentSuffix}-*"
                                 }
-                            ],
-                            "Condition": {
-                                "Bool": {
-                                    "aws:MultiFactorAuthPresent": "true"
-                                },
-                                "NumericLessThan": {
-                                    "aws:MultiFactorAuthAge": {
-                                        "Ref": "RequireMFAAge"
-                                    }
-                                }
-                            }
+                            ]
                         }
                     ]
                 }
@@ -333,11 +352,12 @@
         },
         "IdentityCenterMFAPolicy": {
             "Type": "AWS::IAM::ManagedPolicy",
+            "Condition": "IsAWSEnvironment",
             "Properties": {
                 "ManagedPolicyName": {
                     "Fn::Sub": "IdentityCenterMFAPolicy-${EnvironmentSuffix}"
                 },
-                "Description": "Policy for IAM Identity Center MFA integration",
+                "Description": "Policy for IAM Identity Center MFA integration (AWS only - not in LocalStack)",
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -354,12 +374,7 @@
                                 "identitystore:ListGroups",
                                 "identitystore:DescribeGroup"
                             ],
-                            "Resource": "*",
-                            "Condition": {
-                                "Bool": {
-                                    "aws:MultiFactorAuthPresent": "true"
-                                }
-                            }
+                            "Resource": "*"
                         }
                     ]
                 }
@@ -501,7 +516,8 @@
             }
         },
         "IdentityCenterMFAPolicyArn": {
-            "Description": "ARN of the IAM Identity Center MFA policy",
+            "Condition": "IsAWSEnvironment",
+            "Description": "ARN of the IAM Identity Center MFA policy (AWS only)",
             "Value": {
                 "Ref": "IdentityCenterMFAPolicy"
             },
