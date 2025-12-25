@@ -1,0 +1,1828 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Highly secure AWS infrastructure with VPC, EC2, KMS encryption, S3, and Secrets Manager",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment name for resource tagging"
+        },
+        "Project": {
+            "Type": "String",
+            "Default": "secure-infrastructure",
+            "Description": "Project name for resource tagging"
+        },
+        "Owner": {
+            "Type": "String",
+            "Default": "devops-team",
+            "Description": "Owner for resource tagging"
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for VPC",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
+        },
+        "PublicSubnet1Cidr": {
+            "Type": "String",
+            "Default": "10.0.1.0/24",
+            "Description": "CIDR block for first public subnet"
+        },
+        "PublicSubnet2Cidr": {
+            "Type": "String",
+            "Default": "10.0.2.0/24",
+            "Description": "CIDR block for second public subnet"
+        },
+        "PrivateSubnet1Cidr": {
+            "Type": "String",
+            "Default": "10.0.10.0/24",
+            "Description": "CIDR block for first private subnet"
+        },
+        "PrivateSubnet2Cidr": {
+            "Type": "String",
+            "Default": "10.0.20.0/24",
+            "Description": "CIDR block for second private subnet"
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Default": "t3.micro",
+            "Description": "EC2 instance type",
+            "AllowedValues": [
+                "t3.micro",
+                "t3.small",
+                "t3.medium",
+                "t3.large"
+            ]
+        },
+        "KeyPairName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional EC2 Key Pair name for SSH access (leave empty to disable SSH)"
+        },
+        "SSHAllowedCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block allowed for SSH access (only used if KeyPairName is provided)"
+        },
+        "EnableNatGateway": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable NAT Gateway for private subnet internet access"
+        },
+        "IsLocalStack": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Set to true when deploying to LocalStack (disables NAT Gateways and uses fallback AMI)"
+        },
+        "FallbackAmiId": {
+            "Type": "String",
+            "Default": "ami-0c55b159cbfafe1f0",
+            "Description": "Fallback AMI ID for LocalStack (Amazon Linux 2 equivalent)"
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "EnableNat": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableNatGateway"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "IsLocalStack"
+                        },
+                        "false"
+                    ]
+                }
+            ]
+        },
+        "IsLocalStackEnv": {
+            "Fn::Equals": [
+                {
+                    "Ref": "IsLocalStack"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "EC2InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${Project}-${Environment}-ec2-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "KMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS Key for encrypting resources in secure infrastructure",
+                "EnableKeyRotation": {
+                    "Fn::If": [
+                        "IsLocalStackEnv",
+                        false,
+                        true
+                    ]
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Fn::If": [
+                                "IsLocalStackEnv",
+                                {
+                                    "Sid": "LocalStack Simplified Policy",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "Service": [
+                                            "ec2.amazonaws.com",
+                                            "s3.amazonaws.com",
+                                            "secretsmanager.amazonaws.com",
+                                            "autoscaling.amazonaws.com"
+                                        ]
+                                    },
+                                    "Action": "kms:*",
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Ref": "AWS::NoValue"
+                                }
+                            ]
+                        },
+                        {
+                            "Fn::If": [
+                                "IsLocalStackEnv",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                },
+                                {
+                                    "Sid": "Allow CloudFormation Service",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "Service": "cloudformation.amazonaws.com"
+                                    },
+                                    "Action": [
+                                        "kms:CreateGrant",
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:GenerateDataKeyWithoutPlainText",
+                                        "kms:ReEncrypt*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        },
+                        {
+                            "Fn::If": [
+                                "IsLocalStackEnv",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                },
+                                {
+                                    "Sid": "Allow EC2 Service",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "Service": "ec2.amazonaws.com"
+                                    },
+                                    "Action": [
+                                        "kms:CreateGrant",
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:GenerateDataKeyWithoutPlainText",
+                                        "kms:ReEncrypt*"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "kms:ViaService": {
+                                                "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "Fn::If": [
+                                "IsLocalStackEnv",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                },
+                                {
+                                    "Sid": "Allow Auto Scaling Service Enhanced",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "Service": "autoscaling.amazonaws.com"
+                                    },
+                                    "Action": [
+                                        "kms:CreateGrant",
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:GenerateDataKeyWithoutPlainText",
+                                        "kms:ReEncrypt*",
+                                        "kms:ListGrants",
+                                        "kms:RevokeGrant"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        },
+                        {
+                            "Fn::If": [
+                                "IsLocalStackEnv",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                },
+                                {
+                                    "Sid": "Allow Auto Scaling Service Direct Access",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "Service": "autoscaling.amazonaws.com"
+                                    },
+                                    "Action": [
+                                        "kms:CreateGrant",
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:GenerateDataKeyWithoutPlainText",
+                                        "kms:ReEncrypt*"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "kms:ViaService": {
+                                                "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "Fn::If": [
+                                "IsLocalStackEnv",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                },
+                                {
+                                    "Sid": "Allow EBS Service",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "Service": "ebs.amazonaws.com"
+                                    },
+                                    "Action": [
+                                        "kms:CreateGrant",
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:GenerateDataKeyWithoutPlainText",
+                                        "kms:ReEncrypt*"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "kms:ViaService": {
+                                                "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "Fn::If": [
+                                "IsLocalStackEnv",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                },
+                                {
+                                    "Sid": "Allow S3 Service",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "Service": "s3.amazonaws.com"
+                                    },
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:ReEncrypt*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        },
+                        {
+                            "Fn::If": [
+                                "IsLocalStackEnv",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                },
+                                {
+                                    "Sid": "Allow Secrets Manager Service",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "Service": "secretsmanager.amazonaws.com"
+                                    },
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:ReEncrypt*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "Allow EC2 Instance Role",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "EC2InstanceRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": [
+                                "kms:CreateGrant",
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey",
+                                "kms:GenerateDataKeyWithoutPlainText",
+                                "kms:ReEncrypt*"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Fn::If": [
+                                "IsLocalStackEnv",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                },
+                                {
+                                    "Sid": "Allow Auto Scaling to use grants",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "Service": "autoscaling.amazonaws.com"
+                                    },
+                                    "Action": [
+                                        "kms:CreateGrant",
+                                        "kms:ListGrants",
+                                        "kms:RevokeGrant"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "Bool": {
+                                            "kms:GrantIsForAWSResource": true
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "Fn::If": [
+                                "IsLocalStackEnv",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                },
+                                {
+                                    "Sid": "Allow Service Linked Role",
+                                    "Effect": "Allow",
+                                    "Principal": {
+                                        "AWS": {
+                                            "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+                                        }
+                                    },
+                                    "Action": [
+                                        "kms:CreateGrant",
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:GenerateDataKeyWithoutPlainText",
+                                        "kms:ReEncrypt*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "KMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${Project}-${Environment}-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "KMSKey"
+                }
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${Project}-${Environment}-ec2-profile"
+                },
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "EC2KMSAccessPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "KMSAccess",
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "kms:CreateGrant",
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey",
+                                "kms:GenerateDataKeyWithoutPlainText",
+                                "kms:ReEncrypt*",
+                                "kms:ListGrants"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "KMSKey",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "KMSKey",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "EC2S3AccessPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "S3Access",
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:DeleteObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "${S3Bucket.Arn}/*"
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "S3Bucket",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "EC2SecretsManagerAccessPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "SecretsManagerAccess",
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "secretsmanager:GetSecretValue",
+                                "secretsmanager:DescribeSecret"
+                            ],
+                            "Resource": {
+                                "Ref": "DatabaseSecret"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-igw"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet1Cidr"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-public-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet2Cidr"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-public-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet1Cidr"
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-private-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet2Cidr"
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-private-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "EnableNat",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-nat-eip-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "EnableNat",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-nat-eip-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "EnableNat",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-nat-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "EnableNat",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-nat-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-public-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-private-rt-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "EnableNat",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway1"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-private-rt-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "EnableNat",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway2"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
+        },
+        "EC2SecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for EC2 instances",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "IpProtocol": "tcp",
+                                "FromPort": 22,
+                                "ToPort": 22,
+                                "CidrIp": {
+                                    "Ref": "SSHAllowedCidr"
+                                },
+                                "Description": "SSH access"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS outbound"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP outbound"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-ec2-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${Project}-${Environment}-secure-bucket-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::GetAtt": [
+                                        "KMSKey",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "S3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureConnections",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${S3Bucket.Arn}/*"
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "S3Bucket",
+                                        "Arn"
+                                    ]
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowEC2RoleAccess",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "EC2InstanceRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:DeleteObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "${S3Bucket.Arn}/*"
+                            }
+                        },
+                        {
+                            "Sid": "AllowEC2RoleListBucket",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "EC2InstanceRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "S3Bucket",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "DatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Project}-${Environment}-db-secret"
+                },
+                "Description": "Database credentials for secure infrastructure",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "KMSKey",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "DependsOn": [
+                "EC2KMSAccessPolicy",
+                "EC2S3AccessPolicy",
+                "EC2SecretsManagerAccessPolicy"
+            ],
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${Project}-${Environment}-launch-template"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Fn::If": [
+                            "IsLocalStackEnv",
+                            {
+                                "Ref": "FallbackAmiId"
+                            },
+                            "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
+                        ]
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "KeyName": {
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "EC2SecurityGroup"
+                        }
+                    ],
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/xvda",
+                            "Ebs": {
+                                "VolumeType": "gp3",
+                                "VolumeSize": 20,
+                                "Encrypted": true,
+                                "KmsKeyId": {
+                                    "Fn::GetAtt": [
+                                        "KMSKey",
+                                        "Arn"
+                                    ]
+                                },
+                                "DeleteOnTermination": true
+                            }
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "#!/bin/bash\n# Wait for KMS key to be fully available\nsleep 30\nyum update -y\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n\n# Additional logging for troubleshooting\necho \"Instance launched successfully at $(date)\" > /var/log/user-data.log\necho \"KMS Key ARN: ${KMSKey.Arn}\" >> /var/log/user-data.log\n"
+                        }
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${Project}-${Environment}-instance"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "Environment"
+                                    }
+                                },
+                                {
+                                    "Key": "Project",
+                                    "Value": {
+                                        "Ref": "Project"
+                                    }
+                                },
+                                {
+                                    "Key": "Owner",
+                                    "Value": {
+                                        "Ref": "Owner"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "ResourceType": "volume",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${Project}-${Environment}-volume"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "Environment"
+                                    }
+                                },
+                                {
+                                    "Key": "Project",
+                                    "Value": {
+                                        "Ref": "Project"
+                                    }
+                                },
+                                {
+                                    "Key": "Owner",
+                                    "Value": {
+                                        "Ref": "Owner"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "DependsOn": [
+                "EC2KMSAccessPolicy"
+            ],
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${Project}-${Environment}-asg"
+                },
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 1,
+                "MaxSize": 3,
+                "DesiredCapacity": 1,
+                "HealthCheckType": "EC2",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-${Environment}-asg"
+                        },
+                        "PropagateAtLaunch": false
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VpcId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VpcId"
+                }
+            }
+        },
+        "PublicSubnetIds": {
+            "Description": "Public Subnet IDs",
+            "Value": {
+                "Fn::Sub": "${PublicSubnet1},${PublicSubnet2}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnetIds"
+                }
+            }
+        },
+        "PrivateSubnetIds": {
+            "Description": "Private Subnet IDs",
+            "Value": {
+                "Fn::Sub": "${PrivateSubnet1},${PrivateSubnet2}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnetIds"
+                }
+            }
+        },
+        "KmsKeyId": {
+            "Description": "KMS Key ID",
+            "Value": {
+                "Ref": "KMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KmsKeyId"
+                }
+            }
+        },
+        "KmsKeyArn": {
+            "Description": "KMS Key ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "KMSKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KmsKeyArn"
+                }
+            }
+        },
+        "KmsKeyAlias": {
+            "Description": "KMS Key Alias",
+            "Value": {
+                "Ref": "KMSKeyAlias"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KmsKeyAlias"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "S3 Bucket Name",
+            "Value": {
+                "Ref": "S3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketName"
+                }
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Auto Scaling Group Name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AutoScalingGroupName"
+                }
+            }
+        },
+        "EC2InstanceRoleArn": {
+            "Description": "EC2 Instance Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2InstanceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2InstanceRoleArn"
+                }
+            }
+        },
+        "SecretsManagerSecretArn": {
+            "Description": "Secrets Manager Secret ARN",
+            "Value": {
+                "Ref": "DatabaseSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecretsManagerSecretArn"
+                }
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "Launch Template ID",
+            "Value": {
+                "Ref": "LaunchTemplate"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LaunchTemplateId"
+                }
+            }
+        },
+        "SecurityGroupId": {
+            "Description": "EC2 Security Group ID",
+            "Value": {
+                "Ref": "EC2SecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecurityGroupId"
+                }
+            }
+        }
+    }
+}

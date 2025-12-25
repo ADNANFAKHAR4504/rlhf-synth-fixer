@@ -1,0 +1,24 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-292042",
+  "team": "synth-2",
+  "startedAt": "2025-08-08T14:06:48.450Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "KMS",
+    "IAM",
+    "SecretsManager",
+    "AutoScaling"
+  ],
+  "wave": "P0"
+}
