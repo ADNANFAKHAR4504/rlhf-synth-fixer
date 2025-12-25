@@ -1,0 +1,180 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Serverless infrastructure with Lambda function triggered by S3 events'
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: 'Name of the existing S3 bucket'
+    Default: 'iac-291198'
+    AllowedPattern: '^[a-z0-9][a-z0-9.-]*[a-z0-9]$'
+    ConstraintDescription: 'S3 bucket name must be valid'
+  
+  CloudWatchLogGroupName:
+    Type: String
+    Description: 'Name of the existing CloudWatch Log Group'
+    Default: 'iac-291198'
+    AllowedPattern: '^[a-zA-Z0-9_/.-]+$'
+    ConstraintDescription: 'CloudWatch Log Group name must be valid'
+
+Resources:
+  # IAM Role for Lambda function
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-lambda-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3AndCloudWatchAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub 'arn:aws:s3:::${S3BucketName}/*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudWatchLogGroupName}:*'
+
+  # Lambda function
+  S3FileProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-s3-file-processor'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          LOG_GROUP_NAME: !Ref CloudWatchLogGroupName
+      Code:
+        ZipFile: |
+          const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+          const { CloudWatchLogsClient, CreateLogStreamCommand, PutLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+          
+          const s3Client = new S3Client({});
+          const cloudWatchClient = new CloudWatchLogsClient({});
+          
+          exports.handler = async (event) => {
+            console.log('Event received:', JSON.stringify(event, null, 2));
+            
+            try {
+              for (const record of event.Records) {
+                const bucket = record.s3.bucket.name;
+                const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
+                
+                console.log(`Processing file: ${key} from bucket: ${bucket}`);
+                
+                // Get the object from S3
+                const getObjectCommand = new GetObjectCommand({
+                  Bucket: bucket,
+                  Key: key
+                });
+                
+                const s3Object = await s3Client.send(getObjectCommand);
+                const fileContent = await s3Object.Body.transformToString('utf-8');
+                const fileSize = s3Object.ContentLength;
+                const lastModified = s3Object.LastModified;
+                
+                // Log details to CloudWatch
+                const logMessage = {
+                  filename: key,
+                  bucket: bucket,
+                  size: fileSize,
+                  lastModified: lastModified,
+                  content: fileContent.substring(0, 1000), // Log first 1000 characters
+                  eventTime: record.eventTime
+                };
+                
+                console.log('File details:', JSON.stringify(logMessage, null, 2));
+                
+                // Write to CloudWatch Log Group
+                const logGroupName = process.env.LOG_GROUP_NAME;
+                const logStreamName = `s3-processor-${Date.now()}`;
+                
+                try {
+                  const createLogStreamCommand = new CreateLogStreamCommand({
+                    logGroupName: logGroupName,
+                    logStreamName: logStreamName
+                  });
+                  await cloudWatchClient.send(createLogStreamCommand);
+                } catch (error) {
+                  // Log stream might already exist, continue
+                  if (error.name !== 'ResourceAlreadyExistsException') {
+                    throw error;
+                  }
+                }
+                
+                const putLogEventsCommand = new PutLogEventsCommand({
+                  logGroupName: logGroupName,
+                  logStreamName: logStreamName,
+                  logEvents: [
+                    {
+                      timestamp: Date.now(),
+                      message: JSON.stringify(logMessage, null, 2)
+                    }
+                  ]
+                });
+                
+                await cloudWatchClient.send(putLogEventsCommand);
+                console.log(`Successfully processed and logged file: ${key}`);
+              }
+              
+              return {
+                statusCode: 200,
+                body: JSON.stringify({
+                  message: 'Successfully processed S3 event',
+                  processedRecords: event.Records.length
+                })
+              };
+              
+            } catch (error) {
+              console.error('Error processing S3 event:', error);
+              throw error;
+            }
+          };
+
+  # Permission for S3 to invoke Lambda
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref S3FileProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub 'arn:aws:s3:::${S3BucketName}'
+
+  # Note: S3 bucket notifications are configured manually or through AWS CLI
+  # This is because CloudFormation doesn't support S3 bucket notifications for existing buckets
+  # The Lambda function can be triggered manually or through other means
+
+Outputs:
+  LambdaFunctionName:
+    Description: 'Name of the Lambda function'
+    Value: !Ref S3FileProcessorFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionName'
+  
+  LambdaFunctionArn:
+    Description: 'ARN of the Lambda function'
+    Value: !GetAtt S3FileProcessorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
+  
+  LambdaExecutionRoleArn:
+    Description: 'ARN of the Lambda execution role'
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaExecutionRoleArn'
