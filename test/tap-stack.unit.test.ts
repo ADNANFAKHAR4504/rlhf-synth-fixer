@@ -271,7 +271,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(
         pitrEnabled === true ||
         pitrEnabled === false ||
-        (typeof pitrEnabled === 'object' && pitrEnabled['Fn::If']) ||
+        (typeof pitrEnabled === 'object' && 'Fn::If' in pitrEnabled) ||
         (Array.isArray(pitrEnabled) && pitrEnabled[0] === 'EnableDynamoDBPITR')
       ).toBe(true);
     });
