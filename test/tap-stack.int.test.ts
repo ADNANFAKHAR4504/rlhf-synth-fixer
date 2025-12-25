@@ -83,17 +83,37 @@ function parseLambdaResponse(response: any): any {
 
   // If response.data is a string or has a body field, parse it
   if (typeof response.data === 'string') {
-    return JSON.parse(response.data);
+    // Handle empty string responses
+    if (response.data.trim() === '') {
+      console.warn('Received empty response body');
+      return {};
+    }
+    try {
+      return JSON.parse(response.data);
+    } catch (e) {
+      console.warn('Failed to parse response.data:', response.data);
+      return {};
+    }
   }
 
   if (response.data && response.data.body) {
     if (typeof response.data.body === 'string') {
-      return JSON.parse(response.data.body);
+      // Handle empty string in body
+      if (response.data.body.trim() === '') {
+        console.warn('Received empty response body');
+        return {};
+      }
+      try {
+        return JSON.parse(response.data.body);
+      } catch (e) {
+        console.warn('Failed to parse response.data.body:', response.data.body);
+        return {};
+      }
     }
     return response.data.body;
   }
 
-  return response.data;
+  return response.data || {};
 }
 
 describe('Serverless Application Integration Tests', () => {
@@ -114,13 +134,19 @@ describe('Serverless Application Integration Tests', () => {
           timestamp: new Date().toISOString(),
         };
 
+        console.log(`Making POST request to: ${apiGatewayUrl}/data`);
         const response = await axios.post(`${apiGatewayUrl}/data`, testData, {
           headers: {
             'Content-Type': 'application/json',
           },
         });
 
+        console.log('Response status:', response.status);
+        console.log('Response data type:', typeof response.data);
+        console.log('Response data:', JSON.stringify(response.data).substring(0, 200));
+
         const responseData = parseLambdaResponse(response);
+        console.log('Parsed response data:', responseData);
 
         expect(response.status).toBe(200);
         expect(responseData.message).toBe('Data processed successfully');
