@@ -8,14 +8,9 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = false
 
-  # Disable access logs and health check logs for LocalStack compatibility
-  # LocalStack Community doesn't support these ALB logging features
-  dynamic "access_logs" {
-    for_each = local.is_localstack ? [] : [1]
-    content {
-      enabled = false
-    }
-  }
+  # Note: access_logs configuration removed for LocalStack compatibility
+  # LocalStack Community doesn't support ALB access logs (health_check_logs.s3.enabled error)
+  # For AWS deployments, configure access_logs in terraform.tfvars or via backend config
 
   tags = {
     Name        = "${var.project_name}-${var.environment_suffix}-alb"
