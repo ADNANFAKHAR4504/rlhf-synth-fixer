@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "localstack",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-292054",
+  "team": "synth-2",
+  "wave": "P0",
+  "startedAt": "2025-08-20T14:50:04.561Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "EC2",
+    "VPC",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "Security Groups",
+    "SNS",
+    "Application Load Balancer",
+    "Target Groups",
+    "IAM",
+    "Launch Template",
+    "Auto Scaling Groups",
+    "CloudWatch",
+    "RDS",
+    "Secrets Manager"
+  ]
+}
