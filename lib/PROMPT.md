@@ -6,7 +6,7 @@ I need to create a comprehensive AWS CDK Java stack that demonstrates security b
    - Launch EC2 instances with encrypted EBS volumes using customer-managed KMS keys
    - Configure security groups with minimal required access - all ingress rules must specify exact CIDR blocks or reference other security groups
    - Web traffic should only allow ingress from load balancer security groups or specific trusted IP ranges
-   - Never use 0.0.0.0/0 ingress rules for any service
+   - Never use open-to-internet ingress rules - all traffic must come from specific trusted sources only
    - Use Systems Manager Session Manager for secure access instead of SSH key pairs where possible
    - Deploy instances in private subnets with no public IPs unless absolutely necessary for web servers
 
@@ -23,7 +23,7 @@ I need to create a comprehensive AWS CDK Java stack that demonstrates security b
    - Deploy in private subnets with database security groups allowing access only from application tiers
 
 4. **IAM Security Implementation**
-   - Create IAM roles with exact resource ARNs and specific actions - never use Resource: * or Action: *
+   - Create IAM roles with exact resource ARNs and specific actions - never use wildcards for resources or actions
    - Each role should have only the minimum permissions required for its specific function
    - Implement service-specific IAM policies with exact resource ARNs and minimal required actions
    - Use resource-based policies where appropriate with explicit resource references
@@ -53,7 +53,7 @@ I need to create a comprehensive AWS CDK Java stack that demonstrates security b
    - Configure VPC Flow Logs for network traffic analysis
    - Enable access logging for all services that support it
 
-9. **Resource Tagging Strategy**
+9. **Tagging Strategy**
    - Apply consistent tags across all resources: Environment, Owner, Project, CostCenter
    - Use tags for cost allocation and access control policies
    - Implement tag-based compliance rules
