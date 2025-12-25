@@ -18,5 +18,11 @@
     "IAM"
   ],
   "wave": "P0",
-  "training_quality": 9
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "abubakarTuring",
+  "dockerS3Location": ""
 }
