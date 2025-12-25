@@ -52,7 +52,11 @@ class KmsConstruct extends Construct {
   public readonly key: kms.Key;
   public readonly alias: kms.Alias;
 
-  constructor(scope: Construct, id: string, props: { environment: string; costCenter: string; naming: ResourceNaming }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: { environment: string; costCenter: string; naming: ResourceNaming }
+  ) {
     super(scope, id);
     this.key = new kms.Key(this, 'KmsKey', {
       description: `KMS key for ${props.environment} environment`,
@@ -73,7 +77,16 @@ class VpcConstruct extends Construct {
   public readonly privateSubnets: ec2.ISubnet[];
   public readonly publicSubnets: ec2.ISubnet[];
 
-  constructor(scope: Construct, id: string, props: { cidr: string; environment: string; costCenter: string; naming: ResourceNaming }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      cidr: string;
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+    }
+  ) {
     super(scope, id);
     this.vpc = new ec2.Vpc(this, 'Vpc', {
       ipAddresses: ec2.IpAddresses.cidr(props.cidr),
@@ -82,7 +95,11 @@ class VpcConstruct extends Construct {
       enableDnsSupport: true,
       subnetConfiguration: [
         { cidrMask: 24, name: 'Public', subnetType: ec2.SubnetType.PUBLIC },
-        { cidrMask: 24, name: 'Private', subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+        {
+          cidrMask: 24,
+          name: 'Private',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
       ],
     });
     this.privateSubnets = this.vpc.privateSubnets;
@@ -96,7 +113,17 @@ class VpcConstruct extends Construct {
 class S3Construct extends Construct {
   public readonly bucket: s3.Bucket;
 
-  constructor(scope: Construct, id: string, props: { kmsKey: kms.IKey; environment: string; costCenter: string; naming: ResourceNaming; bucketSuffix?: string }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      kmsKey: kms.IKey;
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+      bucketSuffix?: string;
+    }
+  ) {
     super(scope, id);
     this.bucket = new s3.Bucket(this, 'Bucket', {
       bucketName: props.naming.generateName('s3', props.bucketSuffix),
@@ -116,13 +143,19 @@ class S3Construct extends Construct {
 class IamConstruct extends Construct {
   public readonly monitoringRole: iam.Role;
 
-  constructor(scope: Construct, id: string, props: { environment: string; costCenter: string; naming: ResourceNaming }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: { environment: string; costCenter: string; naming: ResourceNaming }
+  ) {
     super(scope, id);
     this.monitoringRole = new iam.Role(this, 'MonitoringRole', {
       roleName: props.naming.generateName('monitoring', 'role'),
       assumedBy: new iam.ServicePrincipal('cloudwatch.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
     });
     cdk.Tags.of(this.monitoringRole).add('Environment', props.environment);
@@ -134,9 +167,21 @@ class MonitoringConstruct extends Construct {
   public readonly alarmTopic: sns.Topic;
   public readonly dashboard: cloudwatch.Dashboard;
 
-  constructor(scope: Construct, id: string, props: { kmsKey: kms.IKey; environment: string; costCenter: string; naming: ResourceNaming; vpc: ec2.IVpc }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      kmsKey: kms.IKey;
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+      vpc: ec2.IVpc;
+    }
+  ) {
     super(scope, id);
-    const stackNameShort = cdk.Stack.of(this).stackName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 10);
+    const stackNameShort = cdk.Stack.of(this)
+      .stackName.replace(/[^a-zA-Z0-9]/g, '')
+      .substring(0, 10);
     this.alarmTopic = new sns.Topic(this, 'AlarmTopic', {
       topicName: `tap-${props.environment}-alarms-${stackNameShort}`,
       masterKey: props.kmsKey,
@@ -166,22 +211,37 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     const environmentConfig: EnvironmentConfig = {
-      environment: this.node.tryGetContext('environment') || process.env.ENVIRONMENT || 'development',
-      costCenter: this.node.tryGetContext('costCenter') || process.env.COST_CENTER || 'engineering',
+      environment:
+        this.node.tryGetContext('environment') ||
+        process.env.ENVIRONMENT ||
+        'development',
+      costCenter:
+        this.node.tryGetContext('costCenter') ||
+        process.env.COST_CENTER ||
+        'engineering',
       regions: this.node.tryGetContext('regions')?.split(',') || ['us-east-1'],
-      vpcCidrs: this.node.tryGetContext('vpcCidrs') || { 'us-east-1': '10.0.0.0/16' },
+      vpcCidrs: this.node.tryGetContext('vpcCidrs') || {
+        'us-east-1': '10.0.0.0/16',
+      },
       enableMonitoring: this.node.tryGetContext('enableMonitoring') !== 'false',
     };
 
     const namingConfig: NamingConfig = {
-      prefix: this.node.tryGetContext('namePrefix') || process.env.NAME_PREFIX || 'tap',
+      prefix:
+        this.node.tryGetContext('namePrefix') ||
+        process.env.NAME_PREFIX ||
+        'tap',
       separator: '-',
       includeRegion: true,
       includeEnvironment: true,
     };
 
     const currentRegion = this.region;
-    const naming = new ResourceNaming(namingConfig, environmentConfig.environment, currentRegion);
+    const naming = new ResourceNaming(
+      namingConfig,
+      environmentConfig.environment,
+      currentRegion
+    );
 
     const kmsConstruct = new KmsConstruct(this, 'Kms', {
       environment: environmentConfig.environment,
@@ -242,13 +302,17 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'PrivateSubnetIds', {
-      value: vpcConstruct.privateSubnets.map(subnet => subnet.subnetId).join(','),
+      value: vpcConstruct.privateSubnets
+        .map(subnet => subnet.subnetId)
+        .join(','),
       description: 'Private Subnet IDs',
       exportName: `${naming.generateName('vpc')}-private-subnets`,
     });
 
     new cdk.CfnOutput(this, 'PublicSubnetIds', {
-      value: vpcConstruct.publicSubnets.map(subnet => subnet.subnetId).join(','),
+      value: vpcConstruct.publicSubnets
+        .map(subnet => subnet.subnetId)
+        .join(','),
       description: 'Public Subnet IDs',
       exportName: `${naming.generateName('vpc')}-public-subnets`,
     });

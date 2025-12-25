@@ -19,18 +19,18 @@ describe('TapStack', () => {
         namePrefix: 'tap',
       },
     });
-    
+
     // Set environment variables for the test
     process.env.CDK_DEFAULT_REGION = 'us-east-1';
     process.env.CDK_DEFAULT_ACCOUNT = '123456789012';
-    
+
     stack = new TapStack(app, 'TestTapStack', {
       env: {
         region: 'us-east-1',
         account: '123456789012',
       },
     });
-    
+
     template = Template.fromStack(stack);
   });
 
@@ -55,14 +55,14 @@ describe('TapStack', () => {
       expect(Object.keys(subnets)).toHaveLength(9);
 
       // Check for public subnets (should have MapPublicIpOnLaunch: true)
-      const publicSubnets = Object.values(subnets).filter((subnet: any) => 
-        subnet.Properties.MapPublicIpOnLaunch === true
+      const publicSubnets = Object.values(subnets).filter(
+        (subnet: any) => subnet.Properties.MapPublicIpOnLaunch === true
       );
       expect(publicSubnets).toHaveLength(3);
 
       // Check for private subnets (should have MapPublicIpOnLaunch: false)
-      const privateSubnets = Object.values(subnets).filter((subnet: any) => 
-        subnet.Properties.MapPublicIpOnLaunch === false
+      const privateSubnets = Object.values(subnets).filter(
+        (subnet: any) => subnet.Properties.MapPublicIpOnLaunch === false
       );
       expect(privateSubnets).toHaveLength(6);
 
@@ -80,7 +80,9 @@ describe('TapStack', () => {
 
     test('should create VPC peering connection when configured', () => {
       // This test covers the VpcPeeringConstruct branch
-      const vpcPeeringResources = template.findResources('AWS::EC2::VPCPeeringConnection');
+      const vpcPeeringResources = template.findResources(
+        'AWS::EC2::VPCPeeringConnection'
+      );
       // Note: VPC peering is not created by default in our test configuration
       expect(Object.keys(vpcPeeringResources)).toHaveLength(0);
     });
@@ -233,18 +235,25 @@ describe('TapStack', () => {
     });
 
     test('should create pipeline roles', () => {
-      const pipelineRoles = Object.values(template.findResources('AWS::IAM::Role')).filter((role: any) =>
-        role.Properties.RoleName?.includes('pipeline') || role.Properties.AssumeRolePolicyDocument?.Statement?.some((stmt: any) =>
-          stmt.Principal?.Service === 'codepipeline.amazonaws.com'
-        )
+      const pipelineRoles = Object.values(
+        template.findResources('AWS::IAM::Role')
+      ).filter(
+        (role: any) =>
+          role.Properties.RoleName?.includes('pipeline') ||
+          role.Properties.AssumeRolePolicyDocument?.Statement?.some(
+            (stmt: any) =>
+              stmt.Principal?.Service === 'codepipeline.amazonaws.com'
+          )
       );
       expect(pipelineRoles.length).toBeGreaterThan(0);
     });
 
     test('should create codebuild service role', () => {
-      const codebuildRoles = Object.values(template.findResources('AWS::IAM::Role')).filter((role: any) =>
-        role.Properties.AssumeRolePolicyDocument?.Statement?.some((stmt: any) =>
-          stmt.Principal?.Service === 'codebuild.amazonaws.com'
+      const codebuildRoles = Object.values(
+        template.findResources('AWS::IAM::Role')
+      ).filter((role: any) =>
+        role.Properties.AssumeRolePolicyDocument?.Statement?.some(
+          (stmt: any) => stmt.Principal?.Service === 'codebuild.amazonaws.com'
         )
       );
       expect(codebuildRoles.length).toBeGreaterThan(0);
@@ -289,10 +298,7 @@ describe('TapStack', () => {
         BackupSelection: {
           SelectionName: 'BackupSelection',
           IamRoleArn: {
-            'Fn::GetAtt': [
-              'IamBackupRole95AD45E4',
-              'Arn',
-            ],
+            'Fn::GetAtt': ['IamBackupRole95AD45E4', 'Arn'],
           },
         },
       });
@@ -323,9 +329,13 @@ describe('TapStack', () => {
       });
 
       const templateNoBackup = Template.fromStack(stackNoBackup);
-      const backupVaults = templateNoBackup.findResources('AWS::Backup::BackupVault');
-      const backupPlans = templateNoBackup.findResources('AWS::Backup::BackupPlan');
-      
+      const backupVaults = templateNoBackup.findResources(
+        'AWS::Backup::BackupVault'
+      );
+      const backupPlans = templateNoBackup.findResources(
+        'AWS::Backup::BackupPlan'
+      );
+
       // When backup is disabled, no backup resources should be created
       expect(Object.keys(backupVaults)).toHaveLength(0);
       expect(Object.keys(backupPlans)).toHaveLength(0);
@@ -372,18 +382,26 @@ describe('TapStack', () => {
       process.env.CDK_DEFAULT_REGION = 'us-east-1';
       process.env.CDK_DEFAULT_ACCOUNT = '123456789012';
 
-      const stackNoMonitoring = new TapStack(appNoMonitoring, 'TestTapStackNoMonitoring', {
-        env: {
-          region: 'us-east-1',
-          account: '123456789012',
-        },
-      });
+      const stackNoMonitoring = new TapStack(
+        appNoMonitoring,
+        'TestTapStackNoMonitoring',
+        {
+          env: {
+            region: 'us-east-1',
+            account: '123456789012',
+          },
+        }
+      );
 
       const templateNoMonitoring = Template.fromStack(stackNoMonitoring);
       const snsTopics = templateNoMonitoring.findResources('AWS::SNS::Topic');
-      const cloudwatchDashboards = templateNoMonitoring.findResources('AWS::CloudWatch::Dashboard');
-      const cloudwatchAlarms = templateNoMonitoring.findResources('AWS::CloudWatch::Alarm');
-      
+      const cloudwatchDashboards = templateNoMonitoring.findResources(
+        'AWS::CloudWatch::Dashboard'
+      );
+      const cloudwatchAlarms = templateNoMonitoring.findResources(
+        'AWS::CloudWatch::Alarm'
+      );
+
       // Should still have some resources but fewer monitoring-specific ones
       expect(Object.keys(snsTopics)).toHaveLength(0);
       expect(Object.keys(cloudwatchDashboards)).toHaveLength(0);
@@ -394,7 +412,9 @@ describe('TapStack', () => {
   describe('Pipeline Resources', () => {
     test('should not create CodeCommit repository by default', () => {
       // CodeCommit is disabled by default, so no repository should be created
-      const codeCommitRepos = template.findResources('AWS::CodeCommit::Repository');
+      const codeCommitRepos = template.findResources(
+        'AWS::CodeCommit::Repository'
+      );
       expect(Object.keys(codeCommitRepos)).toHaveLength(0);
     });
 
@@ -451,7 +471,8 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::CodeBuild::Project', {
         Source: {
           Type: 'S3',
-          BuildSpec: '{\n  "version": "0.2",\n  "phases": {\n    "install": {\n      "runtime-versions": {\n        "nodejs": "14"\n      },\n      "commands": [\n        "npm install -g aws-cdk",\n        "npm install"\n      ]\n    },\n    "build": {\n      "commands": [\n        "npm run build",\n        "cdk synth",\n        "cdk deploy --require-approval never"\n      ]\n    }\n  },\n  "artifacts": {\n    "files": [\n      "**/*"\n    ]\n  }\n}',
+          BuildSpec:
+            '{\n  "version": "0.2",\n  "phases": {\n    "install": {\n      "runtime-versions": {\n        "nodejs": "14"\n      },\n      "commands": [\n        "npm install -g aws-cdk",\n        "npm install"\n      ]\n    },\n    "build": {\n      "commands": [\n        "npm run build",\n        "cdk synth",\n        "cdk deploy --require-approval never"\n      ]\n    }\n  },\n  "artifacts": {\n    "files": [\n      "**/*"\n    ]\n  }\n}',
         },
       });
     });
@@ -495,15 +516,15 @@ describe('TapStack', () => {
       template.hasOutput('VpcId', {
         Description: 'VPC ID',
       });
-      
+
       template.hasOutput('KmsKeyId', {
         Description: 'KMS Key ID',
       });
-      
+
       template.hasOutput('ArtifactBucketName', {
         Description: 'Artifact S3 Bucket Name',
       });
-      
+
       template.hasOutput('DataBucketName', {
         Description: 'Data S3 Bucket Name',
       });
@@ -515,14 +536,14 @@ describe('TapStack', () => {
       // Check that the VPC has the required tags
       const vpc = template.findResources('AWS::EC2::VPC');
       expect(Object.keys(vpc)).toHaveLength(1);
-      
+
       const vpcResource = Object.values(vpc)[0];
       const tags = vpcResource.Properties.Tags;
-      
+
       // Check for required tags
       const environmentTag = tags.find((tag: any) => tag.Key === 'Environment');
       const costCenterTag = tags.find((tag: any) => tag.Key === 'CostCenter');
-      
+
       expect(environmentTag).toBeDefined();
       expect(environmentTag.Value).toBe('development');
       expect(costCenterTag).toBeDefined();
@@ -561,7 +582,7 @@ describe('TapStack', () => {
   describe('Error Handling and Edge Cases', () => {
     test('should handle missing context values gracefully', () => {
       const appMinimal = new cdk.App();
-      
+
       process.env.CDK_DEFAULT_REGION = 'us-east-1';
       process.env.CDK_DEFAULT_ACCOUNT = '123456789012';
 
@@ -591,15 +612,19 @@ describe('TapStack', () => {
       process.env.CDK_DEFAULT_REGION = 'us-west-2';
       process.env.CDK_DEFAULT_ACCOUNT = '123456789012';
 
-      const stackDifferentRegion = new TapStack(appDifferentRegion, 'TestTapStackDifferentRegion', {
-        env: {
-          region: 'us-west-2',
-          account: '123456789012',
-        },
-      });
+      const stackDifferentRegion = new TapStack(
+        appDifferentRegion,
+        'TestTapStackDifferentRegion',
+        {
+          env: {
+            region: 'us-west-2',
+            account: '123456789012',
+          },
+        }
+      );
 
       const templateDifferentRegion = Template.fromStack(stackDifferentRegion);
-      
+
       // Should create resources with different region naming
       templateDifferentRegion.hasResourceProperties('AWS::EC2::VPC', {
         CidrBlock: '10.0.0.0/16', // Default CIDR is used regardless of context
@@ -622,15 +647,19 @@ describe('TapStack', () => {
       process.env.CDK_DEFAULT_REGION = 'us-east-1';
       process.env.CDK_DEFAULT_ACCOUNT = '123456789012';
 
-      const stackProduction = new TapStack(appProduction, 'TestTapStackProduction', {
-        env: {
-          region: 'us-east-1',
-          account: '123456789012',
-        },
-      });
+      const stackProduction = new TapStack(
+        appProduction,
+        'TestTapStackProduction',
+        {
+          env: {
+            region: 'us-east-1',
+            account: '123456789012',
+          },
+        }
+      );
 
       const templateProduction = Template.fromStack(stackProduction);
-      
+
       // Should create resources with production naming
       templateProduction.hasResourceProperties('AWS::KMS::Key', {
         Description: 'KMS key for production environment',
@@ -641,11 +670,20 @@ describe('TapStack', () => {
   describe('Resource Naming', () => {
     test('should generate consistent resource names', () => {
       const resources = template.findResources('*');
-      const resourceNames = Object.values(resources).map((resource: any) => 
-        resource.Properties?.Name || resource.Properties?.BucketName || resource.Properties?.RoleName || 
-        resource.Properties?.RepositoryName || resource.Properties?.TopicName || resource.Properties?.DashboardName ||
-        resource.Properties?.AlarmName || resource.Properties?.BackupVaultName || resource.Properties?.BackupPlanName
-      ).filter(Boolean);
+      const resourceNames = Object.values(resources)
+        .map(
+          (resource: any) =>
+            resource.Properties?.Name ||
+            resource.Properties?.BucketName ||
+            resource.Properties?.RoleName ||
+            resource.Properties?.RepositoryName ||
+            resource.Properties?.TopicName ||
+            resource.Properties?.DashboardName ||
+            resource.Properties?.AlarmName ||
+            resource.Properties?.BackupVaultName ||
+            resource.Properties?.BackupPlanName
+        )
+        .filter(Boolean);
 
       // All resource names should follow the naming pattern
       resourceNames.forEach((name: string) => {
