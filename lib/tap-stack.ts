@@ -383,6 +383,5 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('CostCenter', environmentConfig.costCenter);
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
     cdk.Tags.of(this).add('Region', currentRegion);
-    cdk.Tags.of(this).add('LocalStack', 'true');
   }
 }

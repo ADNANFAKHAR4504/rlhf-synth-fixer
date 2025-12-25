@@ -19,6 +19,7 @@ Implement multi-region deployment using CDK Pipelines or StackSets. The deployme
 ## Output
 
 Create these files:
+
 - bin/tap.ts - CDK app entry point
 - lib/tap-stack.ts - main stack called TapStack
 - cdk.json - project config

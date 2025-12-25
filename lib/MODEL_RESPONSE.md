@@ -47,21 +47,21 @@ class ResourceNaming {
 
   generateName(resourceType: string, suffix?: string): string {
     const parts = [this.config.prefix];
-    
+
     if (this.config.includeEnvironment) {
       parts.push(this.environment);
     }
-    
+
     if (this.config.includeRegion) {
       parts.push(this.region.replace('-', ''));
     }
-    
+
     parts.push(resourceType);
-    
+
     if (suffix) {
       parts.push(suffix);
     }
-    
+
     return parts.join(this.config.separator).toLowerCase();
   }
 }
@@ -71,11 +71,15 @@ class KmsConstruct extends Construct {
   public readonly key: kms.Key;
   public readonly alias: kms.Alias;
 
-  constructor(scope: Construct, id: string, props: {
-    environment: string;
-    costCenter: string;
-    naming: ResourceNaming;
-  }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+    }
+  ) {
     super(scope, id);
 
     this.key = new kms.Key(this, 'KmsKey', {
@@ -101,12 +105,16 @@ class VpcConstruct extends Construct {
   public readonly privateSubnets: ec2.ISubnet[];
   public readonly publicSubnets: ec2.ISubnet[];
 
-  constructor(scope: Construct, id: string, props: {
-    cidr: string;
-    environment: string;
-    costCenter: string;
-    naming: ResourceNaming;
-  }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      cidr: string;
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+    }
+  ) {
     super(scope, id);
 
     this.vpc = new ec2.Vpc(this, 'Vpc', {
@@ -153,13 +161,17 @@ class VpcConstruct extends Construct {
 class S3Construct extends Construct {
   public readonly bucket: s3.Bucket;
 
-  constructor(scope: Construct, id: string, props: {
-    kmsKey: kms.IKey;
-    environment: string;
-    costCenter: string;
-    naming: ResourceNaming;
-    bucketSuffix?: string;
-  }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      kmsKey: kms.IKey;
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+      bucketSuffix?: string;
+    }
+  ) {
     super(scope, id);
 
     this.bucket = new s3.Bucket(this, 'Bucket', {
@@ -202,11 +214,15 @@ class IamConstruct extends Construct {
   public readonly backupRole: iam.Role;
   public readonly monitoringRole: iam.Role;
 
-  constructor(scope: Construct, id: string, props: {
-    environment: string;
-    costCenter: string;
-    naming: ResourceNaming;
-  }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+    }
+  ) {
     super(scope, id);
 
     // Backup service role
@@ -214,8 +230,12 @@ class IamConstruct extends Construct {
       roleName: props.naming.generateName('backup', 'role'),
       assumedBy: new iam.ServicePrincipal('backup.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSBackupServiceRolePolicyForBackup'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSBackupServiceRolePolicyForRestores'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSBackupServiceRolePolicyForBackup'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSBackupServiceRolePolicyForRestores'
+        ),
       ],
     });
 
@@ -224,7 +244,9 @@ class IamConstruct extends Construct {
       roleName: props.naming.generateName('monitoring', 'role'),
       assumedBy: new iam.ServicePrincipal('cloudwatch.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
     });
 
@@ -241,13 +263,17 @@ class BackupConstruct extends Construct {
   public readonly vault: backup.BackupVault;
   public readonly plan: backup.BackupPlan;
 
-  constructor(scope: Construct, id: string, props: {
-    kmsKey: kms.IKey;
-    backupRole: iam.IRole;
-    environment: string;
-    costCenter: string;
-    naming: ResourceNaming;
-  }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      kmsKey: kms.IKey;
+      backupRole: iam.IRole;
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+    }
+  ) {
     super(scope, id);
 
     // Backup vault
@@ -296,13 +322,17 @@ class MonitoringConstruct extends Construct {
   public readonly alarmTopic: sns.Topic;
   public readonly dashboard: cloudwatch.Dashboard;
 
-  constructor(scope: Construct, id: string, props: {
-    kmsKey: kms.IKey;
-    environment: string;
-    costCenter: string;
-    naming: ResourceNaming;
-    vpc: ec2.IVpc;
-  }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      kmsKey: kms.IKey;
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+      vpc: ec2.IVpc;
+    }
+  ) {
     super(scope, id);
 
     // SNS topic for alarms
@@ -341,26 +371,37 @@ class MonitoringConstruct extends Construct {
 
 // VPC Peering Construct
 class VpcPeeringConstruct extends Construct {
-  constructor(scope: Construct, id: string, props: {
-    sourceVpc: ec2.IVpc;
-    targetVpcId: string;
-    targetRegion: string;
-    environment: string;
-    costCenter: string;
-    naming: ResourceNaming;
-  }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      sourceVpc: ec2.IVpc;
+      targetVpcId: string;
+      targetRegion: string;
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+    }
+  ) {
     super(scope, id);
 
-    const peeringConnection = new ec2.CfnVPCPeeringConnection(this, 'PeeringConnection', {
-      vpcId: props.sourceVpc.vpcId,
-      peerVpcId: props.targetVpcId,
-      peerRegion: props.targetRegion,
-    });
+    const peeringConnection = new ec2.CfnVPCPeeringConnection(
+      this,
+      'PeeringConnection',
+      {
+        vpcId: props.sourceVpc.vpcId,
+        peerVpcId: props.targetVpcId,
+        peerRegion: props.targetRegion,
+      }
+    );
 
     // Apply tags
     cdk.Tags.of(peeringConnection).add('Environment', props.environment);
     cdk.Tags.of(peeringConnection).add('CostCenter', props.costCenter);
-    cdk.Tags.of(peeringConnection).add('Name', props.naming.generateName('peering'));
+    cdk.Tags.of(peeringConnection).add(
+      'Name',
+      props.naming.generateName('peering')
+    );
   }
 }
 
@@ -368,13 +409,17 @@ class VpcPeeringConstruct extends Construct {
 class PipelineConstruct extends Construct {
   public readonly pipeline: codepipeline.Pipeline;
 
-  constructor(scope: Construct, id: string, props: {
-    kmsKey: kms.IKey;
-    artifactBucket: s3.IBucket;
-    environment: string;
-    costCenter: string;
-    naming: ResourceNaming;
-  }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      kmsKey: kms.IKey;
+      artifactBucket: s3.IBucket;
+      environment: string;
+      costCenter: string;
+      naming: ResourceNaming;
+    }
+  ) {
     super(scope, id);
 
     // CodeCommit repository
@@ -400,10 +445,7 @@ class PipelineConstruct extends Construct {
             'runtime-versions': {
               nodejs: '14',
             },
-            commands: [
-              'npm install -g aws-cdk',
-              'npm install',
-            ],
+            commands: ['npm install -g aws-cdk', 'npm install'],
           },
           build: {
             commands: [
@@ -469,9 +511,19 @@ export class TapStack extends cdk.Stack {
 
     // Get configuration from context or environment variables
     const environmentConfig: EnvironmentConfig = {
-      environment: this.node.tryGetContext('environment') || process.env.ENVIRONMENT || 'development',
-      costCenter: this.node.tryGetContext('costCenter') || process.env.COST_CENTER || 'engineering',
-      regions: this.node.tryGetContext('regions')?.split(',') || ['us-east-2', 'us-west-2', 'eu-west-1'],
+      environment:
+        this.node.tryGetContext('environment') ||
+        process.env.ENVIRONMENT ||
+        'development',
+      costCenter:
+        this.node.tryGetContext('costCenter') ||
+        process.env.COST_CENTER ||
+        'engineering',
+      regions: this.node.tryGetContext('regions')?.split(',') || [
+        'us-east-2',
+        'us-west-2',
+        'eu-west-1',
+      ],
       vpcCidrs: this.node.tryGetContext('vpcCidrs') || {
         'us-east-2': '10.0.0.0/16',
         'us-west-2': '10.1.0.0/16',
@@ -482,14 +534,21 @@ export class TapStack extends cdk.Stack {
     };
 
     const namingConfig: NamingConfig = {
-      prefix: this.node.tryGetContext('namePrefix') || process.env.NAME_PREFIX || 'tap',
+      prefix:
+        this.node.tryGetContext('namePrefix') ||
+        process.env.NAME_PREFIX ||
+        'tap',
       separator: '-',
       includeRegion: true,
       includeEnvironment: true,
     };
 
     const currentRegion = this.region;
-    const naming = new ResourceNaming(namingConfig, environmentConfig.environment, currentRegion);
+    const naming = new ResourceNaming(
+      namingConfig,
+      environmentConfig.environment,
+      currentRegion
+    );
 
     // KMS for encryption
     const kmsConstruct = new KmsConstruct(this, 'Kms', {
@@ -543,7 +602,10 @@ export class TapStack extends cdk.Stack {
       // Add backup selections
       backupConstruct.plan.addSelection('BackupSelection', {
         resources: [
-          backup.BackupResource.fromTag('Environment', environmentConfig.environment),
+          backup.BackupResource.fromTag(
+            'Environment',
+            environmentConfig.environment
+          ),
         ],
         role: iamConstruct.backupRole,
       });
@@ -628,40 +690,48 @@ if (require.main === module) {
 ## Key Features Implemented
 
 ### 1. **Multi-Environment & Multi-Region Support**
+
 - Configurable through context variables or environment variables
 - Supports development, staging, and production environments
 - Deploys to us-east-2, us-west-2, and eu-west-1 regions
 
 ### 2. **Enforced Tagging**
+
 - All resources automatically tagged with `Environment` and `CostCenter`
 - Additional tags for management and region identification
 
 ### 3. **Parameterized Resource Naming**
+
 - `ResourceNaming` utility class for consistent naming
 - Configurable prefix, separator, and naming patterns
 - Includes environment and region in resource names
 
 ### 4. **Security & Encryption**
+
 - KMS keys with automatic rotation
 - S3 buckets with KMS encryption and versioning
 - SSL enforcement and blocked public access
 
 ### 5. **Backup Policies**
+
 - AWS Backup with daily and weekly schedules
 - Automated lifecycle management
 - Cross-region backup support
 
 ### 6. **VPC & Networking**
+
 - Multi-AZ VPC with public, private, and isolated subnets
 - VPC Flow Logs for monitoring
 - VPC peering construct for cross-region connectivity
 
 ### 7. **Monitoring & Alarms**
+
 - CloudWatch dashboards and alarms
 - SNS topics for notifications
 - VPC and resource monitoring
 
 ### 8. **CI/CD Pipeline**
+
 - CodeCommit, CodeBuild, and CodePipeline integration
 - Automated deployment with CDK
 - Artifact management with S3
@@ -669,6 +739,7 @@ if (require.main === module) {
 ## Usage Examples
 
 ### Deploy to Development Environment
+
 ```bash
 # Set context variables
 cdk deploy --context environment=development --context costCenter=engineering
@@ -680,6 +751,7 @@ cdk deploy
 ```
 
 ### Deploy to Multiple Regions
+
 ```bash
 # Deploy to specific regions
 cdk deploy --context regions=us-east-2,eu-west-1
@@ -689,6 +761,7 @@ cdk deploy --all
 ```
 
 ### Configure Custom VPC CIDRs
+
 ```bash
 cdk deploy --context vpcCidrs='{"us-east-2":"10.10.0.0/16","us-west-2":"10.11.0.0/16"}'
 ```
