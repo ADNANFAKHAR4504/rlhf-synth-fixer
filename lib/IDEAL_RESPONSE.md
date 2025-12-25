@@ -1,3 +1,4 @@
+```yaml
 # infrastructure.yaml
 # CloudFormation template for a secure and compliant financial services application
 
@@ -5,19 +6,49 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Core infrastructure for a financial services application adhering to security and compliance best practices.
 
 Parameters:
-  Environment:
+  EnvironmentSuffix:
     Type: String
     Default: dev
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: Must contain only alphanumeric characters
   Project:
     Type: String
+    Default: defaultProject
     Description: Project name for tagging
   Owner:
     Type: String
+    Default: DevOps
     Description: Resource owner for tagging
+  UseLocalStack:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Whether deploying to LocalStack (affects RDS configuration)
+  KeyPairName:
+    Type: String
+    Default: localstack-key
+    Description: Name of the EC2 Key Pair for instances
+
+Conditions:
+  IsLocalStack: !Equals [!Ref UseLocalStack, 'true']
 
 Resources:
+
+  RDSKMSKey: 
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: true
+      Description: KMS key for RDS encryption
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+
+
   # VPC Configuration
   FinancialServicesVPC:
     Type: AWS::EC2::VPC
@@ -27,7 +58,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -44,7 +75,7 @@ Resources:
         - Key: Name
           Value: Public Subnet 1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -60,7 +91,7 @@ Resources:
         - Key: Name
           Value: Public Subnet 2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -77,7 +108,7 @@ Resources:
         - Key: Name
           Value: Private Subnet 1
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -93,7 +124,7 @@ Resources:
         - Key: Name
           Value: Private Subnet 2
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -208,7 +239,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -218,16 +249,6 @@ Resources:
     Type: AWS::Config::DeliveryChannel
     Properties:
       S3BucketName: !Ref SecureS3Bucket
-
-  # ConfigRecorder:
-  #   Type: AWS::Config::ConfigurationRecorder
-  #   DependsOn: ConfigDeliveryChannel
-  #   Properties:
-  #     Name: default
-  #     RoleARN: !GetAtt ConfigRole.Arn
-  #     RecordingGroup:
-  #       AllSupported: true
-  #       IncludeGlobalResourceTypes: true
 
   # CloudTrail S3 Bucket (dedicated, secure, encrypted)
   CloudTrailLogBucket:
@@ -244,7 +265,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -320,7 +341,7 @@ Resources:
       S3BucketName: !Ref CloudTrailLogBucket
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -345,6 +366,21 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
+
+  S3BucketLoggingEnabledRule:  
+    Type: AWS::Config::ConfigRule
+    DependsOn:
+      - ConfigRecorder
+      - ConfigDeliveryChannel
+    Properties:
+      ConfigRuleName: s3-bucket-logging-enabled
+      Description: Ensure S3 bucket logging is enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_LOGGING_ENABLED
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
 
   # VPC Flow Logs
   VPCFlowLog:
@@ -393,7 +429,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -410,7 +446,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -438,6 +474,7 @@ Resources:
           - Effect: Allow
             Principal:
               CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
+              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}"
             Action: s3:GetObject
             Resource: !Sub "${SecureS3Bucket.Arn}/*"
 
@@ -462,6 +499,27 @@ Resources:
       CloudFrontOriginAccessIdentityConfig:
         Comment: Access Identity for SecureS3Bucket
 
+  SecureCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt SecureS3Bucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOAI}"
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        Comment: Secure CloudFront distribution for S3
+
   # Route 53 Private Hosted Zone
   PrivateHostedZone:
     Type: AWS::Route53::HostedZone
@@ -478,7 +536,7 @@ Resources:
       TopicName: "financial-secure-topic"
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -503,7 +561,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: "financialwebacl"  # Static name instead of Sub
+      Name: !Sub "financialwebacl-${EnvironmentSuffix}"
       Description: 'Web ACL for protecting web applications'
       Scope: REGIONAL
       DefaultAction:
@@ -527,7 +585,7 @@ Resources:
               Name: AWSManagedRulesCommonRuleSet
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -536,22 +594,55 @@ Resources:
   # Update RDS to use credentials from Secrets Manager and security group
   FinancialDB:
     Type: AWS::RDS::DBInstance
+    Condition: !Not [!Ref IsLocalStack]
     DependsOn:
-    - FinancialServicesVPC
+    - FinancialDBSubnetGroup
+    - RDSSecurityGroup
     Properties:
-      DBInstanceClass: db.t3.medium
+      DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
       Engine: postgres
+      EngineVersion: '13.13'
+      DBName: financialdb
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:username}}']]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}']]
       StorageEncrypted: true
       PubliclyAccessible: false
+      KmsKeyId: !Ref RDSKMSKey
       DBSubnetGroupName: !Ref FinancialDBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
+      BackupRetentionPeriod: 0
+      MultiAZ: false
+      DeletionProtection: false
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+
+  # LocalStack-specific simplified RDS instance
+  FinancialDBLocalStack:
+    Type: AWS::RDS::DBInstance
+    Condition: IsLocalStack
+    Properties:
+      DBInstanceClass: db.t2.micro
+      AllocatedStorage: 20
+      Engine: postgres
+      EngineVersion: '11.22'
+      DBName: financialdb
+      MasterUsername: dbadmin
+      MasterUserPassword: password123
+      StorageEncrypted: false
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 0
+      MultiAZ: false
+      DeletionProtection: false
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -571,7 +662,8 @@ Resources:
       Runtime: nodejs22.x
       Environment:
         Variables:
-          SECRET_ARN: !Ref RDSSecret
+          SECRET_ARN: !If [IsLocalStack, 'localstack-secret', !Ref RDSSecret]
+          RDS_ENDPOINT: !If [IsLocalStack, !GetAtt FinancialDBLocalStack.Endpoint.Address, !GetAtt FinancialDB.Endpoint.Address]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -580,7 +672,7 @@ Resources:
           - !Ref PrivateSubnet2
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -603,7 +695,7 @@ Resources:
         PointInTimeRecoveryEnabled: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -614,9 +706,41 @@ Outputs:
     Description: VPC ID
     Value: !Ref FinancialServicesVPC
 
+  PublicSubnet1Id:
+    Description: First public subnet ID
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2Id:
+    Description: Second public subnet ID
+    Value: !Ref PublicSubnet2
+
+  PrivateSubnet1Id:
+    Description: First private subnet ID
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2Id:
+    Description: Second private subnet ID
+    Value: !Ref PrivateSubnet2
+
+  RDSInstanceId:
+    Description: FinancialDB RDS Instance ID
+    Value: !If [IsLocalStack, !Ref FinancialDBLocalStack, !Ref FinancialDB]
+
+  RDSInstanceEndpoint:
+    Description: FinancialDB Endpoint Address
+    Value: !If [IsLocalStack, !GetAtt FinancialDBLocalStack.Endpoint.Address, !GetAtt FinancialDB.Endpoint.Address]
+
+  RDSInstancePort:
+    Description: FinancialDB Endpoint Port
+    Value: !If [IsLocalStack, !GetAtt FinancialDBLocalStack.Endpoint.Port, !GetAtt FinancialDB.Endpoint.Port]
+
   S3BucketName:
-    Description: S3 Bucket Name
+    Description: Encrypted S3 Bucket Name
     Value: !Ref SecureS3Bucket
+
+  CloudTrailLogBucketName:
+    Description: CloudTrail S3 Bucket Name
+    Value: !Ref CloudTrailLogBucket
 
   WebACLArn:
     Description: The ARN of the WebACL
@@ -626,10 +750,23 @@ Outputs:
     Description: The ID of the WebACL
     Value: !GetAtt WebACL.Id
 
-  RDSInstanceId:
-    Description: FinancialDB RDS Instance ID
-    Value: !Ref FinancialDB
+  FinancialDynamoDBName:
+    Description: Name of the DynamoDB table
+    Value: !Ref FinancialDynamoDB
 
-  RDSInstanceEndpoint:
-    Description: FinancialDB Endpoint Address
-    Value: !GetAtt FinancialDB.Endpoint.Address
+  LambdaFunctionName:
+    Description: Financial Lambda Function Name
+    Value: !Ref FinancialLambdaFunction
+
+  ConfigRecorderName:
+    Description: AWS Config Recorder Name
+    Value: !Ref ConfigRecorder
+
+  ProjectName:
+    Description: Project name
+    Value: !Ref Project
+  
+  SNSTopicArn:
+    Description: ARN of the secure SNS Topic
+    Value: !Ref SecureSNSTopic
+```

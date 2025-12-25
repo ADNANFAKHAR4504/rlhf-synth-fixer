@@ -17,6 +17,30 @@
             "Type": "String",
             "Default": "DevOps",
             "Description": "Resource owner for tagging"
+        },
+        "UseLocalStack": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Whether deploying to LocalStack (affects RDS configuration)"
+        },
+        "KeyPairName": {
+            "Type": "String",
+            "Default": "localstack-key",
+            "Description": "Name of the EC2 Key Pair for instances"
+        }
+    },
+    "Conditions": {
+        "IsLocalStack": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseLocalStack"
+                },
+                "true"
+            ]
         }
     },
     "Resources": {
@@ -985,7 +1009,9 @@
         "WebACL": {
             "Type": "AWS::WAFv2::WebACL",
             "Properties": {
-                "Name": "financialwebacl",
+                "Name": {
+                    "Fn::Sub": "financialwebacl-${EnvironmentSuffix}"
+                },
                 "Description": "Web ACL for protecting web applications",
                 "Scope": "REGIONAL",
                 "DefaultAction": {
@@ -1040,13 +1066,23 @@
         },
         "FinancialDB": {
             "Type": "AWS::RDS::DBInstance",
+            "Condition": {
+                "Fn::Not": [
+                    {
+                        "Ref": "IsLocalStack"
+                    }
+                ]
+            },
             "DependsOn": [
-                "FinancialServicesVPC"
+                "FinancialDBSubnetGroup",
+                "RDSSecurityGroup"
             ],
             "Properties": {
-                "DBInstanceClass": "db.t3.medium",
+                "DBInstanceClass": "db.t3.micro",
                 "AllocatedStorage": 20,
                 "Engine": "postgres",
+                "EngineVersion": "13.13",
+                "DBName": "financialdb",
                 "MasterUsername": {
                     "Fn::Join": [
                         "",
@@ -1084,6 +1120,47 @@
                         "Ref": "RDSSecurityGroup"
                     }
                 ],
+                "BackupRetentionPeriod": 0,
+                "MultiAZ": false,
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "FinancialDBLocalStack": {
+            "Type": "AWS::RDS::DBInstance",
+            "Condition": "IsLocalStack",
+            "Properties": {
+                "DBInstanceClass": "db.t2.micro",
+                "AllocatedStorage": 20,
+                "Engine": "postgres",
+                "EngineVersion": "11.22",
+                "DBName": "financialdb",
+                "MasterUsername": "dbadmin",
+                "MasterUserPassword": "password123",
+                "StorageEncrypted": false,
+                "PubliclyAccessible": false,
+                "BackupRetentionPeriod": 0,
+                "MultiAZ": false,
+                "DeletionProtection": false,
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -1123,7 +1200,30 @@
                 "Environment": {
                     "Variables": {
                         "SECRET_ARN": {
-                            "Ref": "RDSSecret"
+                            "Fn::If": [
+                                "IsLocalStack",
+                                "localstack-secret",
+                                {
+                                    "Ref": "RDSSecret"
+                                }
+                            ]
+                        },
+                        "RDS_ENDPOINT": {
+                            "Fn::If": [
+                                "IsLocalStack",
+                                {
+                                    "Fn::GetAtt": [
+                                        "FinancialDBLocalStack",
+                                        "Endpoint.Address"
+                                    ]
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "FinancialDB",
+                                        "Endpoint.Address"
+                                    ]
+                                }
+                            ]
                         }
                     }
                 },
@@ -1243,24 +1343,54 @@
         "RDSInstanceId": {
             "Description": "FinancialDB RDS Instance ID",
             "Value": {
-                "Ref": "FinancialDB"
+                "Fn::If": [
+                    "IsLocalStack",
+                    {
+                        "Ref": "FinancialDBLocalStack"
+                    },
+                    {
+                        "Ref": "FinancialDB"
+                    }
+                ]
             }
         },
         "RDSInstanceEndpoint": {
             "Description": "FinancialDB Endpoint Address",
             "Value": {
-                "Fn::GetAtt": [
-                    "FinancialDB",
-                    "Endpoint.Address"
+                "Fn::If": [
+                    "IsLocalStack",
+                    {
+                        "Fn::GetAtt": [
+                            "FinancialDBLocalStack",
+                            "Endpoint.Address"
+                        ]
+                    },
+                    {
+                        "Fn::GetAtt": [
+                            "FinancialDB",
+                            "Endpoint.Address"
+                        ]
+                    }
                 ]
             }
         },
         "RDSInstancePort": {
             "Description": "FinancialDB Endpoint Port",
             "Value": {
-                "Fn::GetAtt": [
-                    "FinancialDB",
-                    "Endpoint.Port"
+                "Fn::If": [
+                    "IsLocalStack",
+                    {
+                        "Fn::GetAtt": [
+                            "FinancialDBLocalStack",
+                            "Endpoint.Port"
+                        ]
+                    },
+                    {
+                        "Fn::GetAtt": [
+                            "FinancialDB",
+                            "Endpoint.Port"
+                        ]
+                    }
                 ]
             }
         },

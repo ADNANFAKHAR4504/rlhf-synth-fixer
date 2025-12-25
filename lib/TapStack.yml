@@ -18,6 +18,18 @@ Parameters:
     Type: String
     Default: DevOps
     Description: Resource owner for tagging
+  UseLocalStack:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Whether deploying to LocalStack (affects RDS configuration)
+  KeyPairName:
+    Type: String
+    Default: localstack-key
+    Description: Name of the EC2 Key Pair for instances
+
+Conditions:
+  IsLocalStack: !Equals [!Ref UseLocalStack, 'true']
 
 Resources:
 
@@ -548,7 +560,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: "financialwebacl"  # Static name instead of Sub
+      Name: !Sub "financialwebacl-${EnvironmentSuffix}"
       Description: 'Web ACL for protecting web applications'
       Scope: REGIONAL
       DefaultAction:
@@ -581,13 +593,16 @@ Resources:
   # Update RDS to use credentials from Secrets Manager and security group
   FinancialDB:
     Type: AWS::RDS::DBInstance
+    Condition: !Not [!Ref IsLocalStack]
     DependsOn:
-    - FinancialServicesVPC
+    - FinancialDBSubnetGroup
+    - RDSSecurityGroup
     Properties:
-      DBInstanceClass: db.t3.medium
-      AllocatedStorage: 5
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
       Engine: postgres
-      EngineVersion: '17.2'
+      EngineVersion: '13.13'
+      DBName: financialdb
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:username}}']]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}']]
       StorageEncrypted: true
@@ -597,6 +612,33 @@ Resources:
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       BackupRetentionPeriod: 0
+      MultiAZ: false
+      DeletionProtection: false
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+
+  # LocalStack-specific simplified RDS instance
+  FinancialDBLocalStack:
+    Type: AWS::RDS::DBInstance
+    Condition: IsLocalStack
+    Properties:
+      DBInstanceClass: db.t2.micro
+      AllocatedStorage: 20
+      Engine: postgres
+      EngineVersion: '11.22'
+      DBName: financialdb
+      MasterUsername: dbadmin
+      MasterUserPassword: password123
+      StorageEncrypted: false
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 0
+      MultiAZ: false
+      DeletionProtection: false
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -619,7 +661,8 @@ Resources:
       Runtime: nodejs22.x
       Environment:
         Variables:
-          SECRET_ARN: !Ref RDSSecret
+          SECRET_ARN: !If [IsLocalStack, 'localstack-secret', !Ref RDSSecret]
+          RDS_ENDPOINT: !If [IsLocalStack, !GetAtt FinancialDBLocalStack.Endpoint.Address, !GetAtt FinancialDB.Endpoint.Address]
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -680,15 +723,15 @@ Outputs:
 
   RDSInstanceId:
     Description: FinancialDB RDS Instance ID
-    Value: !Ref FinancialDB
+    Value: !If [IsLocalStack, !Ref FinancialDBLocalStack, !Ref FinancialDB]
 
   RDSInstanceEndpoint:
     Description: FinancialDB Endpoint Address
-    Value: !GetAtt FinancialDB.Endpoint.Address
+    Value: !If [IsLocalStack, !GetAtt FinancialDBLocalStack.Endpoint.Address, !GetAtt FinancialDB.Endpoint.Address]
 
   RDSInstancePort:
     Description: FinancialDB Endpoint Port
-    Value: !GetAtt FinancialDB.Endpoint.Port
+    Value: !If [IsLocalStack, !GetAtt FinancialDBLocalStack.Endpoint.Port, !GetAtt FinancialDB.Endpoint.Port]
 
   S3BucketName:
     Description: Encrypted S3 Bucket Name
