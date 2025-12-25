@@ -694,7 +694,7 @@
         },
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
-        "EngineVersion": "5.7.44",
+        "EngineVersion": "8.0.39",
         "MasterUsername": "admin",
         "MasterUserPassword": {
           "Fn::Sub": "{{resolve:secretsmanager:tap-database-password-${EnvironmentSuffix}:SecretString:password}}"
