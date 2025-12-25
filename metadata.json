@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr947",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "subtask": "Web Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "ALB",
+    "IAM",
+    "CloudWatch Logs",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route 53",
+    "Elastic IP"
+  ],
+  "wave": "P0"
+}
