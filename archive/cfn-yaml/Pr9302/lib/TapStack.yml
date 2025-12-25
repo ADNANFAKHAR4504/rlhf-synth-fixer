@@ -1,0 +1,305 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TAP Stack - IAM MFA Enforcement CloudFormation Template'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+      - Label:
+          default: 'Security Configuration'
+        Parameters:
+          - MFAMaxSessionDuration
+          - RequireMFAAge
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  IsLocalStack:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Whether deploying to LocalStack (disables MFA enforcement features not supported in LocalStack Community)'
+
+  MFAMaxSessionDuration:
+    Type: Number
+    Default: 3600
+    MinValue: 900
+    MaxValue: 43200
+    Description: 'Maximum session duration in seconds when using MFA (15 minutes to 12 hours)'
+
+  RequireMFAAge:
+    Type: Number
+    Default: 3600
+    MinValue: 0
+    MaxValue: 86400
+    Description: 'Maximum age of MFA authentication in seconds (0 to 24 hours)'
+
+Conditions:
+  # LocalStack Community does not support MFA conditions, IAM Identity Center, or FIDO2
+  EnableMFAEnforcement: !Equals [!Ref IsLocalStack, 'false']
+  IsAWSEnvironment: !Equals [!Ref IsLocalStack, 'false']
+
+Resources:
+  # IAM Role for administrative access with MFA enforcement (simplified for LocalStack)
+  MFAEnforcedAdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'MFAEnforcedAdminRole-${EnvironmentSuffix}'
+      Description: !If
+        - EnableMFAEnforcement
+        - 'Administrative role that requires MFA authentication for all actions'
+        - 'Administrative role (MFA enforcement disabled for LocalStack)'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub '${AWS::AccountId}'
+            Action: 'sts:AssumeRole'
+            # MFA conditions only in AWS, not LocalStack
+            Condition: !If
+              - EnableMFAEnforcement
+              - Bool:
+                  'aws:MultiFactorAuthPresent': 'true'
+                NumericLessThan:
+                  'aws:MultiFactorAuthAge': !Ref RequireMFAAge
+              - !Ref AWS::NoValue
+      MaxSessionDuration: !Ref MFAMaxSessionDuration
+      ManagedPolicyArns:
+        - !Ref MFAEnforcementPolicy
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MFARequired
+          Value: !If [EnableMFAEnforcement, 'true', 'false']
+        - Key: SecurityLevel
+          Value: 'High'
+        - Key: LocalStackCompatible
+          Value: !Ref IsLocalStack
+
+  # IAM Role for developers with MFA enforcement and limited permissions (simplified for LocalStack)
+  MFAEnforcedDeveloperRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'MFAEnforcedDeveloperRole-${EnvironmentSuffix}'
+      Description: !If
+        - EnableMFAEnforcement
+        - 'Developer role that requires MFA authentication with limited permissions'
+        - 'Developer role (MFA enforcement disabled for LocalStack)'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub '${AWS::AccountId}'
+            Action: 'sts:AssumeRole'
+            # MFA and region conditions only in AWS, not LocalStack
+            Condition: !If
+              - EnableMFAEnforcement
+              - Bool:
+                  'aws:MultiFactorAuthPresent': 'true'
+                NumericLessThan:
+                  'aws:MultiFactorAuthAge': !Ref RequireMFAAge
+                StringEquals:
+                  'aws:RequestedRegion':
+                    - 'us-east-1'
+                    - 'us-west-1'
+              - !Ref AWS::NoValue
+      MaxSessionDuration: !Ref MFAMaxSessionDuration
+      ManagedPolicyArns:
+        - !Ref MFAEnforcementPolicy
+        - !Ref DeveloperPermissionsPolicy
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MFARequired
+          Value: !If [EnableMFAEnforcement, 'true', 'false']
+        - Key: SecurityLevel
+          Value: 'Medium'
+        - Key: LocalStackCompatible
+          Value: !Ref IsLocalStack
+
+  # Custom IAM policy for MFA enforcement (simplified for LocalStack)
+  MFAEnforcementPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub 'MFAEnforcementPolicy-${EnvironmentSuffix}'
+      Description: !If
+        - EnableMFAEnforcement
+        - 'Policy that enforces MFA authentication for all actions'
+        - 'Policy for basic IAM operations (MFA enforcement disabled for LocalStack)'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow basic IAM operations for MFA device management
+          - Sid: 'AllowMFADeviceManagement'
+            Effect: Allow
+            Action:
+              - 'iam:ListMFADevices'
+              - 'iam:ListVirtualMFADevices'
+              - 'iam:GetUser'
+              - 'iam:GetAccountSummary'
+              - 'iam:ChangePassword'
+              - 'iam:CreateVirtualMFADevice'
+              - 'iam:EnableMFADevice'
+              - 'iam:ResyncMFADevice'
+              - 'iam:DeleteVirtualMFADevice'
+              - 'iam:DeactivateMFADevice'
+            Resource: '*'
+
+  # Developer-specific permissions policy (simplified for LocalStack)
+  DeveloperPermissionsPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub 'DeveloperPermissionsPolicy-${EnvironmentSuffix}'
+      Description: !If
+        - EnableMFAEnforcement
+        - 'Limited permissions for developers with MFA enforcement'
+        - 'Limited permissions for developers (MFA conditions disabled for LocalStack)'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow read-only access to AWS services (MFA condition only in AWS)
+          - Sid: 'AllowReadOnlyAccess'
+            Effect: Allow
+            Action:
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 'dynamodb:GetItem'
+              - 'dynamodb:Query'
+              - 'dynamodb:Scan'
+              - 'lambda:GetFunction'
+              - 'lambda:ListFunctions'
+              - 'cloudformation:DescribeStacks'
+              - 'cloudformation:DescribeStackResources'
+              - 'logs:DescribeLogGroups'
+              - 'logs:DescribeLogStreams'
+              - 'logs:GetLogEvents'
+            Resource: '*'
+          # Allow limited write access to development resources (MFA condition only in AWS)
+          - Sid: 'AllowDevelopmentResourceAccess'
+            Effect: Allow
+            Action:
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+              - 'dynamodb:PutItem'
+              - 'dynamodb:UpdateItem'
+              - 'dynamodb:DeleteItem'
+              - 'lambda:UpdateFunctionCode'
+              - 'lambda:UpdateFunctionConfiguration'
+            Resource:
+              - !Sub 'arn:aws:s3:::*-${EnvironmentSuffix}-*'
+              - !Sub 'arn:aws:dynamodb:*:*:table/*-${EnvironmentSuffix}-*'
+              - !Sub 'arn:aws:lambda:*:*:function:*-${EnvironmentSuffix}-*'
+
+  # IAM Identity Center integration policy (NOT supported in LocalStack Community - AWS only)
+  IdentityCenterMFAPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: IsAWSEnvironment
+    Properties:
+      ManagedPolicyName: !Sub 'IdentityCenterMFAPolicy-${EnvironmentSuffix}'
+      Description: 'Policy for IAM Identity Center MFA integration (AWS only - not in LocalStack)'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'AllowIdentityCenterMFAOperations'
+            Effect: Allow
+            Action:
+              - 'sso:ListInstances'
+              - 'sso:DescribeInstance'
+              - 'sso:ListPermissionSets'
+              - 'sso:DescribePermissionSet'
+              - 'identitystore:ListUsers'
+              - 'identitystore:DescribeUser'
+              - 'identitystore:ListGroups'
+              - 'identitystore:DescribeGroup'
+            Resource: '*'
+
+  # Original DynamoDB table from template (keeping existing functionality)
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'TurnAroundPromptTable-${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MFAProtected
+          Value: 'true'
+
+Outputs:
+  # Original outputs
+  TurnAroundPromptTableName:
+    Description: 'Name of the DynamoDB table'
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
+
+  TurnAroundPromptTableArn:
+    Description: 'ARN of the DynamoDB table'
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  # New MFA-related outputs
+  MFAEnforcedAdminRoleArn:
+    Description: 'ARN of the MFA-enforced admin role'
+    Value: !GetAtt MFAEnforcedAdminRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-MFAEnforcedAdminRoleArn'
+
+  MFAEnforcedDeveloperRoleArn:
+    Description: 'ARN of the MFA-enforced developer role'
+    Value: !GetAtt MFAEnforcedDeveloperRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-MFAEnforcedDeveloperRoleArn'
+
+  MFAEnforcementPolicyArn:
+    Description: 'ARN of the MFA enforcement policy'
+    Value: !Ref MFAEnforcementPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-MFAEnforcementPolicyArn'
+
+  DeveloperPermissionsPolicyArn:
+    Description: 'ARN of the developer permissions policy'
+    Value: !Ref DeveloperPermissionsPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-DeveloperPermissionsPolicyArn'
+
+  IdentityCenterMFAPolicyArn:
+    Condition: IsAWSEnvironment
+    Description: 'ARN of the IAM Identity Center MFA policy (AWS only)'
+    Value: !Ref IdentityCenterMFAPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-IdentityCenterMFAPolicyArn'

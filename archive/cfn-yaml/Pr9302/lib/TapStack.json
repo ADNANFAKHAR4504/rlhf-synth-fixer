@@ -1,0 +1,531 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TAP Stack - IAM MFA Enforcement CloudFormation Template",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "MFAMaxSessionDuration",
+                        "RequireMFAAge"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "IsLocalStack": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Whether deploying to LocalStack (disables MFA enforcement features not supported in LocalStack Community)"
+        },
+        "MFAMaxSessionDuration": {
+            "Type": "Number",
+            "Default": 3600,
+            "MinValue": 900,
+            "MaxValue": 43200,
+            "Description": "Maximum session duration in seconds when using MFA (15 minutes to 12 hours)"
+        },
+        "RequireMFAAge": {
+            "Type": "Number",
+            "Default": 3600,
+            "MinValue": 0,
+            "MaxValue": 86400,
+            "Description": "Maximum age of MFA authentication in seconds (0 to 24 hours)"
+        }
+    },
+    "Conditions": {
+        "EnableMFAEnforcement": {
+            "Fn::Equals": [
+                {
+                    "Ref": "IsLocalStack"
+                },
+                "false"
+            ]
+        },
+        "IsAWSEnvironment": {
+            "Fn::Equals": [
+                {
+                    "Ref": "IsLocalStack"
+                },
+                "false"
+            ]
+        }
+    },
+    "Resources": {
+        "MFAEnforcedAdminRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "MFAEnforcedAdminRole-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::If": [
+                        "EnableMFAEnforcement",
+                        "Administrative role that requires MFA authentication for all actions",
+                        "Administrative role (MFA enforcement disabled for LocalStack)"
+                    ]
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "${AWS::AccountId}"
+                                }
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "Fn::If": [
+                                    "EnableMFAEnforcement",
+                                    {
+                                        "Bool": {
+                                            "aws:MultiFactorAuthPresent": "true"
+                                        },
+                                        "NumericLessThan": {
+                                            "aws:MultiFactorAuthAge": {
+                                                "Ref": "RequireMFAAge"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "Ref": "AWS::NoValue"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "MaxSessionDuration": {
+                    "Ref": "MFAMaxSessionDuration"
+                },
+                "ManagedPolicyArns": [
+                    {
+                        "Ref": "MFAEnforcementPolicy"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "MFARequired",
+                        "Value": {
+                            "Fn::If": [
+                                "EnableMFAEnforcement",
+                                "true",
+                                "false"
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "SecurityLevel",
+                        "Value": "High"
+                    },
+                    {
+                        "Key": "LocalStackCompatible",
+                        "Value": {
+                            "Ref": "IsLocalStack"
+                        }
+                    }
+                ]
+            }
+        },
+        "MFAEnforcedDeveloperRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "MFAEnforcedDeveloperRole-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::If": [
+                        "EnableMFAEnforcement",
+                        "Developer role that requires MFA authentication with limited permissions",
+                        "Developer role (MFA enforcement disabled for LocalStack)"
+                    ]
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "${AWS::AccountId}"
+                                }
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "Fn::If": [
+                                    "EnableMFAEnforcement",
+                                    {
+                                        "Bool": {
+                                            "aws:MultiFactorAuthPresent": "true"
+                                        },
+                                        "NumericLessThan": {
+                                            "aws:MultiFactorAuthAge": {
+                                                "Ref": "RequireMFAAge"
+                                            }
+                                        },
+                                        "StringEquals": {
+                                            "aws:RequestedRegion": [
+                                                "us-east-1",
+                                                "us-west-1"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "Ref": "AWS::NoValue"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "MaxSessionDuration": {
+                    "Ref": "MFAMaxSessionDuration"
+                },
+                "ManagedPolicyArns": [
+                    {
+                        "Ref": "MFAEnforcementPolicy"
+                    },
+                    {
+                        "Ref": "DeveloperPermissionsPolicy"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "MFARequired",
+                        "Value": {
+                            "Fn::If": [
+                                "EnableMFAEnforcement",
+                                "true",
+                                "false"
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "SecurityLevel",
+                        "Value": "Medium"
+                    },
+                    {
+                        "Key": "LocalStackCompatible",
+                        "Value": {
+                            "Ref": "IsLocalStack"
+                        }
+                    }
+                ]
+            }
+        },
+        "MFAEnforcementPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "ManagedPolicyName": {
+                    "Fn::Sub": "MFAEnforcementPolicy-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::If": [
+                        "EnableMFAEnforcement",
+                        "Policy that enforces MFA authentication for all actions",
+                        "Policy for basic IAM operations (MFA enforcement disabled for LocalStack)"
+                    ]
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowMFADeviceManagement",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:ListMFADevices",
+                                "iam:ListVirtualMFADevices",
+                                "iam:GetUser",
+                                "iam:GetAccountSummary",
+                                "iam:ChangePassword",
+                                "iam:CreateVirtualMFADevice",
+                                "iam:EnableMFADevice",
+                                "iam:ResyncMFADevice",
+                                "iam:DeleteVirtualMFADevice",
+                                "iam:DeactivateMFADevice"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "DeveloperPermissionsPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "ManagedPolicyName": {
+                    "Fn::Sub": "DeveloperPermissionsPolicy-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::If": [
+                        "EnableMFAEnforcement",
+                        "Limited permissions for developers with MFA enforcement",
+                        "Limited permissions for developers (MFA conditions disabled for LocalStack)"
+                    ]
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowReadOnlyAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:ListBucket",
+                                "dynamodb:GetItem",
+                                "dynamodb:Query",
+                                "dynamodb:Scan",
+                                "lambda:GetFunction",
+                                "lambda:ListFunctions",
+                                "cloudformation:DescribeStacks",
+                                "cloudformation:DescribeStackResources",
+                                "logs:DescribeLogGroups",
+                                "logs:DescribeLogStreams",
+                                "logs:GetLogEvents"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "AllowDevelopmentResourceAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:PutObject",
+                                "s3:DeleteObject",
+                                "dynamodb:PutItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "lambda:UpdateFunctionCode",
+                                "lambda:UpdateFunctionConfiguration"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::*-${EnvironmentSuffix}-*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:dynamodb:*:*:table/*-${EnvironmentSuffix}-*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:lambda:*:*:function:*-${EnvironmentSuffix}-*"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "IdentityCenterMFAPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Condition": "IsAWSEnvironment",
+            "Properties": {
+                "ManagedPolicyName": {
+                    "Fn::Sub": "IdentityCenterMFAPolicy-${EnvironmentSuffix}"
+                },
+                "Description": "Policy for IAM Identity Center MFA integration (AWS only - not in LocalStack)",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowIdentityCenterMFAOperations",
+                            "Effect": "Allow",
+                            "Action": [
+                                "sso:ListInstances",
+                                "sso:DescribeInstance",
+                                "sso:ListPermissionSets",
+                                "sso:DescribePermissionSet",
+                                "identitystore:ListUsers",
+                                "identitystore:DescribeUser",
+                                "identitystore:ListGroups",
+                                "identitystore:DescribeGroup"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "TurnAroundPromptTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "TurnAroundPromptTable-${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "DeletionProtectionEnabled": false,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "MFAProtected",
+                        "Value": "true"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "TurnAroundPromptTableName": {
+            "Description": "Name of the DynamoDB table",
+            "Value": {
+                "Ref": "TurnAroundPromptTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+                }
+            }
+        },
+        "TurnAroundPromptTableArn": {
+            "Description": "ARN of the DynamoDB table",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TurnAroundPromptTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        },
+        "MFAEnforcedAdminRoleArn": {
+            "Description": "ARN of the MFA-enforced admin role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MFAEnforcedAdminRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFAEnforcedAdminRoleArn"
+                }
+            }
+        },
+        "MFAEnforcedDeveloperRoleArn": {
+            "Description": "ARN of the MFA-enforced developer role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MFAEnforcedDeveloperRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFAEnforcedDeveloperRoleArn"
+                }
+            }
+        },
+        "MFAEnforcementPolicyArn": {
+            "Description": "ARN of the MFA enforcement policy",
+            "Value": {
+                "Ref": "MFAEnforcementPolicy"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFAEnforcementPolicyArn"
+                }
+            }
+        },
+        "DeveloperPermissionsPolicyArn": {
+            "Description": "ARN of the developer permissions policy",
+            "Value": {
+                "Ref": "DeveloperPermissionsPolicy"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DeveloperPermissionsPolicyArn"
+                }
+            }
+        },
+        "IdentityCenterMFAPolicyArn": {
+            "Condition": "IsAWSEnvironment",
+            "Description": "ARN of the IAM Identity Center MFA policy (AWS only)",
+            "Value": {
+                "Ref": "IdentityCenterMFAPolicy"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-IdentityCenterMFAPolicyArn"
+                }
+            }
+        }
+    }
+}
