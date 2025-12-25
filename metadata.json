@@ -3,7 +3,7 @@
   "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "LS-ls-trainr917",
+  "po_id": "LS-trainr917",
   "team": "synth-2",
   "startedAt": "2025-08-20T12:47:49+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
@@ -24,7 +24,7 @@
   ],
   "wave": "P0",
   "migrated_from": {
-    "po_id": "ls-trainr917",
+    "po_id": "trainr917",
     "pr": "Pr1797"
   }
 }
