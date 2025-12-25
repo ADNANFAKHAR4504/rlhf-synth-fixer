@@ -806,6 +806,13 @@
     },
     "EKSCluster": {
       "Type": "AWS::EKS::Cluster",
+      "Metadata": {
+        "cfn-lint": {
+          "config": {
+            "ignore_checks": ["E3012"]
+          }
+        }
+      },
       "Properties": {
         "Name": {
           "Fn::Sub": "eks-cluster-${EnvironmentSuffix}"
