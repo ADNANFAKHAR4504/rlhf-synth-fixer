@@ -38,25 +38,25 @@ provider "aws" {
   skip_credentials_validation = local.is_localstack ? true : false
   skip_metadata_api_check     = local.is_localstack ? true : false
   skip_requesting_account_id  = local.is_localstack ? true : false
-  s3_use_path_style          = local.is_localstack ? true : false
+  s3_use_path_style           = local.is_localstack ? true : false
 
   endpoints {
-    apigateway       = local.is_localstack ? var.aws_endpoint_url : null
-    cloudformation   = local.is_localstack ? var.aws_endpoint_url : null
-    cloudtrail       = local.is_localstack ? var.aws_endpoint_url : null
-    cloudwatch       = local.is_localstack ? var.aws_endpoint_url : null
-    cloudwatchlogs   = local.is_localstack ? var.aws_endpoint_url : null
-    dynamodb         = local.is_localstack ? var.aws_endpoint_url : null
-    ec2              = local.is_localstack ? var.aws_endpoint_url : null
-    iam              = local.is_localstack ? var.aws_endpoint_url : null
-    kms              = local.is_localstack ? var.aws_endpoint_url : null
-    lambda           = local.is_localstack ? var.aws_endpoint_url : null
-    s3               = local.is_localstack ? var.aws_endpoint_url : null
-    secretsmanager   = local.is_localstack ? var.aws_endpoint_url : null
-    sns              = local.is_localstack ? var.aws_endpoint_url : null
-    sqs              = local.is_localstack ? var.aws_endpoint_url : null
-    ssm              = local.is_localstack ? var.aws_endpoint_url : null
-    sts              = local.is_localstack ? var.aws_endpoint_url : null
+    apigateway     = local.is_localstack ? var.aws_endpoint_url : null
+    cloudformation = local.is_localstack ? var.aws_endpoint_url : null
+    cloudtrail     = local.is_localstack ? var.aws_endpoint_url : null
+    cloudwatch     = local.is_localstack ? var.aws_endpoint_url : null
+    cloudwatchlogs = local.is_localstack ? var.aws_endpoint_url : null
+    dynamodb       = local.is_localstack ? var.aws_endpoint_url : null
+    ec2            = local.is_localstack ? var.aws_endpoint_url : null
+    iam            = local.is_localstack ? var.aws_endpoint_url : null
+    kms            = local.is_localstack ? var.aws_endpoint_url : null
+    lambda         = local.is_localstack ? var.aws_endpoint_url : null
+    s3             = local.is_localstack ? var.aws_endpoint_url : null
+    secretsmanager = local.is_localstack ? var.aws_endpoint_url : null
+    sns            = local.is_localstack ? var.aws_endpoint_url : null
+    sqs            = local.is_localstack ? var.aws_endpoint_url : null
+    ssm            = local.is_localstack ? var.aws_endpoint_url : null
+    sts            = local.is_localstack ? var.aws_endpoint_url : null
   }
 }
 

@@ -151,8 +151,8 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_kms_key" "main" {
   description             = "KMS key for ${var.environment} environment encryption"
-  deletion_window_in_days = 7  # Reduced for LocalStack testing
-  enable_key_rotation     = local.is_localstack ? false : true  # Disable key rotation in LocalStack
+  deletion_window_in_days = 7                                  # Reduced for LocalStack testing
+  enable_key_rotation     = local.is_localstack ? false : true # Disable key rotation in LocalStack
 
   # Simplified policy for LocalStack compatibility
   policy = jsonencode({
