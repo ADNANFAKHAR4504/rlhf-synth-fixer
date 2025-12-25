@@ -11,18 +11,10 @@ terraform {
     }
   }
 
-  # Backend disabled for LocalStack testing
-  # Original S3 backend commented out
-  # backend "s3" {
-  #   bucket         = "iac-rlhf-tf-states"
-  #   key            = "global/app-http-https-sg/terraform.tfstate"
-  #   region         = "us-west-2"
-  #   encrypt        = true
-  # }
+  backend "s3" {}
 }
 
 # AWS provider
 provider "aws" {
-  # Region is sourced from variable in main.tf
   region = var.aws_region
 }
