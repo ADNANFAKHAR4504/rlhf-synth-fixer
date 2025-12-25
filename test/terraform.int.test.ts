@@ -303,6 +303,9 @@ describe('Terraform Infrastructure - End-to-End Workflow Tests', () => {
     });
     await s3Client.send(putCommand);
 
+    // Wait for S3 public access propagation
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
     // Construct public URL using path-style (more reliable than virtual-hosted-style)
     const region = process.env.AWS_REGION || 'us-east-1';
     const publicUrl = `https://s3.${region}.amazonaws.com/${bucketName}/${publicTestKey}`;
