@@ -154,11 +154,15 @@ describe('TapStack Integration Tests', () => {
 
     it('should have valid DNS names', () => {
       if (outputs.loadBalancerDns) {
-        expect(outputs.loadBalancerDns).toMatch(/.*\.elb\.amazonaws\.com$/);
+        // Accept both AWS format and LocalStack format
+        expect(outputs.loadBalancerDns).toMatch(
+          /.*\.(elb\.amazonaws\.com|elb\.localhost\.localstack\.cloud)$/
+        );
       }
       if (outputs.databaseEndpoint) {
+        // Accept both AWS RDS format and LocalStack format
         expect(outputs.databaseEndpoint).toMatch(
-          /.*\.rds\.amazonaws\.com:\d+$/
+          /.*\.(rds\.amazonaws\.com|localhost\.localstack\.cloud):\d+$/
         );
       }
     });
@@ -198,8 +202,9 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have correct DNS name format', () => {
+      // Accept both AWS format and LocalStack format
       expect(outputs.loadBalancerDns).toMatch(
-        /^[a-z0-9-]+\.us-east-1\.elb\.amazonaws\.com$/
+        /^[a-z0-9-]+\.(us-east-1\.elb\.amazonaws\.com|elb\.localhost\.localstack\.cloud)$/
       );
     });
   });
@@ -238,8 +243,9 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have valid database endpoint', () => {
+      // Accept both AWS RDS format and LocalStack format
       expect(outputs.databaseEndpoint).toMatch(
-        /^[\w-]+\.[\w]+\.us-east-1\.rds\.amazonaws\.com:5432$/
+        /^([\w-]+\.[\w]+\.us-east-1\.rds\.amazonaws\.com|localhost\.localstack\.cloud):\d+$/
       );
     });
   });
