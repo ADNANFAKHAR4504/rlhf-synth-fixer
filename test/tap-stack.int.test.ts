@@ -71,7 +71,7 @@ describe('TapStack Integration Tests', () => {
 
     test('should have proper resource dependencies', () => {
       // Check that resources reference each other properly
-      expect(templateContent).toContain('!Ref ExistingVPCId');
+      expect(templateContent).toContain('!Ref AppVPC');
       expect(templateContent).toContain('!Ref AppS3Bucket');
       expect(templateContent).toContain('!Ref S3KMSKey');
       expect(templateContent).toContain('!Ref CloudTrailLogsBucket');
@@ -135,8 +135,8 @@ describe('TapStack Integration Tests', () => {
 
     test('should have parameter integration', () => {
       expect(templateContent).toContain('EnvironmentSuffix:');
-      expect(templateContent).toContain('ExistingVPCId:');
-      expect(templateContent).toContain('AvailabilityZones:');
+      expect(templateContent).toContain('VpcCidr:');
+      expect(templateContent).toContain('PublicKeyName:');
     });
 
     test('should have tagging integration', () => {
@@ -164,7 +164,7 @@ describe('TapStack Integration Tests', () => {
     test('should support complete application deployment', () => {
       expect(templateContent).toContain('SampleEC2Instance:');
       expect(templateContent).toContain('ImageId:');
-      expect(templateContent).toContain('ami-0c02fb55956c7d316');
+      expect(templateContent).toContain('ami-760aaa0f');
     });
 
     test('should support S3 encryption', () => {
