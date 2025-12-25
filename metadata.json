@@ -9,8 +9,6 @@
   "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "IaC Optimization",
     "Security Configuration as Code"
   ],
   "aws_services": [
