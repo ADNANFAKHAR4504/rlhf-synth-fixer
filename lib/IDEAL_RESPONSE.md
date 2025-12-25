@@ -454,24 +454,24 @@ Outputs:
 
 ## Key Security Features Implemented
 
-### 🔐 **Encryption at Rest**
+###  **Encryption at Rest**
 - All S3 buckets use **SSE-KMS** encryption with a dedicated KMS key
 - **BucketKeyEnabled** reduces KMS API costs while maintaining security
 - KMS key policy allows S3 service access for encryption operations
 
-### 🛡️ **Least Privilege IAM Roles**
+###  **Least Privilege IAM Roles**
 - **Read-Only Role**: Only `GetObject`, `ListBucket`, and KMS decrypt permissions
 - **Read-Write Role**: Limited to necessary S3 operations and KMS key usage
 - **Backup Role**: Specific permissions for backup operations only
 - External ID condition for additional security on role assumption
 
-### 📊 **Comprehensive Logging**
+###  **Comprehensive Logging**
 - **CloudWatch Log Groups** for different event types with appropriate retention
 - **S3 Access Logging** to dedicated logs bucket
 - **CloudTrail** for API-level auditing of S3 operations
 - **Lifecycle policies** on logs bucket to manage storage costs
 
-### 🏗️ **Infrastructure Best Practices**
+###  **Infrastructure Best Practices**
 - All resources prefixed with `secureapp` as required
 - **Public access blocked** on all S3 buckets
 - **Versioning enabled** on critical buckets
