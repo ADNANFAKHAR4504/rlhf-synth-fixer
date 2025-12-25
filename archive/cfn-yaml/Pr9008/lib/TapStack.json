@@ -1,0 +1,2467 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-grade comprehensive web application infrastructure with data processing pipeline",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "Environment",
+                        "OwnerEmail"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VPCCidr",
+                        "PublicSubnetCidr1",
+                        "PublicSubnetCidr2",
+                        "PrivateSubnetCidr1",
+                        "PrivateSubnetCidr2"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "DBMasterUsername",
+                        "DBInstanceClass",
+                        "DBAllocatedStorage"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Application Configuration"
+                    },
+                    "Parameters": [
+                        "LambdaMemorySize",
+                        "LambdaTimeout",
+                        "ApiRateLimit",
+                        "ApiBurstLimit"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "AllowedValues": [
+                "dev",
+                "prod"
+            ],
+            "Description": "Environment designation for tagging and configuration"
+        },
+        "OwnerEmail": {
+            "Type": "String",
+            "Default": "team@example.com",
+            "Description": "Owner email for tagging and notifications",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        },
+        "VPCCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for VPC",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/[0-9]{1,2}$"
+        },
+        "PublicSubnetCidr1": {
+            "Type": "String",
+            "Default": "10.0.1.0/24",
+            "Description": "CIDR block for public subnet 1"
+        },
+        "PublicSubnetCidr2": {
+            "Type": "String",
+            "Default": "10.0.2.0/24",
+            "Description": "CIDR block for public subnet 2"
+        },
+        "PrivateSubnetCidr1": {
+            "Type": "String",
+            "Default": "10.0.10.0/24",
+            "Description": "CIDR block for private subnet 1"
+        },
+        "PrivateSubnetCidr2": {
+            "Type": "String",
+            "Default": "10.0.20.0/24",
+            "Description": "CIDR block for private subnet 2"
+        },
+        "DBMasterUsername": {
+            "Type": "String",
+            "Default": "dbadmin",
+            "Description": "Database master username",
+            "MinLength": 1,
+            "MaxLength": 16,
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
+        },
+        "DBInstanceClass": {
+            "Type": "String",
+            "Default": "db.t3.micro",
+            "Description": "Database instance class (cost-optimized default)",
+            "AllowedValues": [
+                "db.t3.micro",
+                "db.t3.small",
+                "db.t3.medium"
+            ]
+        },
+        "DBAllocatedStorage": {
+            "Type": "Number",
+            "Default": 20,
+            "MinValue": 20,
+            "MaxValue": 100,
+            "Description": "Allocated storage for RDS in GB"
+        },
+        "LambdaMemorySize": {
+            "Type": "Number",
+            "Default": 128,
+            "MinValue": 128,
+            "MaxValue": 512,
+            "Description": "Memory allocation for Lambda function (MB)"
+        },
+        "LambdaTimeout": {
+            "Type": "Number",
+            "Default": 30,
+            "MinValue": 3,
+            "MaxValue": 60,
+            "Description": "Lambda function timeout in seconds"
+        },
+        "ApiRateLimit": {
+            "Type": "Number",
+            "Default": 100,
+            "Description": "API Gateway rate limit (requests per second)"
+        },
+        "ApiBurstLimit": {
+            "Type": "Number",
+            "Default": 200,
+            "Description": "API Gateway burst limit"
+        }
+    },
+    "Resources": {
+        "DatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-db-credentials"
+                },
+                "Description": "RDS Master User Credentials",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-db-secret"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "SecretRDSInstanceAttachment": {
+            "Type": "AWS::SecretsManager::SecretTargetAttachment",
+            "Properties": {
+                "SecretId": {
+                    "Ref": "DatabaseSecret"
+                },
+                "TargetId": {
+                    "Ref": "Database"
+                },
+                "TargetType": "AWS::RDS::DBInstance"
+            }
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VPCCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-VPC"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-IGW"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnetCidr1"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Public-Subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnetCidr2"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Public-Subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnetCidr1"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Private-Subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnetCidr2"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Private-Subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NATGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-NAT-EIP-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NATGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-NAT-EIP-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NATGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-NAT-Gateway-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NATGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-NAT-Gateway-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Public-RT"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Private-RT-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway1"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Private-RT-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway2"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                }
+            }
+        },
+        "APIGatewaySecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${AWS::StackName}-API-SG"
+                },
+                "GroupDescription": "Security group for API Gateway VPC endpoint",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTPS from anywhere"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-API-SG"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${AWS::StackName}-Lambda-SG"
+                },
+                "GroupDescription": "Security group for Lambda functions",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Lambda-SG"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${AWS::StackName}-DB-SG"
+                },
+                "GroupDescription": "Security group for RDS database",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "LambdaSecurityGroup"
+                        },
+                        "Description": "Allow MySQL access from Lambda"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-DB-SG"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionToGlacier",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ],
+                            "NoncurrentVersionTransitions": [
+                                {
+                                    "TransitionInDays": 60,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "DataBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureConnections",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "DataBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${DataBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "S3EventProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-S3EventProcessor"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "S3EventProcessorRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "SNSTopic"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\nsns = boto3.client('sns')\ns3 = boto3.client('s3')\n\ndef lambda_handler(event, context):\n    \"\"\"Process S3 events and check for lifecycle transitions\"\"\"\n    try:\n        for record in event['Records']:\n            bucket = record['s3']['bucket']['name']\n            key = record['s3']['object']['key']\n            \n            # Get object metadata to check storage class\n            try:\n                response = s3.get_object_attributes(\n                    Bucket=bucket,\n                    Key=key,\n                    ObjectAttributes=['StorageClass']\n                )\n                storage_class = response.get('StorageClass', 'STANDARD')\n                \n                # Check if object has transitioned to Glacier\n                if storage_class == 'GLACIER':\n                    message = {\n                        'Event': 'Object Transitioned to Glacier',\n                        'Bucket': bucket,\n                        'Key': key,\n                        'StorageClass': storage_class,\n                        'Timestamp': datetime.utcnow().isoformat()\n                    }\n                    \n                    sns.publish(\n                        TopicArn=os.environ['SNS_TOPIC_ARN'],\n                        Subject=f'S3 Object Lifecycle Transition - {key}',\n                        Message=json.dumps(message, indent=2)\n                    )\n            except Exception as e:\n                print(f\"Error processing object {key}: {str(e)}\")\n                \n        return {\n            'statusCode': 200,\n            'body': json.dumps('Events processed successfully')\n        }\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps(f'Error: {str(e)}')\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "S3EventProcessorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-S3EventProcessorRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectAttributes"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${DataBucket.Arn}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SNSPublish",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "SNSTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "S3EventProcessorPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "S3EventProcessorFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "s3.amazonaws.com",
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                },
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "DataBucket",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "GlacierTransitionCheckRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-glacier-check"
+                },
+                "Description": "Daily check for objects transitioned to Glacier",
+                "ScheduleExpression": "rate(1 day)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "GlacierCheckFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "GlacierCheckTarget"
+                    }
+                ]
+            }
+        },
+        "GlacierCheckPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "GlacierCheckFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "GlacierTransitionCheckRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "GlacierCheckFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-GlacierCheck"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GlacierCheckRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "BUCKET_NAME": {
+                            "Ref": "DataBucket"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "SNSTopic"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime, timedelta\n\ns3 = boto3.client('s3')\nsns = boto3.client('sns')\n\ndef lambda_handler(event, context):\n    \"\"\"Check for recently transitioned Glacier objects\"\"\"\n    bucket = os.environ['BUCKET_NAME']\n    sns_topic = os.environ['SNS_TOPIC_ARN']\n    \n    try:\n        paginator = s3.get_paginator('list_objects_v2')\n        glacier_objects = []\n        \n        for page in paginator.paginate(Bucket=bucket):\n            if 'Contents' in page:\n                for obj in page['Contents']:\n                    # Get detailed object info\n                    head = s3.get_object_attributes(\n                        Bucket=bucket,\n                        Key=obj['Key'],\n                        ObjectAttributes=['StorageClass']\n                    )\n                    storage_class = head.get('StorageClass', 'STANDARD')\n                    \n                    if storage_class == 'GLACIER':\n                        glacier_objects.append({\n                            'Key': obj['Key'],\n                            'Size': obj['Size'],\n                            'LastModified': obj['LastModified'].isoformat(),\n                            'StorageClass': storage_class\n                        })\n        \n        if glacier_objects:\n            message = {\n                'Event': 'Daily Glacier Transition Report',\n                'Bucket': bucket,\n                'TotalObjectsInGlacier': len(glacier_objects),\n                'Objects': glacier_objects[:10],  # Limit to first 10 for brevity\n                'Timestamp': datetime.utcnow().isoformat()\n            }\n            \n            sns.publish(\n                TopicArn=sns_topic,\n                Subject='Daily S3 Glacier Storage Report',\n                Message=json.dumps(message, indent=2, default=str)\n            )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps(f'Checked {len(glacier_objects)} Glacier objects')\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        sns.publish(\n            TopicArn=sns_topic,\n            Subject='Glacier Check Error',\n            Message=f'Error during Glacier check: {str(e)}'\n        )\n        return {\n            'statusCode': 500,\n            'body': json.dumps(f'Error: {str(e)}')\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "GlacierCheckRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-GlacierCheckRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket",
+                                        "s3:GetObject",
+                                        "s3:GetObjectAttributes"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${DataBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SNSPublish",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "SNSTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "SNSTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${AWS::StackName}-Notifications"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "${AWS::StackName} Infrastructure Notifications"
+                },
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "OwnerEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "KmsMasterKeyId": "alias/aws/sns",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DataProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-DataProcessor"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": {
+                    "Ref": "LambdaTimeout"
+                },
+                "MemorySize": {
+                    "Ref": "LambdaMemorySize"
+                },
+                "ReservedConcurrentExecutions": 10,
+                "Environment": {
+                    "Variables": {
+                        "BUCKET_NAME": {
+                            "Ref": "DataBucket"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "SNSTopic"
+                        },
+                        "DB_SECRET_ARN": {
+                            "Ref": "DatabaseSecret"
+                        },
+                        "DB_ENDPOINT": {
+                            "Fn::GetAtt": [
+                                "Database",
+                                "Endpoint.Address"
+                            ]
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport logging\nfrom datetime import datetime\nimport traceback\n\n# Initialize AWS clients\ns3 = boto3.client('s3')\nsns = boto3.client('sns')\nsecrets_manager = boto3.client('secretsmanager')\ncloudwatch = boto3.client('cloudwatch')\n\n# Setup logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef get_db_credentials():\n    \"\"\"Retrieve database credentials from Secrets Manager\"\"\"\n    try:\n        secret_arn = os.environ['DB_SECRET_ARN']\n        response = secrets_manager.get_secret_value(SecretId=secret_arn)\n        return json.loads(response['SecretString'])\n    except Exception as e:\n        logger.error(f\"Failed to retrieve DB credentials: {str(e)}\")\n        raise\n\ndef validate_input(data):\n    \"\"\"Validate incoming data structure\"\"\"\n    required_fields = ['userId', 'data']\n    for field in required_fields:\n        if field not in data:\n            raise ValueError(f\"Missing required field: {field}\")\n    return True\n\ndef process_data(data):\n    \"\"\"Process the incoming data with business logic\"\"\"\n    # Add timestamp\n    data['processedAt'] = datetime.utcnow().isoformat()\n    data['processorVersion'] = '1.0.0'\n    data['environment'] = os.environ['ENVIRONMENT']\n    \n    # Add data quality score (mock calculation)\n    if 'data' in data and isinstance(data['data'], dict):\n        data['qualityScore'] = min(100, len(data['data']) * 10)\n    \n    return data\n\ndef store_in_s3(bucket, data, request_id):\n    \"\"\"Store processed data in S3 with proper organization\"\"\"\n    try:\n        date_prefix = datetime.utcnow().strftime('%Y/%m/%d')\n        key = f\"processed/{date_prefix}/{request_id}.json\"\n        \n        s3.put_object(\n            Bucket=bucket,\n            Key=key,\n            Body=json.dumps(data, default=str),\n            ServerSideEncryption='AES256',\n            Metadata={\n                'processedAt': datetime.utcnow().isoformat(),\n                'environment': os.environ['ENVIRONMENT']\n            }\n        )\n        \n        logger.info(f\"Successfully stored data in S3: {key}\")\n        return key\n        \n    except Exception as e:\n        logger.error(f\"Failed to store in S3: {str(e)}\")\n        raise\n\ndef send_metric(metric_name, value, unit='Count'):\n    \"\"\"Send custom metrics to CloudWatch\"\"\"\n    try:\n        cloudwatch.put_metric_data(\n            Namespace='CustomApp/DataProcessor',\n            MetricData=[\n                {\n                    'MetricName': metric_name,\n                    'Value': value,\n                    'Unit': unit,\n                    'Timestamp': datetime.utcnow()\n                }\n            ]\n        )\n    except Exception as e:\n        logger.warning(f\"Failed to send metric {metric_name}: {str(e)}\")\n\ndef lambda_handler(event, context):\n    \"\"\"Main Lambda handler with comprehensive error handling\"\"\"\n    start_time = datetime.utcnow()\n    \n    try:\n        # Parse input\n        if 'body' in event:\n            data = json.loads(event.get('body', '{}'))\n        else:\n            data = event\n        \n        logger.info(f\"Processing request: {context.aws_request_id}\")\n        \n        # Validate input\n        validate_input(data)\n        \n        # Process data\n        processed_data = process_data(data)\n        \n        # Store in S3\n        bucket = os.environ['BUCKET_NAME']\n        s3_key = store_in_s3(bucket, processed_data, context.aws_request_id)\n        \n        # Send success metrics\n        send_metric('ProcessingSuccess', 1)\n        \n        # Calculate processing time\n        processing_time = (datetime.utcnow() - start_time).total_seconds()\n        send_metric('ProcessingTime', processing_time, 'Seconds')\n        \n        response = {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*',\n                'X-Request-Id': context.aws_request_id\n            },\n            'body': json.dumps({\n                'message': 'Data processed successfully',\n                'requestId': context.aws_request_id,\n                's3Key': s3_key,\n                'processingTime': processing_time\n            })\n        }\n        \n        logger.info(f\"Request completed successfully: {context.aws_request_id}\")\n        return response\n        \n    except ValueError as ve:\n        logger.error(f\"Validation error: {str(ve)}\")\n        send_metric('ValidationError', 1)\n        \n        return {\n            'statusCode': 400,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': str(ve)})\n        }\n        \n    except Exception as e:\n        error_message = f\"Processing failed: {str(e)}\\n{traceback.format_exc()}\"\n        logger.error(error_message)\n        \n        # Send failure metrics\n        send_metric('ProcessingError', 1)\n        \n        # Send error notification\n        try:\n            sns.publish(\n                TopicArn=os.environ['SNS_TOPIC_ARN'],\n                Subject='Data Processing Error Alert',\n                Message=json.dumps({\n                    'error': str(e),\n                    'requestId': context.aws_request_id,\n                    'timestamp': datetime.utcnow().isoformat(),\n                    'environment': os.environ['ENVIRONMENT']\n                }, indent=2)\n            )\n        except Exception as sns_error:\n            logger.error(f\"Failed to send SNS notification: {str(sns_error)}\")\n        \n        return {\n            'statusCode': 500,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({\n                'error': 'Internal server error',\n                    'requestId': context.aws_request_id\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaExecutionRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${DataBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SNSPublish",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "SNSTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SecretsManagerAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DatabaseSecret"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchMetrics",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "cloudwatch:namespace": "CustomApp/DataProcessor"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LambdaApiGatewayPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "DataProcessorFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*"
+                }
+            }
+        },
+        "RestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-API"
+                },
+                "Description": "API Gateway for data processing with comprehensive security",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Policy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": "execute-api:Invoke",
+                            "Resource": "*",
+                            "Condition": {
+                                "IpAddress": {
+                                    "aws:SourceIp": [
+                                        "0.0.0.0/0"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ApiResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "RestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "process"
+            }
+        },
+        "ApiMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "RequestValidatorId": {
+                    "Ref": "ApiRequestValidator"
+                },
+                "RequestModels": {
+                    "application/json": {
+                        "Ref": "ApiRequestModel"
+                    }
+                },
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DataProcessorFunction.Arn}/invocations"
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    },
+                    {
+                        "StatusCode": 400
+                    },
+                    {
+                        "StatusCode": 500
+                    }
+                ]
+            }
+        },
+        "ApiRequestValidator": {
+            "Type": "AWS::ApiGateway::RequestValidator",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "Name": "RequestBodyValidator",
+                "ValidateRequestBody": true,
+                "ValidateRequestParameters": false
+            }
+        },
+        "ApiRequestModel": {
+            "Type": "AWS::ApiGateway::Model",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ContentType": "application/json",
+                "Name": "DataProcessingRequest",
+                "Schema": {
+                    "$schema": "http://json-schema.org/draft-04/schema#",
+                    "type": "object",
+                    "properties": {
+                        "userId": {
+                            "type": "string"
+                        },
+                        "data": {
+                            "type": "object"
+                        }
+                    },
+                    "required": [
+                        "userId",
+                        "data"
+                    ]
+                }
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "ApiMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                },
+                "StageDescription": {
+                    "MetricsEnabled": true,
+                    "LoggingLevel": "INFO",
+                    "DataTraceEnabled": true,
+                    "MethodSettings": [
+                        {
+                            "ResourcePath": "/*",
+                            "HttpMethod": "*",
+                            "MetricsEnabled": true,
+                            "LoggingLevel": "INFO",
+                            "DataTraceEnabled": true,
+                            "ThrottlingRateLimit": {
+                                "Ref": "ApiRateLimit"
+                            },
+                            "ThrottlingBurstLimit": {
+                                "Ref": "ApiBurstLimit"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ApiLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigateway/${RestApi}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "${AWS::StackName}-db-subnet-group"
+                },
+                "DBSubnetGroupDescription": "Subnet group for RDS database",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-DB-SubnetGroup"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "Database": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${AWS::StackName}-db-${Environment}"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                },
+                "Engine": "mysql",
+                "EngineVersion": "8.0.43",
+                "MasterUsername": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+                },
+                "AllocatedStorage": {
+                    "Ref": "DBAllocatedStorage"
+                },
+                "StorageType": "gp3",
+                "StorageEncrypted": true,
+                "KmsKeyId": "alias/aws/rds",
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DatabaseSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "BackupRetentionPeriod": 7,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "MultiAZ": true,
+                "EnableCloudwatchLogsExports": [
+                    "error",
+                    "general",
+                    "slowquery"
+                ],
+                "DeletionProtection": {
+                    "Fn::If": [
+                        "IsProduction",
+                        true,
+                        false
+                    ]
+                },
+                "EnablePerformanceInsights": {
+                    "Fn::If": [
+                        "SupportsPerformanceInsights",
+                        true,
+                        false
+                    ]
+                },
+                "PerformanceInsightsRetentionPeriod": {
+                    "Fn::If": [
+                        "SupportsPerformanceInsights",
+                        7,
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-Lambda-Errors"
+                },
+                "AlarmDescription": "Alert when Lambda function errors occur",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "DataProcessorFunction"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-Lambda-Throttles"
+                },
+                "AlarmDescription": "Alert when Lambda function is throttled",
+                "MetricName": "Throttles",
+                "Namespace": "AWS/Lambda",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "DataProcessorFunction"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ]
+            }
+        },
+        "DatabaseCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-DB-CPU-High"
+                },
+                "AlarmDescription": "Alert when database CPU exceeds 80%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/RDS",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "Database"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DatabaseStorageAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-DB-Storage-Low"
+                },
+                "AlarmDescription": "Alert when database storage space is low",
+                "MetricName": "FreeStorageSpace",
+                "Namespace": "AWS/RDS",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "Database"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 2147483648,
+                "ComparisonOperator": "LessThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ]
+            }
+        },
+        "ApiGateway4xxAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-API-4xx-Errors"
+                },
+                "AlarmDescription": "Alert on high 4xx error rate",
+                "MetricName": "4XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-API"
+                        }
+                    },
+                    {
+                        "Name": "Stage",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ]
+            }
+        },
+        "ApiGateway5xxAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-API-5xx-Errors"
+                },
+                "AlarmDescription": "Alert on 5xx errors",
+                "MetricName": "5XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-API"
+                        }
+                    },
+                    {
+                        "Name": "Stage",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ]
+            }
+        },
+        "CloudTrailBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        },
+                        {
+                            "Id": "TransitionOldLogs",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "CloudTrailBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": [
+                "CloudTrailBucketPolicy"
+            ],
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": "${AWS::StackName}-Trail"
+                },
+                "S3BucketName": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "IsLogging": true,
+                "IsMultiRegionTrail": false,
+                "IncludeGlobalServiceEvents": true,
+                "EnableLogFileValidation": true,
+                "EventSelectors": [
+                    {
+                        "ReadWriteType": "All",
+                        "IncludeManagementEvents": true,
+                        "DataResources": [
+                            {
+                                "Type": "AWS::S3::Object",
+                                "Values": [
+                                    {
+                                        "Fn::Sub": "${DataBucket.Arn}/"
+                                    }
+                                ]
+                            },
+                            {
+                                "Type": "AWS::Lambda::Function",
+                                "Values": [
+                                    {
+                                        "Fn::GetAtt": [
+                                            "DataProcessorFunction",
+                                            "Arn"
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "MonitoringDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "${AWS::StackName}-Dashboard"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Lambda Invocations\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Lambda Errors\"}],\n          [\".\", \"Duration\", {\"stat\": \"Average\", \"label\": \"Lambda Duration\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ApiGateway\", \"Count\", {\"stat\": \"Sum\", \"label\": \"API Requests\"}],\n          [\".\", \"4XXError\", {\"stat\": \"Sum\", \"label\": \"4XX Errors\"}],\n          [\".\", \"5XXError\", {\"stat\": \"Sum\", \"label\": \"5XX Errors\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"API Gateway Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/RDS\", \"CPUUtilization\", {\"stat\": \"Average\"}],\n          [\".\", \"DatabaseConnections\", {\"stat\": \"Average\"}],\n          [\".\", \"FreeStorageSpace\", {\"stat\": \"Average\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"RDS Metrics\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        }
+    },
+    "Conditions": {
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "prod"
+            ]
+        },
+        "SupportsPerformanceInsights": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DBInstanceClass"
+                        },
+                        "db.t3.micro"
+                    ]
+                }
+            ]
+        }
+    },
+    "Outputs": {
+        "StackName": {
+            "Description": "CloudFormation Stack Name",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "Region": {
+            "Description": "AWS Region",
+            "Value": {
+                "Ref": "AWS::Region"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Region"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet1-ID"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet2-ID"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1-ID"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2-ID"
+                }
+            }
+        },
+        "NATGateway1Id": {
+            "Description": "NAT Gateway 1 ID",
+            "Value": {
+                "Ref": "NATGateway1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NATGateway1-ID"
+                }
+            }
+        },
+        "NATGateway2Id": {
+            "Description": "NAT Gateway 2 ID",
+            "Value": {
+                "Ref": "NATGateway2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NATGateway2-ID"
+                }
+            }
+        },
+        "APIGatewayURL": {
+            "Description": "API Gateway endpoint URL for data processing",
+            "Value": {
+                "Fn::Sub": "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/process"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-API-URL"
+                }
+            }
+        },
+        "APIGatewayId": {
+            "Description": "API Gateway REST API ID",
+            "Value": {
+                "Ref": "RestApi"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-API-ID"
+                }
+            }
+        },
+        "DataBucketName": {
+            "Description": "S3 Data Bucket Name",
+            "Value": {
+                "Ref": "DataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Data-Bucket"
+                }
+            }
+        },
+        "DataBucketArn": {
+            "Description": "S3 Data Bucket ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Data-Bucket-ARN"
+                }
+            }
+        },
+        "CloudTrailBucketName": {
+            "Description": "CloudTrail Bucket Name",
+            "Value": {
+                "Ref": "CloudTrailBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrail-Bucket"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Main Data Processor Lambda Function Name",
+            "Value": {
+                "Ref": "DataProcessorFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Lambda-Name"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Main Data Processor Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Lambda-ARN"
+                }
+            }
+        },
+        "S3EventProcessorArn": {
+            "Description": "S3 Event Processor Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "S3EventProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3Processor-ARN"
+                }
+            }
+        },
+        "GlacierCheckFunctionArn": {
+            "Description": "Glacier Check Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "GlacierCheckFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GlacierCheck-ARN"
+                }
+            }
+        },
+        "DatabaseEndpoint": {
+            "Description": "RDS Database Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "Database",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DB-Endpoint"
+                }
+            }
+        },
+        "DatabasePort": {
+            "Description": "RDS Database Port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "Database",
+                    "Endpoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DB-Port"
+                }
+            }
+        },
+        "DatabaseSecretArn": {
+            "Description": "Database Credentials Secret ARN",
+            "Value": {
+                "Ref": "DatabaseSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DB-Secret-ARN"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "SNS Topic ARN for notifications",
+            "Value": {
+                "Ref": "SNSTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SNS-Topic"
+                }
+            }
+        },
+        "SNSTopicName": {
+            "Description": "SNS Topic Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SNSTopic",
+                    "TopicName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SNS-Topic-Name"
+                }
+            }
+        },
+        "CloudTrailArn": {
+            "Description": "CloudTrail ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudTrail",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrail-ARN"
+                }
+            }
+        },
+        "MonitoringDashboardURL": {
+            "Description": "CloudWatch Dashboard URL",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AWS::StackName}-Dashboard"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Dashboard-URL"
+                }
+            }
+        },
+        "EstimatedMonthlyCost": {
+            "Description": "Estimated monthly AWS cost breakdown",
+            "Value": "Total: ~$95-100/month\n- NAT Gateways (2x): ~$90 ($45 each)\n- RDS t3.micro Multi-AZ: ~$30\n- S3 Storage: ~$5-10\n- Lambda/API Gateway: <$5\n- CloudWatch/CloudTrail: ~$5-10\n- Data Transfer: ~$5\nNote: Actual costs may vary based on usage patterns\n",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Cost-Estimate"
+                }
+            }
+        },
+        "DeploymentTimestamp": {
+            "Description": "Stack deployment timestamp",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Deployment-Time"
+                }
+            }
+        }
+    }
+}

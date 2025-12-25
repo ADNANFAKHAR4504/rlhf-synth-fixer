@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "350137",
+  "team": "synth",
+  "startedAt": "2025-11-11T14:00:35.720Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "KMS",
+    "IAM",
+    "Lambda",
+    "CloudWatch LogGroup",
+    "CloudWatch Alarm",
+    "API Gateway",
+    "SQS",
+    "SNS",
+    "VPC",
+    "EC2 Security Group",
+    "VPC Endpoint",
+    "Route Table",
+    "Subnet"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

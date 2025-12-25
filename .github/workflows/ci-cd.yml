@@ -81,6 +81,18 @@ jobs:
           file: 'metadata.json'
           schema: 'config/schemas/metadata.schema.json'
 
+      - name: Validate Wave (P0/P1) for LocalStack Tasks
+        id: validate-wave
+        run: |
+          if [ -f "./scripts/ci-validate-wave.sh" ]; then
+            chmod +x ./scripts/ci-validate-wave.sh
+            ./scripts/ci-validate-wave.sh
+          else
+            echo "⚠️ Wave validation script not found - skipping"
+          fi
+        env:
+          WAVE_VALIDATION_STRICT: 'false'
+
       - name: Check Project Files
         id: check-files
         run: ./scripts/check-project-files.sh
