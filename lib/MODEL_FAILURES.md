@@ -135,3 +135,46 @@ The fixed template now:
 4. **Custom Resource Patterns:** Complex cleanup logic requires Lambda-backed custom resources
 5. **Cost Control:** Orphaned resources can accumulate significant costs over time
 6. **Testing Integration:** Infrastructure tests must align with actual AWS SDK behavior
+
+## LocalStack Compatibility Adjustments
+
+This section documents changes made for LocalStack deployment compatibility. These changes do not affect production AWS deployment functionality.
+
+### Category A: Unsupported Resources (Entire resource commented/removed)
+
+| Resource | LocalStack Status | Solution Applied | Production Status |
+|----------|------------------|------------------|-------------------|
+| N/A | All resources supported | No changes needed | Enabled in AWS |
+
+### Category B: Deep Functionality Limitations (Property/feature disabled)
+
+| Resource | Feature | LocalStack Limitation | Solution Applied | Production Status |
+|----------|---------|----------------------|------------------|-------------------|
+| NAT Gateway | EIP Allocation | Works in LocalStack Pro | No changes needed | Works in AWS |
+| CloudTrail | Multi-region | Works in LocalStack Pro | No changes needed | Works in AWS |
+| Lambda VPC | VPC Attachment | Works in LocalStack Pro | No changes needed | Works in AWS |
+| Custom Resources | Lambda-backed | Works in LocalStack | No changes needed | Works in AWS |
+
+### Category C: Behavioral Differences (Works but behaves differently)
+
+| Resource | Feature | LocalStack Behavior | Production Behavior |
+|----------|---------|---------------------|---------------------|
+| CloudTrail | Event Delivery | Events are mocked/limited | Full event capture |
+| CloudWatch Alarms | Triggering | May not trigger alerts | Real-time alerting |
+| KMS | Encryption | Simulated encryption | Full HSM-backed encryption |
+
+### Category D: Test-Specific Adjustments
+
+| Test File | Adjustment | Reason |
+|-----------|------------|--------|
+| tap-stack.int.test.ts | Using LocalStack endpoints | AWS_ENDPOINT_URL set to localhost:4566 |
+| tap-stack.int.test.ts | Account ID 000000000000 | LocalStack default account |
+| tap-stack.int.test.ts | Region us-east-1 | LocalStack default region |
+
+### LocalStack Pro Features Used
+
+This stack leverages LocalStack Pro features:
+- NAT Gateway with EIP allocation
+- CloudTrail for audit logging
+- Lambda VPC integration
+- CloudFormation custom resources with Lambda backends

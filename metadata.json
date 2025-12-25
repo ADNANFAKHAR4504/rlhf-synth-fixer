@@ -4,7 +4,7 @@
   "provider": "localstack",
   "complexity": "hard",
   "turn_type": "multi",
-  "po_id": "291596",
+  "po_id": "LS-291596",
   "team": "5",
   "startedAt": "2025-08-22T16:46:53.835Z",
   "subtask": "Provisioning of Infrastructure Environments",
@@ -27,5 +27,10 @@
     "AWS Internet Gateway",
     "AWS Security Groups",
     "AWS CloudWatch Logs"
-  ]
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291596",
+    "pr": "2057"
+  }
 }
