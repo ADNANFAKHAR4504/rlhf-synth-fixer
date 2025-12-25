@@ -33,9 +33,9 @@ final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(final String environmentSuffix, final StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String envSuffix, final StackProps props) {
+        this.environmentSuffix = envSuffix;
+        this.stackProps = props != null ? props : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -54,13 +54,13 @@ final class TapStackProps {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(final String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String envSuffix) {
+            this.environmentSuffix = envSuffix;
             return this;
         }
 
-        public Builder stackProps(final StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps props) {
+            this.stackProps = props;
             return this;
         }
 
@@ -88,13 +88,13 @@ class TapStack extends Stack {
      * @param id The unique identifier for this stack
      * @param props Optional properties for configuring the stack, including environment suffix
      */
-    public TapStack(final Construct scope, final String id, final TapStackProps props) {
+    TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
         // Detect LocalStack environment
         String endpointUrl = System.getenv("AWS_ENDPOINT_URL");
-        this.isLocalStack = endpointUrl != null &&
-                           (endpointUrl.contains("localhost") || endpointUrl.contains("4566"));
+        this.isLocalStack = endpointUrl != null
+                           && (endpointUrl.contains("localhost") || endpointUrl.contains("4566"));
 
         // Get environment suffix from props, context, or use 'dev' as default
         this.environmentSuffix = Optional.ofNullable(props)
