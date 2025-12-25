@@ -47,10 +47,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.AllowedPattern).toBe('^[a-z][a-z0-9-]{0,19}$');
     });
 
-    test('should have AmiId parameter', () => {
-      expect(template.Parameters.AmiId).toBeDefined();
-      expect(template.Parameters.AmiId.Type).toBe('String');
-      expect(template.Parameters.AmiId.Default).toBeDefined();
+    test('should NOT have AmiId parameter (using Mapping instead to avoid LocalStack bug)', () => {
+      // AmiId was moved from Parameter to Mapping to avoid LocalStack double-wrapping bug
+      expect(template.Parameters.AmiId).toBeUndefined();
+    });
+
+    test('should have AmiConfig mapping for LocalStack compatibility', () => {
+      expect(template.Mappings.AmiConfig).toBeDefined();
+      expect(template.Mappings.AmiConfig['us-east-1']).toBeDefined();
+      expect(template.Mappings.AmiConfig['us-east-1'].ImageId).toBeDefined();
     });
 
     test('should have InstanceType parameter', () => {
@@ -332,11 +337,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(instance2.Properties.IamInstanceProfile).toBeDefined();
     });
 
-    test('EC2 instances should use AmiId parameter (not SSM)', () => {
+    test('EC2 instances should use FindInMap for AMI (not parameter to avoid LocalStack bug)', () => {
       const instance1 = template.Resources.WebServerInstance1;
       const instance2 = template.Resources.WebServerInstance2;
-      expect(instance1.Properties.ImageId.Ref).toBe('AmiId');
-      expect(instance2.Properties.ImageId.Ref).toBe('AmiId');
+      // Should use FindInMap instead of Ref to avoid LocalStack double-wrapping
+      expect(instance1.Properties.ImageId['Fn::FindInMap']).toBeDefined();
+      expect(instance2.Properties.ImageId['Fn::FindInMap']).toBeDefined();
+      expect(instance1.Properties.ImageId['Fn::FindInMap'][0]).toBe('AmiConfig');
+      expect(instance2.Properties.ImageId['Fn::FindInMap'][0]).toBe('AmiConfig');
     });
 
     test('EC2 instances should NOT have Monitoring property (LocalStack)', () => {
@@ -438,9 +446,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.WebServerLaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
     });
 
-    test('LaunchTemplate should use AmiId parameter', () => {
+    test('LaunchTemplate should use FindInMap for AMI (not parameter to avoid LocalStack bug)', () => {
       const lt = template.Resources.WebServerLaunchTemplate;
-      expect(lt.Properties.LaunchTemplateData.ImageId.Ref).toBe('AmiId');
+      expect(lt.Properties.LaunchTemplateData.ImageId['Fn::FindInMap']).toBeDefined();
+      expect(lt.Properties.LaunchTemplateData.ImageId['Fn::FindInMap'][0]).toBe('AmiConfig');
     });
 
     test('LaunchTemplate should NOT have Monitoring (LocalStack)', () => {
@@ -612,10 +621,12 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('LocalStack Compatibility Verification', () => {
-    test('should NOT use SSM Parameter Store for AMI lookup', () => {
-      const amiParam = template.Parameters.AmiId;
-      expect(amiParam.Type).toBe('String');
-      expect(amiParam.Type).not.toContain('AWS::SSM::Parameter');
+    test('should use Mapping for AMI (not parameter) to avoid LocalStack double-wrapping bug', () => {
+      // AmiId should NOT be a parameter (causes double-wrapping in LocalStack)
+      expect(template.Parameters.AmiId).toBeUndefined();
+      // Should use AmiConfig mapping instead
+      expect(template.Mappings.AmiConfig).toBeDefined();
+      expect(template.Mappings.AmiConfig['us-east-1'].ImageId).toBeDefined();
     });
 
     test('should NOT have AWS managed IAM policies', () => {

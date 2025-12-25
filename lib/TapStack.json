@@ -5,7 +5,8 @@
         "cfn-lint": {
             "config": {
                 "ignore_checks": [
-                    "W2506"
+                    "W2506",
+                    "W1034"
                 ]
             }
         }
@@ -17,11 +18,6 @@
             "Default": "webapp",
             "AllowedPattern": "^[a-z][a-z0-9-]{0,19}$",
             "ConstraintDescription": "Must begin with a lowercase letter, contain only lowercase alphanumeric characters and hyphens, max 20 characters"
-        },
-        "AmiId": {
-            "Type": "String",
-            "Default": "ami-0c55b159cbfafe1f0",
-            "Description": "AMI ID for EC2 instances (LocalStack uses generic AMI)"
         },
         "InstanceType": {
             "Description": "EC2 instance type for web servers",
@@ -42,6 +38,17 @@
         }
     },
     "Mappings": {
+        "AmiConfig": {
+            "us-east-1": {
+                "ImageId": "ami-localstack"
+            },
+            "us-west-2": {
+                "ImageId": "ami-localstack"
+            },
+            "eu-west-1": {
+                "ImageId": "ami-localstack"
+            }
+        },
         "SubnetConfig": {
             "VPC": {
                 "CIDR": "10.0.0.0/16"
@@ -685,7 +692,13 @@
             ],
             "Properties": {
                 "ImageId": {
-                    "Ref": "AmiId"
+                    "Fn::FindInMap": [
+                        "AmiConfig",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "ImageId"
+                    ]
                 },
                 "InstanceType": {
                     "Ref": "InstanceType"
@@ -783,7 +796,13 @@
             ],
             "Properties": {
                 "ImageId": {
-                    "Ref": "AmiId"
+                    "Fn::FindInMap": [
+                        "AmiConfig",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "ImageId"
+                    ]
                 },
                 "InstanceType": {
                     "Ref": "InstanceType"
@@ -1016,7 +1035,13 @@
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
-                        "Ref": "AmiId"
+                        "Fn::FindInMap": [
+                            "AmiConfig",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            "ImageId"
+                        ]
                     },
                     "InstanceType": {
                         "Ref": "InstanceType"
