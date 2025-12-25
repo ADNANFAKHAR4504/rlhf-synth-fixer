@@ -1,15 +1,15 @@
-You are an expert DevOps engineer. Implement the following AWS infrastructure and CI/CD pipeline logic using Pulumi (Python). Only edit these three files:
+You are an expert DevOps engineer. Implement the following AWS infrastructure and CI/CD pipeline logic using Pulumi with Python. Only edit these three files:
 
-lib/tap_stack.py — infrastructure code for Pulumi stack
+lib/tap_stack.py - infrastructure code for Pulumi stack
 
-tests/unit/test_tap_stack.py — Pulumi mocks-based unit tests
+tests/unit/test_tap_stack.py - Pulumi mocks-based unit tests
 
-tests/integration/test_tap_stack.py — Pulumi mocks-based integration tests
+tests/integration/test_tap_stack.py - Pulumi mocks-based integration tests
 
-Do not touch other files (including README or GitHub workflow files). If the pipeline configuration is needed, include it as a comment in lib/tap_stack.py.
+Do not touch other files including README or GitHub workflow files. If the pipeline configuration is needed, include it as a comment in lib/tap_stack.py.
 
 1) Objective
-Build a production-grade CI/CD-enabled AWS infrastructure using Pulumi (Python), fully deployable in us-east-1, with rollback capabilities, monitoring, security, and high availability.
+Build a production-grade CI/CD-enabled AWS infrastructure using Pulumi with Python, fully deployable in us-east-1, with rollback capabilities, monitoring, security, and high availability.
 
 2) Hard requirements
 Region: us-east-1
@@ -28,9 +28,9 @@ Auto-deploy to production on merge to main
 
 Rollback on failed deployment
 
-Notifications to Slack (Webhook URL from GitHub Secret)
+Notifications to Slack using Webhook URL from GitHub Secret
 
-AWS credentials stored in GitHub Secrets (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+AWS credentials stored in GitHub Secrets: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
 
 PR checks for all infra changes before merge
 
@@ -50,9 +50,9 @@ Tags: every resource must have environment: production
 
 Compliance & security:
 
-Restrict inbound access by configurable CIDR (Pulumi config)
+Restrict inbound access by configurable CIDR from Pulumi config
 
-Enable encryption at rest (KMS or AWS-managed keys) and in transit (HTTPS)
+Enable encryption at rest using KMS or AWS-managed keys, and in transit
 
 Store logs in encrypted CloudWatch log groups
 
@@ -60,15 +60,15 @@ Ensure S3 replication target bucket has encryption enabled
 
 Rollback:
 
-Pipeline must revert to last known working infrastructure state on failure (comment a workflow snippet showing how to pulumi cancel and re-deploy last commit)
+Pipeline must revert to last known working infrastructure state on failure. Comment a workflow snippet showing how to pulumi cancel and re-deploy last commit.
 
 3) Tests
-Unit tests (tests/unit/test_tap_stack.py)
+Unit tests in tests/unit/test_tap_stack.py
 Must run with pytest and Pulumi mocks
 
 Assert:
 
-VPC exists with ≥2 subnets in distinct AZs
+VPC exists with at least 2 subnets in distinct AZs
 
 Security group rules match CIDR from config
 
@@ -78,7 +78,7 @@ All resources have environment: production tag
 
 CloudWatch log groups exist and are encrypted
 
-Integration tests (tests/integration/test_tap_stack.py)
+Integration tests in tests/integration/test_tap_stack.py
 Run with Pulumi mocks but validate wiring between resources
 
 Assert:
@@ -89,7 +89,7 @@ Security group attached to correct resources
 
 VPC subnets mapped to correct AZs
 
-Rollback simulation test passes (mock rollback triggered)
+Rollback simulation test passes when mock rollback triggered
 
 4) Delivery format
 Output must only include:
@@ -102,14 +102,14 @@ Output must only include:
 
 No additional narrative, only inline comments for clarity
 
-Code must pass pytest locally without AWS calls (Pulumi mocks only)
+Code must pass pytest locally without AWS calls using Pulumi mocks only
 
 5) Extra implementation rules
 Single-file lib/tap_stack.py with modular helpers inside the file
 
-Fail fast if required Pulumi config (allowed_cidr, replication_region) is missing
+Fail fast if required Pulumi config like allowed_cidr or replication_region is missing
 
-Default replication region: us-west-2 (can be overridden)
+Default replication region: us-west-2, can be overridden
 
 Commented GitHub Actions pipeline snippet showing:
 

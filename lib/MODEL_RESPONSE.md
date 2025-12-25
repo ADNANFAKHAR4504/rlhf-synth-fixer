@@ -73,7 +73,7 @@ jobs:
         if: success()
         run: |
           curl -X POST -H 'Content-type: application/json' \
-            --data '{"text":"✅ Infrastructure deployed successfully"}' \
+            --data '{"text":" Infrastructure deployed successfully"}' \
             ${{ secrets.SLACK_WEBHOOK_URL }}
       
       - name: Rollback on Failure
@@ -88,7 +88,7 @@ jobs:
           pulumi up --stack production --yes
           # Notify failure
           curl -X POST -H 'Content-type: application/json' \
-            --data '{"text":"❌ Deployment failed, rolled back to previous state"}' \
+            --data '{"text":" Deployment failed, rolled back to previous state"}' \
             ${{ secrets.SLACK_WEBHOOK_URL }}
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
