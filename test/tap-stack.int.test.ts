@@ -34,7 +34,7 @@ describe('TapStack Integration Tests', () => {
 
     test('should have StackName output', () => {
       expect(outputs.StackName).toBeDefined();
-      expect(outputs.StackName).toContain('TapStack');
+      expect(outputs.StackName).toContain('localstack-stack');
     });
   });
 
