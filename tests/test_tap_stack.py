@@ -156,7 +156,6 @@ def test_cloudwatch_log_groups_created():
 @pulumi.runtime.test
 def test_localstack_configuration():
     """Test LocalStack-specific configuration is applied."""
-    import os
     from lib.tap_stack import TapStack, TapStackArgs
 
     # Set LocalStack environment
