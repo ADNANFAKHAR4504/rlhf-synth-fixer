@@ -40,7 +40,7 @@ const TEST_REGION = 'ap-south-1';
 // Load stack outputs
 const loadStackOutputs = () => {
   try {
-    const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
+    const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
     return JSON.parse(outputsContent);
   } catch (error) {
@@ -116,16 +116,11 @@ describe('TAP Infrastructure Integration Tests', () => {
 
   beforeAll(async () => {
     // Load stack outputs
-    const allOutputs = loadStackOutputs();
+    stackOutputs = loadStackOutputs();
 
-    // Get the first stack (assuming single stack deployment)
-    const stackName = Object.keys(allOutputs)[0];
-    if (!stackName) {
+    if (!stackOutputs || Object.keys(stackOutputs).length === 0) {
       throw new Error('No stack outputs found');
     }
-
-    // Extract the actual outputs from the stack
-    stackOutputs = allOutputs[stackName];
 
     console.log('Stack outputs loaded:', Object.keys(stackOutputs));
 
@@ -1158,7 +1153,7 @@ describe('TAP Infrastructure Integration Tests', () => {
 
   describe('AWS Security Standards Compliance', () => {
     it('should have proper resource tagging for security and compliance', async () => {
-      const resourcesToCheck = [];
+      const resourcesToCheck: Array<{ type: string; tags: any }> = [];
 
       // Check VPC tags
       if (stackOutputs.vpcId) {
