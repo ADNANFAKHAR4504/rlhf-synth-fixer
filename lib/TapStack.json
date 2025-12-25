@@ -855,25 +855,12 @@
           }
         ],
         "Logging": {
-          "ClusterLogging": {
-            "EnabledTypes": [
-              {
-                "Type": "api"
-              },
-              {
-                "Type": "audit"
-              },
-              {
-                "Type": "authenticator"
-              },
-              {
-                "Type": "controllerManager"
-              },
-              {
-                "Type": "scheduler"
-              }
-            ]
-          }
+          "ClusterLogging": [
+            {
+              "Enabled": true,
+              "Types": ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+            }
+          ]
         },
         "Tags": [
           {
