@@ -83,10 +83,27 @@ function loadCDKOutputs(): StackOutputs {
 
       // For LocalStack, replace API Gateway URLs with LocalStack endpoint
       if (isLocalStack && outputs.ApiGatewayUrl) {
-        const apiId = outputs.ApiGatewayId || outputs.ApiGatewayUrl.match(/https:\/\/([^.]+)/)?.[1];
-        const stage = outputs.ApiGatewayUrl.match(/\.com\/(.+)/)?.[1] || 'prod';
-        outputs.ApiGatewayUrl = `${endpoint}/restapis/${apiId}/${stage}/_user_request_`;
+        // Extract API ID from the original AWS URL
+        const apiId =
+          outputs.ApiGatewayId ||
+          outputs.ApiGatewayUrl.match(/https:\/\/([^.]+)/)?.[1];
+
+        // Extract stage from the AWS URL path (everything after .com/)
+        let stage = 'prod'; // default
+        const awsStageMatch = outputs.ApiGatewayUrl.match(
+          /amazonaws\.com\/([^/]+)/
+        );
+        if (awsStageMatch) {
+          stage = awsStageMatch[1];
+        }
+
+        // LocalStack API Gateway invocation URL format
+        // Note: CloudFormation API Gateway in LocalStack doesn't use _user_request_ prefix for paths
+        outputs.ApiGatewayUrl = `${endpoint}/restapis/${apiId}/${stage}`;
+
         console.log('Using LocalStack API Gateway URL:', outputs.ApiGatewayUrl);
+        console.log('  Extracted API ID:', apiId);
+        console.log('  Extracted Stage:', stage);
       }
 
       console.log('Loaded CDK outputs from TapStack.json');
