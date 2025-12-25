@@ -383,21 +383,21 @@ Resources:
                         </div>
                         
                         <div class="info-card">
-                            <h3>💻 Instance Information</h3>
+                            <h3> Instance Information</h3>
                             <p><strong>Instance ID:</strong> <span id="instance-id">Loading...</span></p>
                             <p><strong>Availability Zone:</strong> <span id="az">Loading...</span></p>
                             <p><strong>Instance Type:</strong> ${InstanceType}</p>
                         </div>
                         
                         <div class="info-card">
-                            <h3>⚡ Status & Performance</h3>
+                            <h3> Status & Performance</h3>
                             <p><strong>Status:</strong> <span class="status"> Healthy & Running</span></p>
                             <p><strong>Load Balancer:</strong> <span class="status"> Active</span></p>
                             <p><strong>Auto Scaling:</strong> <span class="status"> Enabled</span></p>
                         </div>
                         
                         <div class="info-card">
-                            <h3>🏗️ Architecture</h3>
+                            <h3> Architecture</h3>
                             <p><strong>Platform:</strong> AWS CloudFormation</p>
                             <p><strong>Compute:</strong> EC2 Auto Scaling</p>
                             <p><strong>Load Balancer:</strong> Application Load Balancer</p>
