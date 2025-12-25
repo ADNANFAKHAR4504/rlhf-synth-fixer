@@ -20,5 +20,6 @@
     "AWS CloudWatch",
     "AWS IAM"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 9
 }
