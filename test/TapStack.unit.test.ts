@@ -7,7 +7,8 @@ describe('CloudFormation Template Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.json'); // Adjust path as needed
+    // Load CloudFormation template for validation
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
