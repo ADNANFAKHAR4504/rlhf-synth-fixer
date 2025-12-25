@@ -28,9 +28,5 @@
     "Route Tables",
     "Elastic IP"
   ],
-  "wave": "P0",
-  "migrated_from": {
-    "po_id": "trainr940",
-    "pr": "Pr2027"
-  }
+  "wave": "P0"
 }

@@ -28,7 +28,7 @@ Parameters:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-0e95a5e2743ec9ec9  # Amazon Linux 2 - Latest
+      AMI: ami-03cf127a  # LocalStack compatible AMI
 
 Resources:
   # VPC Configuration
