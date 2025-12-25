@@ -405,6 +405,36 @@
         }
     },
     "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            }
+        },
+        "InternetGateway": {
+            "Description": "Internet Gateway ID",
+            "Value": {
+                "Ref": "InternetGateway"
+            }
+        },
+        "SecurityGroup": {
+            "Description": "Instance Security Group ID",
+            "Value": {
+                "Ref": "InstanceSecurityGroup"
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            }
+        },
         "LoadBalancerDNS": {
             "Description": "DNS Name of the Load Balancer",
             "Value": {

@@ -62,7 +62,7 @@ describe('High Availability Web App Integration Tests', () => {
       });
       
       if (response.status === 200) {
-        expect(response.data).toContain('Welcome to the High Availability Web App');
+    expect(response.data).toContain('Welcome to the High Availability Web App');
       } else {
         // If not 200, just verify DNS format
         expect(lbDNS).toMatch(/\.elb\.amazonaws\.com$/);
