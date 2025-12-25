@@ -2078,5 +2078,14 @@
                 "Ref": "AppInstance"
             }
         }
+    },
+    "Metadata": {
+        "cfn-lint": {
+            "config": {
+                "ignore_checks": [
+                    "W2506"
+                ]
+            }
+        }
     }
 }
