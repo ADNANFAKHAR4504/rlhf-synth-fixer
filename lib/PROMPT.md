@@ -78,10 +78,10 @@ Create a production-ready three-tier web application infrastructure using **Clou
 - Use **AWS WAF** for application protection
 - Use **Secrets Manager** with **Lambda** for credential rotation
 - Use **CloudWatch** for monitoring and dashboards
-- Resource names must include **environmentSuffix** parameter for uniqueness
+- All AWS component names must include **environmentSuffix** parameter for uniqueness
 - Follow naming convention: resource-type-environmentSuffix
 - Deploy to **us-east-1** region
-- All resources must use Delete removal policy (no Retain policies)
+- All resources must use Delete removal policy without Retain policies
 
 ### Deployment Requirements (CRITICAL)
 
@@ -94,7 +94,7 @@ Create a production-ready three-tier web application infrastructure using **Clou
 
 ### Constraints
 
-- All EC2 instances must use Amazon Linux 2 AMI (latest version)
+- All EC2 instances must use Amazon Linux 2 AMI latest version
 - Instance types: t3.medium for web tier, t3.large for application tier
 - RDS Multi-AZ deployment required with 7-day backup retention
 - ALB must have WAF web ACL with SQL injection and rate-based rules
@@ -115,14 +115,14 @@ Create a production-ready three-tier web application infrastructure using **Clou
 - **Scalability**: Auto Scaling responds correctly to load changes within defined thresholds
 - **Monitoring**: CloudWatch dashboard shows real-time metrics from all infrastructure tiers
 - **Automation**: Database credential rotation works automatically without manual intervention
-- **Resource Naming**: All resources include environmentSuffix parameter for deployment uniqueness
+- **Naming Convention**: All resources include environmentSuffix parameter for deployment uniqueness
 - **Code Quality**: Valid JSON CloudFormation template, proper dependencies, well-documented parameters
 
 ## What to deliver
 
 - Complete CloudFormation JSON template with all infrastructure components
-- Parameters for environment-specific customization (instance types, database size, environmentSuffix)
-- Outputs for important endpoints (CloudFront distribution URL, ALB DNS name, RDS endpoint)
+- Parameters for environment-specific customization like instance types, database size, and environmentSuffix
+- Outputs for important endpoints including CloudFront distribution URL, ALB DNS name, and RDS endpoint
 - Proper resource dependencies ensuring correct creation order
 - Security group rules for inter-tier communication
 - IAM roles and policies for Lambda rotation function
