@@ -6,10 +6,6 @@
             "Type": "String",
             "Default": "dev",
             "Description": "Environment suffix for resource naming"
-        },
-        "SecurityKMSKeyArn": {
-            "Type": "String",
-            "Description": "ARN of the security KMS key"
         }
     },
     "Resources": {
