@@ -9,7 +9,6 @@
   "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring",
     "General Infrastructure Tooling QA"
   ],
   "aws_services": [
