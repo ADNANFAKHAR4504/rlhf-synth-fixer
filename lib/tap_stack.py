@@ -68,6 +68,7 @@ class TapStack(TerraformStack):
                 "s3_use_path_style": True,
                 "endpoints": [{
                     "s3": "http://localhost:4566",
+                    "s3control": "http://localhost:4566",
                     "ec2": "http://localhost:4566",
                     "iam": "http://localhost:4566",
                     "cloudwatch": "http://localhost:4566",
