@@ -2,7 +2,13 @@
 import * as fs from "fs";
 import * as path from "path";
 
-const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+// Try multiple possible output file locations (CI vs local deployment)
+const possiblePaths = [
+  path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
+  path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
+  path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json"),
+];
+const p = possiblePaths.find((fp) => fs.existsSync(fp)) || possiblePaths[0];
 
 type RawTfOutput = {
   sensitive?: boolean;
