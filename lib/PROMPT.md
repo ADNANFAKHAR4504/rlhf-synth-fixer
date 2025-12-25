@@ -25,7 +25,7 @@ Create a VPC with CIDR block 10.0.0.0/16 that hosts a multi-tier application:
 
 ### Compute Resources
 - Deploy EC2 instances with minimum t3.medium instance type in private subnets
-- Configure security groups that allow SSH access (port 22) only from specific IP ranges and database access (port 5432) to RDS
+- Configure security groups that allow SSH access on port 22 only from specific IP ranges and database access on port 5432 to RDS
 - Attach IAM role to EC2 instances that grants permissions to read from Secrets Manager and use Systems Manager
 - Include Systems Manager Session Manager access for secure remote management without exposing SSH ports
 
