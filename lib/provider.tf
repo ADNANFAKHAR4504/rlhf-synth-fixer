@@ -6,7 +6,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = "~> 5.80.0" # Pin to 5.80.x for LocalStack compatibility
     }
     random = {
       source  = "hashicorp/random"
@@ -14,10 +14,8 @@ terraform {
     }
   }
 
-  # Use local backend for LocalStack testing
-  backend "local" {
-    path = "terraform.tfstate"
-  }
+  # S3 backend for state management (configured via CLI for LocalStack)
+  backend "s3" {}
 }
 
 # Primary AWS provider for LocalStack

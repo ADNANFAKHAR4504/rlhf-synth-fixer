@@ -629,7 +629,7 @@ resource "aws_instance" "web" {
   count = var.environment != "production" ? 2 : 0
 
   ami           = data.aws_ami.amazon_linux_2.id
-  instance_type = "t2.micro" # Use t2.micro for better LocalStack compatibility
+  instance_type = "t3.micro" # Use t3.micro for LocalStack compatibility (no credit_specification issues)
   subnet_id     = aws_subnet.private[count.index % length(aws_subnet.private)].id
 
   vpc_security_group_ids = [aws_security_group.application.id]
@@ -650,6 +650,11 @@ resource "aws_instance" "web" {
     create = "2m"
     update = "2m"
     delete = "2m"
+  }
+
+  # Ignore credit_specification changes for LocalStack compatibility
+  lifecycle {
+    ignore_changes = [credit_specification]
   }
 }
 
@@ -672,6 +677,19 @@ resource "aws_lb" "main" {
     create = "2m"
     update = "2m"
     delete = "2m"
+  }
+
+  # Ignore attributes not supported by LocalStack
+  lifecycle {
+    ignore_changes = [
+      enable_http2,
+      enable_cross_zone_load_balancing,
+      enable_waf_fail_open,
+      desync_mitigation_mode,
+      xff_header_processing_mode,
+      idle_timeout,
+      drop_invalid_header_fields
+    ]
   }
 }
 
@@ -734,11 +752,6 @@ resource "aws_db_subnet_group" "main" {
   subnet_ids = aws_subnet.private[*].id
 
   tags = local.common_tags
-}
-
-# RDS Parameter Group
-data "aws_db_parameter_group" "main" {
-  name = "default.mysql8.0"
 }
 
 # RDS Instance
