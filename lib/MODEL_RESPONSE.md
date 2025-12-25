@@ -1431,7 +1431,7 @@ for section in "AWSTemplateFormatVersion" "Description" "Parameters" "Conditions
   if jq -e ".${section}" ${TEMPLATE_FILE} > /dev/null; then
     echo "Section ${section} present"
   else
-    echo "✗ Missing section: ${section}"
+    echo "Missing section: ${section}"
     exit 1
   fi
 done
