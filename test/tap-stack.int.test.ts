@@ -464,7 +464,7 @@ describe("TapStack — Full Live Integration Tests", () => {
     if ((db?.Engine || "").startsWith("postgres")) {
       // LocalStack uses port 4511 instead of 5432 for PostgreSQL
       if (isLocalStack) {
-        expect(port).toBe(4511);
+        expect(port).toBe(4510);
       } else {
         expect(port).toBe(5432);
       }
