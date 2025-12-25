@@ -1,29 +1,51 @@
 package app;
 
-import software.amazon.awscdk.*;
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.iam.*;
-import software.amazon.awscdk.services.s3.*;
-import software.amazon.awscdk.services.cloudtrail.*;
-import software.amazon.awscdk.services.cloudtrail.DataResourceType;
-import software.amazon.awscdk.services.cloudwatch.*;
-import software.amazon.awscdk.services.config.*;
-import software.amazon.awscdk.services.logs.*;
-import software.amazon.awscdk.services.dynamodb.*;
+import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.services.cloudtrail.Trail;
+import software.amazon.awscdk.services.cloudwatch.Alarm;
+import software.amazon.awscdk.services.cloudwatch.Metric;
+import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
+import software.amazon.awscdk.services.config.CfnConfigRule;
+import software.amazon.awscdk.services.dynamodb.Attribute;
+import software.amazon.awscdk.services.dynamodb.AttributeType;
+import software.amazon.awscdk.services.dynamodb.BillingMode;
+import software.amazon.awscdk.services.dynamodb.Table;
+import software.amazon.awscdk.services.dynamodb.TableEncryption;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.iam.AnyPrincipal;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.iam.Policy;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.logs.FilterPattern;
+import software.amazon.awscdk.services.logs.ILogGroup;
+import software.amazon.awscdk.services.logs.LogGroup;
+import software.amazon.awscdk.services.logs.MetricFilter;
+import software.amazon.awscdk.services.s3.BlockPublicAccess;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.BucketEncryption;
+import software.amazon.awscdk.services.s3.LifecycleRule;
 import software.constructs.Construct;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 
 /**
  * Properties for SecureWebAppStack
  */
-class SecureWebAppStackProps {
+final class SecureWebAppStackProps {
     private final String environmentSuffix;
 
-    private SecureWebAppStackProps(String environmentSuffix) {
-        this.environmentSuffix = environmentSuffix;
+    private SecureWebAppStackProps(final String suffix) {
+        this.environmentSuffix = suffix;
     }
 
     public String getEnvironmentSuffix() {
@@ -34,11 +56,11 @@ class SecureWebAppStackProps {
         return new Builder();
     }
 
-    public static class Builder {
+    public static final class Builder {
         private String environmentSuffix;
 
-        public Builder environmentSuffix(String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String suffix) {
+            this.environmentSuffix = suffix;
             return this;
         }
 
@@ -71,8 +93,8 @@ public class SecureWebAppStack extends Stack {
 
         // Detect LocalStack environment
         String awsEndpointUrl = System.getenv("AWS_ENDPOINT_URL");
-        this.isLocalStack = awsEndpointUrl != null &&
-            (awsEndpointUrl.contains("localhost") || awsEndpointUrl.contains("4566"));
+        this.isLocalStack = awsEndpointUrl != null
+            && (awsEndpointUrl.contains("localhost") || awsEndpointUrl.contains("4566"));
         
         // 1. Create VPC with proper network segmentation
         Vpc vpc = createSecureVpc();
@@ -173,7 +195,7 @@ public class SecureWebAppStack extends Stack {
     /**
      * Creates IAM role with least privilege access to S3 and DynamoDB only
      */
-    private Role createLeastPrivilegeRole(Bucket logsBucket) {
+    private Role createLeastPrivilegeRole(final Bucket logsBucket) {
         Role role = Role.Builder.create(this, "WebAppRole")
             .roleName("WebAppRole-" + environmentSuffix)
             .assumedBy(ServicePrincipal.Builder.create("ec2.amazonaws.com").build())
@@ -224,7 +246,7 @@ public class SecureWebAppStack extends Stack {
      * Skip creating a new CloudTrail since we've reached the limit
      * Return a null trail since we'll be using direct log group references for alarms
      */
-    private Trail createCloudTrail(Bucket logsBucket, Vpc vpc) {
+    private Trail createCloudTrail(final Bucket logsBucket, final Vpc vpc) {
         // We've hit the CloudTrail limit (max 5 trails per region)
         // Instead of creating a new trail or trying to import an existing one,
         // we'll skip CloudTrail creation entirely and just create metric filters
@@ -238,7 +260,7 @@ public class SecureWebAppStack extends Stack {
     /**
      * Creates CloudWatch alarms for detecting unauthorized API calls
      */
-    private void createSecurityAlarms(Trail cloudTrail) {
+    private void createSecurityAlarms(final Trail cloudTrail) {
         // For imported CloudTrail, we need to explicitly create our own log group reference
         // since cloudTrail.getLogGroup() may not be available for imported trails
         ILogGroup cloudTrailLogGroup = LogGroup.fromLogGroupName(this, "CloudTrailLogGroupForAlarms",
@@ -355,7 +377,7 @@ public class SecureWebAppStack extends Stack {
     /**
      * Creates security groups that only allow access from specific office IP ranges
      */
-    private SecurityGroup createRestrictedSecurityGroups(Vpc vpc) {
+    private SecurityGroup createRestrictedSecurityGroups(final Vpc vpc) {
         SecurityGroup webAppSG = SecurityGroup.Builder.create(this, "WebAppSecurityGroup")
             .securityGroupName("WebApp-SG-" + environmentSuffix)
             .description("Security group for web application with IP restrictions")

@@ -14,13 +14,13 @@ import java.util.Optional;
  * This class provides a simple container for stack-specific configuration
  * including environment suffix for resource naming.
  */
-class TapStackProps {
+final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(String environmentSuffix, StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String suffix, final StackProps props) {
+        this.environmentSuffix = suffix;
+        this.stackProps = props != null ? props : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -35,17 +35,17 @@ class TapStackProps {
         return new Builder();
     }
 
-    public static class Builder {
+    public static final class Builder {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String suffix) {
+            this.environmentSuffix = suffix;
             return this;
         }
 
-        public Builder stackProps(StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps props) {
+            this.stackProps = props;
             return this;
         }
 
@@ -79,7 +79,7 @@ class TapStack extends Stack {
      * @param id The unique identifier for this stack
      * @param props Optional properties for configuring the stack, including environment suffix
      */
-    public TapStack(final Construct scope, final String id, final TapStackProps props) {
+    TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
         // Get environment suffix from props, context, or use 'dev' as default
@@ -138,8 +138,8 @@ public final class Main {
     public static void main(final String[] args) {
         // Configure LocalStack endpoint if running in LocalStack environment
         String awsEndpointUrl = System.getenv("AWS_ENDPOINT_URL");
-        boolean isLocalStack = awsEndpointUrl != null &&
-            (awsEndpointUrl.contains("localhost") || awsEndpointUrl.contains("4566"));
+        boolean isLocalStack = awsEndpointUrl != null
+            && (awsEndpointUrl.contains("localhost") || awsEndpointUrl.contains("4566"));
 
         if (isLocalStack) {
             // Set LocalStack credentials for CDK
