@@ -69,11 +69,11 @@ public class SecurityStack extends Stack {
     private final SecurityGroup dbSecurityGroup;
     private final String environmentSuffix;
 
-    public SecurityStack(final Construct scope, final String id, final StackProps props, final String environmentSuffix) {
+    public SecurityStack(final Construct scope, final String id, final StackProps props, final String envSuffix) {
         super(scope, id, props);
 
-        System.err.println("SecurityStack: Initializing with suffix: " + environmentSuffix);
-        this.environmentSuffix = environmentSuffix;
+        System.err.println("SecurityStack: Initializing with suffix: " + envSuffix);
+        this.environmentSuffix = envSuffix;
 
         // Apply standard tags to all resources
         System.err.println("SecurityStack: Adding tags...");
@@ -136,7 +136,7 @@ public class SecurityStack extends Stack {
                 .build();
     }
 
-    private Key createKmsKey(String keyId, String description) {
+    private Key createKmsKey(final String keyId, final String description) {
         return Key.Builder.create(this, keyId + "-" + environmentSuffix)
                 .description(description)
                 .keySpec(KeySpec.SYMMETRIC_DEFAULT)
@@ -147,7 +147,7 @@ public class SecurityStack extends Stack {
     }
 
     private Vpc createSecureVpc() {
-        Vpc vpc = Vpc.Builder.create(this, "SecureVpc-" + environmentSuffix)
+        Vpc localVpc = Vpc.Builder.create(this, "SecureVpc-" + environmentSuffix)
                 .maxAzs(3)
                 .natGateways(2)
                 .subnetConfiguration(List.of(
@@ -193,12 +193,12 @@ public class SecurityStack extends Stack {
                 .build();
 
         FlowLog.Builder.create(this, "VpcFlowLog-" + environmentSuffix)
-                .resourceType(FlowLogResourceType.fromVpc(vpc))
+                .resourceType(FlowLogResourceType.fromVpc(localVpc))
                 .destination(FlowLogDestination.toCloudWatchLogs(flowLogGroup, flowLogRole))
                 .trafficType(FlowLogTrafficType.ALL)
                 .build();
 
-        return vpc;
+        return localVpc;
     }
 
     private SecurityGroup createWebSecurityGroup() {
