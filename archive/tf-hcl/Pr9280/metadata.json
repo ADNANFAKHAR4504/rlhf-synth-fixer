@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr932",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T01:35:10+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "Auto Scaling Group",
+    "Secrets Manager",
+    "CloudWatch",
+    "Systems Manager",
+    "IAM"
+  ],
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
