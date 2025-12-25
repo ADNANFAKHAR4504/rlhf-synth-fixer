@@ -3,9 +3,10 @@ import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 // LocalStack detection and configuration
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                     process.env.LOCALSTACK === 'true';
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+  process.env.LOCALSTACK === 'true';
 
 export interface TapStackArgs {
   environmentSuffix?: string;
@@ -509,7 +510,9 @@ export class TapStack extends pulumi.ComponentResource {
       `webapp-launch-template-${environmentSuffix}`,
       {
         name: `webapp-launch-template-${environmentSuffix}`,
-        imageId: isLocalStack ? 'ami-ff0fea8310386850e' : 'ami-0e2c8caa4b6378d8c', // LocalStack accepts any AMI ID
+        imageId: isLocalStack
+          ? 'ami-ff0fea8310386850e'
+          : 'ami-0e2c8caa4b6378d8c', // LocalStack accepts any AMI ID
         instanceType: 't3.micro', // Using t3.micro for LocalStack compatibility
         keyName: undefined, // Add your key pair name if needed
         vpcSecurityGroupIds: [ec2SecurityGroup.id],
