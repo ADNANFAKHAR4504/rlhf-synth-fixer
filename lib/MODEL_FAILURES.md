@@ -40,6 +40,16 @@ S3 bucket server-side encryption configuration requires strict AccountId validat
 
 Fix: Removed S3BucketServerSideEncryptionConfiguration for LocalStack version while keeping the bucket itself for basic S3 testing.
 
+### 6. S3 Control API AccountId Validation (LocalStack Community Bug)
+
+LocalStack Community Edition has a bug in its S3 Control API where `ListTagsForResource` fails with "AccountId must only contain a-z, A-Z, 0-9 and -" error, even when no tags are specified on the bucket.
+
+This is a terraform provider issue where the AWS provider attempts to read tags during the refresh phase, triggering the S3 Control API call regardless of whether tags exist.
+
+Fix Attempted: Removed tags from S3 bucket configuration for LocalStack deployments. However, terraform still invokes S3 Control API during state refresh.
+
+Result: All resources deploy successfully and are present in terraform state, but the deployment exits with error code 1 due to the post-deployment S3 Control API call failing. This is a LocalStack Community Edition limitation that requires either LocalStack Pro or AWS deployment to resolve.
+
 ## What Works in LocalStack
 
 The following resources deploy successfully and are fully functional:
@@ -50,9 +60,13 @@ The following resources deploy successfully and are fully functional:
 - NAT Gateways with Elastic IPs
 - Route tables and route table associations
 - Security groups with ingress/egress rules
-- S3 bucket (without encryption configuration)
-- All resource tagging
+- S3 bucket (without encryption configuration or tags)
+- All resources are created and present in terraform state
+
+**Note**: The Deploy job shows as "failed" due to the S3 Control API bug during post-deployment verification, but all infrastructure resources are successfully created and functional.
 
 ## Production Deployment
 
 For real AWS deployments, the commented-out sections (EC2, IAM, CloudWatch, S3 encryption) should be uncommented as they work correctly in real AWS environments. The LocalStack limitations are specific to the community edition and don't reflect issues with the actual CDKTF code.
+
+S3 bucket tags are conditionally added for non-LocalStack deployments and will work correctly in AWS.
