@@ -5,29 +5,23 @@
   "turn_type": "single",
   "po_id": "LS-6635",
   "team": "synth-2",
-  "startedAt": "2025-11-17T05:06:45Z",
+  "startedAt": "2025-12-25T00:00:00Z",
   "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "infrastructure-analysis-/-qa"
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code",
+    "General Infrastructure Tooling QA"
   ],
   "aws_services": [
-    "AWS Config",
     "AWS Lambda",
     "Amazon S3",
     "Amazon SNS",
     "AWS KMS",
     "Amazon CloudWatch",
-    "AWS IAM"
+    "AWS IAM",
+    "Amazon EventBridge"
   ],
   "wave": "P1",
-  "training_quality": 10,
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "iamarpit-turing",
-  "dockerS3Location": ""
+  "training_quality": 10
 }
