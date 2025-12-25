@@ -6,15 +6,17 @@
   "po_id": "LS-291169",
   "team": "synth-2",
   "startedAt": "2025-08-05T11:39:52.198Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "migrate-iac",
   "provider": "localstack",
   "subject_labels": [
-    "Environment Migration"
+    "networking",
+    "storage"
   ],
   "aws_services": [
     "VPC",
     "EC2",
     "S3"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 85
 }
