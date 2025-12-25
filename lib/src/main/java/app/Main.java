@@ -295,11 +295,7 @@ class TapStack extends Stack {
                         .name("id")
                         .type(AttributeType.STRING)
                         .build())
-                .billing(software.amazon.awscdk.services.dynamodb.Billing.provisioned(
-                        software.amazon.awscdk.services.dynamodb.ThroughputProps.builder()
-                                .readCapacity(software.amazon.awscdk.services.dynamodb.Capacity.fixed(5))
-                                .writeCapacity(software.amazon.awscdk.services.dynamodb.Capacity.fixed(5))
-                                .build()))
+                .billing(software.amazon.awscdk.services.dynamodb.Billing.onDemand())
                 .build());
 
         commonTags.forEach((key, value) -> Tags.of(dynamoTable).add(key, value));
