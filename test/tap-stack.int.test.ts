@@ -28,20 +28,42 @@ import {
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
 
-// Read AWS region from file
-let awsRegion = 'us-west-2'; // default fallback
+// Read AWS region from environment variable (for LocalStack) or file
+let awsRegion = process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
 try {
-  awsRegion = fs.readFileSync('lib/AWS_REGION', 'utf8').trim();
+  const fileRegion = fs.readFileSync('lib/AWS_REGION', 'utf8').trim();
+  if (fileRegion) {
+    awsRegion = fileRegion;
+  }
 } catch (error) {
-  console.log('Could not read AWS_REGION file, using default: us-west-2');
+  // AWS_REGION file not found, using environment variable or default
+  console.log(`Using AWS region from environment: ${awsRegion}`);
+}
+
+// Configure LocalStack endpoint if available
+const isLocalStack = process.env.PROVIDER === 'localstack' ||
+                     process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+
+const localStackEndpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+
+// Client configuration with LocalStack endpoint support
+const clientConfig: any = {
+  region: awsRegion
+};
+
+if (isLocalStack) {
+  clientConfig.endpoint = localStackEndpoint;
+  clientConfig.forcePathStyle = true; // Required for S3 with LocalStack
+  console.log(`Configuring AWS clients for LocalStack: ${localStackEndpoint}`);
 }
 
 // Initialize AWS clients
-const lambdaClient = new LambdaClient({ region: awsRegion });
-const s3Client = new S3Client({ region: awsRegion });
-const cloudWatchLogsClient = new CloudWatchLogsClient({ region: awsRegion });
-const apiGatewayClient = new APIGatewayClient({ region: awsRegion });
-const cloudWatchClient = new CloudWatchClient({ region: awsRegion });
+const lambdaClient = new LambdaClient(clientConfig);
+const s3Client = new S3Client(clientConfig);
+const cloudWatchLogsClient = new CloudWatchLogsClient(clientConfig);
+const apiGatewayClient = new APIGatewayClient(clientConfig);
+const cloudWatchClient = new CloudWatchClient(clientConfig);
 
 // Check if outputs file exists, if not, skip tests
 let outputs: any = {};
@@ -320,8 +342,8 @@ describe('TAP Stack Integration Tests', () => {
         return;
       }
       const stackName = outputs.StackName;
-      // Check for either TapStack or secureapp (different stacks)
-      expect(stackName).toMatch(/(TapStack|secureapp)/);
+      // Check for either TapStack, secureapp, or LocalStack stack pattern
+      expect(stackName).toMatch(/(TapStack|secureapp|localstack-stack-)/);
     });
 
     test('environment should match expected pattern', () => {
