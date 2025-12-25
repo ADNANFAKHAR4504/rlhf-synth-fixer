@@ -4,17 +4,39 @@ import * as yaml from 'js-yaml';
 
 /**
  * CloudFormation Template Validation Tests
- * 
+ *
  * This is a pure CFN YAML template task with no CDK/TypeScript infrastructure code.
  * These tests validate the static YAML template structure.
  */
+
+// Custom YAML schema that supports CloudFormation intrinsic functions
+const CFN_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
+  new yaml.Type('!Ref', { kind: 'scalar' }),
+  new yaml.Type('!Sub', { kind: 'scalar' }),
+  new yaml.Type('!GetAtt', { kind: 'sequence' }),
+  new yaml.Type('!Join', { kind: 'sequence' }),
+  new yaml.Type('!Select', { kind: 'sequence' }),
+  new yaml.Type('!Split', { kind: 'sequence' }),
+  new yaml.Type('!GetAZs', { kind: 'scalar' }),
+  new yaml.Type('!ImportValue', { kind: 'scalar' }),
+  new yaml.Type('!FindInMap', { kind: 'sequence' }),
+  new yaml.Type('!Base64', { kind: 'scalar' }),
+  new yaml.Type('!Cidr', { kind: 'sequence' }),
+  new yaml.Type('!And', { kind: 'sequence' }),
+  new yaml.Type('!Equals', { kind: 'sequence' }),
+  new yaml.Type('!If', { kind: 'sequence' }),
+  new yaml.Type('!Not', { kind: 'sequence' }),
+  new yaml.Type('!Or', { kind: 'sequence' }),
+  new yaml.Type('!Condition', { kind: 'scalar' }),
+]);
+
 describe('CloudFormation Template Validation', () => {
   const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.yml');
   let template: any;
 
   beforeAll(() => {
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent);
+    template = yaml.load(templateContent, { schema: CFN_SCHEMA });
   });
 
   test('template file exists', () => {
