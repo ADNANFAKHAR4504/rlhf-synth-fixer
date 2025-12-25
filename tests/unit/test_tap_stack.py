@@ -106,13 +106,15 @@ def test_security_groups_created():
 
     stack = TapStack("test-stack", args)
 
-    def check_security_groups(sg_ids):
-        assert "web" in sg_ids, "Web security group should exist"
-        assert "app" in sg_ids, "App security group should exist"
-        assert "db" in sg_ids, "Database security group should exist"
-        assert "ssh" in sg_ids, "SSH security group should exist"
-
-    return stack.security_group_ids.apply(check_security_groups)
+    # Check that security_group_ids is a dict with the expected keys
+    assert isinstance(stack.security_group_ids, dict), "security_group_ids should be a dict"
+    assert "web" in stack.security_group_ids, "Web security group should exist"
+    assert "app" in stack.security_group_ids, "App security group should exist"
+    assert "db" in stack.security_group_ids, "Database security group should exist"
+    assert "ssh" in stack.security_group_ids, "SSH security group should exist"
+    
+    # Return one of the Output values to satisfy test framework
+    return stack.security_group_ids["web"]
 
 
 @pulumi.runtime.test
@@ -127,11 +129,13 @@ def test_s3_buckets_created():
 
     stack = TapStack("test-stack", args)
 
-    def check_s3_buckets(bucket_names):
-        assert "app" in bucket_names, "App bucket should exist"
-        assert "logs" in bucket_names, "Logs bucket should exist"
-
-    return stack.s3_bucket_names.apply(check_s3_buckets)
+    # Check that s3_bucket_names is a dict with the expected keys
+    assert isinstance(stack.s3_bucket_names, dict), "s3_bucket_names should be a dict"
+    assert "app" in stack.s3_bucket_names, "App bucket should exist"
+    assert "logs" in stack.s3_bucket_names, "Logs bucket should exist"
+    
+    # Return one of the Output values to satisfy test framework
+    return stack.s3_bucket_names["app"]
 
 
 @pulumi.runtime.test
@@ -146,11 +150,13 @@ def test_cloudwatch_log_groups_created():
 
     stack = TapStack("test-stack", args)
 
-    def check_log_groups(log_groups):
-        assert "application" in log_groups, "Application log group should exist"
-        assert "infrastructure" in log_groups, "Infrastructure log group should exist"
-
-    return stack.cloudwatch_log_groups.apply(check_log_groups)
+    # Check that cloudwatch_log_groups is a dict with the expected keys
+    assert isinstance(stack.cloudwatch_log_groups, dict), "cloudwatch_log_groups should be a dict"
+    assert "application" in stack.cloudwatch_log_groups, "Application log group should exist"
+    assert "infrastructure" in stack.cloudwatch_log_groups, "Infrastructure log group should exist"
+    
+    # Return one of the Output values to satisfy test framework
+    return stack.cloudwatch_log_groups["application"]
 
 
 @pulumi.runtime.test
@@ -168,11 +174,13 @@ def test_localstack_configuration():
 
     stack = TapStack("test-stack", args)
 
-    def check_config(bucket_names):
-        # Cross-region replication should be disabled
-        assert "backup" not in bucket_names, "Backup bucket should not exist in LocalStack"
-
-    return stack.s3_bucket_names.apply(check_config)
+    # Check that s3_bucket_names is a dict
+    assert isinstance(stack.s3_bucket_names, dict), "s3_bucket_names should be a dict"
+    # Cross-region replication should be disabled
+    assert "backup" not in stack.s3_bucket_names, "Backup bucket should not exist in LocalStack"
+    
+    # Return one of the Output values to satisfy test framework
+    return stack.s3_bucket_names["app"]
 
 
 if __name__ == "__main__":
