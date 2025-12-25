@@ -29,7 +29,13 @@ const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
+
+// Stack naming for LocalStack deployments (from scripts/deploy.sh)
+// LocalStack uses: localstack-stack-{suffix}
+// Regular AWS uses: TapStack{suffix}
+const stackName = isLocalStack
+  ? `localstack-stack-${environmentSuffix}`
+  : `TapStack${environmentSuffix}`;
 
 // Stack outputs will be fetched dynamically from CloudFormation
 let VPC_ID: string;
