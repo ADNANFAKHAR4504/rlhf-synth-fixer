@@ -18,7 +18,8 @@ terraform {
     }
   }
 
-  # Backend disabled for LocalStack testing
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
