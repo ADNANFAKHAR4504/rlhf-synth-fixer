@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291918",
+  "team": "synth-2",
+  "startedAt": "2025-08-15T06:36:00.500Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "CloudTrail",
+    "S3",
+    "EC2",
+    "Lambda",
+    "CloudFormation",
+    "CloudWatch",
+    "Systems Manager",
+    "SNS",
+    "RDS"
+  ],
+  "wave": "P0"
+}
