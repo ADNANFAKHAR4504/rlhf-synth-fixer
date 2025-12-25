@@ -29,7 +29,7 @@ Create a serverless payment webhook processing system using **CloudFormation wit
    - Configure Lambda environment variables encrypted with KMS for sensitive data
    - Implement IAM execution role with least privilege permissions
    - Grant Lambda permissions to write to DynamoDB and CloudWatch Logs only
-   - Enable encryption on all data stores (DynamoDB, CloudWatch Logs)
+   - Enable encryption on all data stores including DynamoDB and CloudWatch Logs
 
 4. **Monitoring and Logging**
    - Create CloudWatch Log Group with 30-day retention period
@@ -49,7 +49,7 @@ Create a serverless payment webhook processing system using **CloudFormation wit
 - Follow naming convention: resource-type with EnvironmentSuffix
 - Deploy to **us-east-1** region
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - CRITICAL
 
 All resources must be configured for easy teardown after testing:
 
