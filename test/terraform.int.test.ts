@@ -303,13 +303,14 @@ describe('Terraform Infrastructure - End-to-End Workflow Tests', () => {
     });
     await s3Client.send(putCommand);
 
-    // Construct public URL
-    const publicUrl = `https://${bucketName}.s3.amazonaws.com/${publicTestKey}`;
-    
+    // Construct public URL using path-style (more reliable than virtual-hosted-style)
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const publicUrl = `https://s3.${region}.amazonaws.com/${bucketName}/${publicTestKey}`;
+
     // Test public access via fetch
     const response = await fetch(publicUrl);
     expect(response.status).toBe(200);
-    
+
     const content = await response.text();
     expect(content).toBe('Public content');
 
