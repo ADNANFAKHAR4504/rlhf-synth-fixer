@@ -1,3 +1,4 @@
+++ b/test/tap-stack.int.test.ts
 /**
  * tap-stack.int.test.ts
  *
@@ -74,25 +75,26 @@ describe('CloudFormation Stack Integration Tests', () => {
         throw new Error('No stacks found');
       }
 
-      // Filter to TapStack stacks
-      const tapStacks = stacksResponse.StackSummaries.filter(
-        stack => stack.StackName?.startsWith('TapStack')
+      // Filter to candidate stacks - prefer TapStack but accept any stack with environment suffix
+      let candidateStacks = stacksResponse.StackSummaries.filter(
+        stack => stack.StackName?.startsWith('TapStack') || 
+                 stack.StackName?.includes(environmentSuffix)
       );
 
-      if (tapStacks.length === 0) {
-        throw new Error('No TapStack stacks found');
+      // If no candidates found, check all stacks for our resources
+      if (candidateStacks.length === 0) {
+        console.log('No TapStack or environment-specific stacks found, checking all stacks...');
+        candidateStacks = stacksResponse.StackSummaries;
       }
 
       // Try to find stack matching environment suffix first
-      let matchingStack = tapStacks.find(
+      let matchingStack = candidateStacks.find(
         stack => stack.StackName === `TapStack${environmentSuffix}` || 
                  stack.StackName === `TapStack${environmentSuffix}1` ||
                  stack.StackName?.endsWith(environmentSuffix)
       );
-
-      // If no exact match, check each stack for our expected resources (DynamoDB table and Lambda)
       if (!matchingStack) {
-        for (const stack of tapStacks) {
+        for (const stack of candidateStacks) {
           try {
             const resourcesCommand = new ListStackResourcesCommand({
               StackName: stack.StackName!
@@ -120,8 +122,8 @@ describe('CloudFormation Stack Integration Tests', () => {
       }
 
       // If still no match, use the most recently updated stack
-      if (!matchingStack && tapStacks.length > 0) {
-        matchingStack = tapStacks.sort((a, b) => {
+      if (!matchingStack && candidateStacks.length > 0) {
+        matchingStack = candidateStacks.sort((a, b) => {
           const timeA = a.LastUpdatedTime?.getTime() || 0;
           const timeB = b.LastUpdatedTime?.getTime() || 0;
           return timeB - timeA;
