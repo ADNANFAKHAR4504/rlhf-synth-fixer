@@ -68,7 +68,7 @@ Create an infrastructure compliance validation system using CloudFormation with 
 - **Performance**: Compliance checks execute within acceptable timeframes
 - **Reliability**: System operates continuously without manual intervention
 - **Security**: All components follow AWS security best practices with encryption and least privilege
-- **Resource Naming**: All resources include environmentSuffix parameter
+- **Naming Convention**: All resources include environmentSuffix parameter
 - **Observability**: Comprehensive logging and monitoring with CloudWatch
 - **Cost**: Optimized for serverless and pay-per-use services
 - **Code Quality**: Well-structured YAML, comprehensive tests, clear documentation
