@@ -80,13 +80,13 @@
     "Mappings": {
         "RegionMap": {
             "us-east-1": {
-                "AMI": "ami-ff0fea8310f3"
+                "AMI": "ami-12345678"
             },
             "us-west-2": {
-                "AMI": "ami-ff0fea8310f3"
+                "AMI": "ami-12345678"
             },
             "eu-west-1": {
-                "AMI": "ami-ff0fea8310f3"
+                "AMI": "ami-12345678"
             }
         }
     },

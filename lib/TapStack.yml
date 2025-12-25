@@ -57,14 +57,14 @@ Conditions:
   HasAlertEmail: !Not [!Equals [!Ref AlertEmail, ""]]
 
 Mappings:
-  # LocalStack Community Edition uses mock AMI IDs
+  # LocalStack Community Edition uses mock AMI IDs (8 or 17 hex chars after ami-)
   RegionMap:
     us-east-1:
-      AMI: ami-ff0fea8310f3
+      AMI: ami-12345678
     us-west-2:
-      AMI: ami-ff0fea8310f3
+      AMI: ami-12345678
     eu-west-1:
-      AMI: ami-ff0fea8310f3
+      AMI: ami-12345678
 
 Resources:
   # --------------------------
