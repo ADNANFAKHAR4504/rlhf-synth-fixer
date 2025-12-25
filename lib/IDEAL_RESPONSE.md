@@ -694,7 +694,7 @@ Complete CloudFormation JSON template implementing a production-ready three-tier
         ],
         "LaunchTemplate": {
           "LaunchTemplateId": {"Ref": "LaunchTemplate"},
-          "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
+          "Version": "$Latest"
         },
         "MinSize": 2,
         "MaxSize": 6,
