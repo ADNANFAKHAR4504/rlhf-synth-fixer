@@ -135,7 +135,7 @@
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
     },
     "AmiId": {
-      "Type": "String",
+      "Type": "AWS::EC2::Image::Id",
       "Default": "ami-04681a1dbd79675a5",
       "Description": "AMI ID for EC2 instances (use a valid AMI for LocalStack)"
     }
