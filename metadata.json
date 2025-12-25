@@ -11,6 +11,13 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Elastic Load Balancing",
+    "Auto Scaling",
+    "RDS",
+    "Secrets Manager"
+  ],
   "wave": "P0"
 }
