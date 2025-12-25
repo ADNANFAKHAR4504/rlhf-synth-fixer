@@ -1749,7 +1749,7 @@
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "postgres",
-                "EngineVersion": "14",
+                "EngineVersion": "16.9",
                 "MasterUsername": {
                     "Ref": "DBMasterUsername"
                 },
