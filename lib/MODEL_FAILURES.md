@@ -148,6 +148,36 @@ on_failure {
 - Implemented SNS topic policies for proper service integration
 - Added CloudWatch log retention policies
 
+## LocalStack Compatibility Adjustments
+
+The following modifications were made to ensure LocalStack Community Edition compatibility. These are intentional architectural decisions, not bugs.
+
+| Feature | LocalStack Limitation | Solution Applied | Production Status |
+|---------|----------------------|------------------|-------------------|
+| CloudWatch Alarms | Limited support in Community | Conditional deployment: `count = local.is_localstack ? 0 : 1` | Enabled in AWS |
+
+### Environment Detection Pattern Used
+
+```hcl
+locals {
+  is_localstack = var.is_localstack || (
+    try(length(regexall("localhost|127\\.0\\.0\\.1|localstack", lookup(var.common_tags, "AWS_ENDPOINT_URL", ""))) > 0, false) ||
+    try(length(regexall("localhost|127\\.0\\.0\\.1|localstack", provider::aws::endpoint_url_cloudwatch)) > 0, false)
+  )
+}
+```
+
+### Services Verified Working in LocalStack
+
+- S3 (full support)
+- Lambda (basic support)
+- CodePipeline (basic support)
+- CodeBuild (basic support)
+- SNS (full support)
+- IAM (basic support)
+- EventBridge (basic support)
+- Secrets Manager (basic support)
+
 ## Testing Validation
 
 After applying these fixes, the infrastructure successfully:

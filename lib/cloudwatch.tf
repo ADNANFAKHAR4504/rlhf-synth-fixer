@@ -9,6 +9,8 @@ resource "aws_cloudwatch_log_group" "codebuild_logs" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "pipeline_failure" {
+  count = local.is_localstack ? 0 : 1
+
   alarm_name          = "${var.environment_suffix}-${var.project_name}-pipeline-failure"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
@@ -31,6 +33,8 @@ resource "aws_cloudwatch_metric_alarm" "pipeline_failure" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "pipeline_success" {
+  count = local.is_localstack ? 0 : 1
+
   alarm_name          = "${var.environment_suffix}-${var.project_name}-pipeline-success"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"

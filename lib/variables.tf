@@ -55,3 +55,9 @@ variable "common_tags" {
     CostCenter = "engineering"
   }
 }
+
+variable "is_localstack" {
+  description = "Flag to indicate if deploying to LocalStack (auto-detected from AWS_ENDPOINT_URL)"
+  type        = bool
+  default     = false
+}
