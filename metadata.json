@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291864",
+  "team": "synth-2",
+  "startedAt": "2025-08-12T10:19:05.934Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "AutoScaling",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "SNS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291864",
+    "pr": "Pr965"
+  }
+}
