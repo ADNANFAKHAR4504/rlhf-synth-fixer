@@ -1,0 +1,19 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr841",
+  "team": "synth-2",
+  "startedAt": "2025-08-14T16:07:51+05:30",
+  "subtask": "Database and Storage Setup",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [],
+  "wave": "P0"
+}
