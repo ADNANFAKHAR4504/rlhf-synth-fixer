@@ -75,5 +75,5 @@ S3 bucket tags are conditionally added for non-LocalStack deployments and will w
 
 ## Testing Status
 
-- Local validation: ✅ PASSED
+- Local validation: PASSED
 - CI/CD Deploy job: Monitoring for final validation
