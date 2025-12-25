@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291275",
+  "team": "synth-2",
+  "startedAt": "2025-08-12T17:44:31.971Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "migrated_from": {
+    "po_id": "291275",
+    "pr": "Pr1078"
+  },
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "KMS",
+    "IAM",
+    "SNS",
+    "CloudWatch Logs"
+  ],
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}
