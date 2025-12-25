@@ -18,7 +18,7 @@ export interface TapStackProps extends cdk.StackProps {
    * Allowed IP addresses for SSH and HTTP access
    */
   allowedIpAddresses: string[];
-  
+
   /**
    * Database configuration
    */
@@ -196,7 +196,9 @@ export class TapStack extends cdk.Stack {
     return vpc;
   }
 
-  private createSecurityGroups(allowedIpAddresses: string[]): ec2.SecurityGroup {
+  private createSecurityGroups(
+    allowedIpAddresses: string[]
+  ): ec2.SecurityGroup {
     const securityGroup = new ec2.SecurityGroup(this, 'TapSecurityGroup', {
       vpc: this.vpc,
       description: 'Security group for TAP Financial Services Application',
@@ -208,19 +210,19 @@ export class TapStack extends cdk.Stack {
       securityGroup.addIngressRule(
         ec2.Peer.ipv4(ip),
         ec2.Port.tcp(80),
-        `Allow HTTP from ${ip}`,
+        `Allow HTTP from ${ip}`
       );
 
       securityGroup.addIngressRule(
         ec2.Peer.ipv4(ip),
         ec2.Port.tcp(443),
-        `Allow HTTPS from ${ip}`,
+        `Allow HTTPS from ${ip}`
       );
 
       securityGroup.addIngressRule(
         ec2.Peer.ipv4(ip),
         ec2.Port.tcp(22),
-        `Allow SSH from ${ip}`,
+        `Allow SSH from ${ip}`
       );
     });
 
@@ -270,12 +272,18 @@ export class TapStack extends cdk.Stack {
         },
       ],
       serverAccessLogsPrefix: 'access-logs/',
-      notificationsHandlerRole: new iam.Role(this, 'BucketNotificationsHandlerRole', {
-        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-        ],
-      }),
+      notificationsHandlerRole: new iam.Role(
+        this,
+        'BucketNotificationsHandlerRole',
+        {
+          assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+          managedPolicies: [
+            iam.ManagedPolicy.fromAwsManagedPolicyName(
+              'service-role/AWSLambdaBasicExecutionRole'
+            ),
+          ],
+        }
+      ),
     });
 
     // Add bucket policy for additional security
@@ -297,7 +305,9 @@ export class TapStack extends cdk.Stack {
     return bucket;
   }
 
-  private createPrivateRdsInstance(config?: TapStackProps['databaseConfig']): rds.DatabaseInstance {
+  private createPrivateRdsInstance(
+    config?: TapStackProps['databaseConfig']
+  ): rds.DatabaseInstance {
     // Create subnet group for RDS in isolated subnets
     const subnetGroup = new rds.SubnetGroup(this, 'TapDbSubnetGroup', {
       vpc: this.vpc,
@@ -325,7 +335,9 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15_4,
       }),
-      instanceType: config?.instanceType || ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType:
+        config?.instanceType ||
+        ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       vpc: this.vpc,
       subnetGroup,
       securityGroups: [dbSecurityGroup],
@@ -349,9 +361,9 @@ export class TapStack extends cdk.Stack {
           version: rds.PostgresEngineVersion.VER_15_4,
         }),
         parameters: {
-          'log_statement': 'all',
-          'log_min_duration_statement': '1000',
-          'shared_preload_libraries': 'pg_stat_statements',
+          log_statement: 'all',
+          log_min_duration_statement: '1000',
+          shared_preload_libraries: 'pg_stat_statements',
         },
       }),
     });
@@ -364,7 +376,9 @@ export class TapStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, 'TapEc2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
       inlinePolicies: {
         S3Access: new iam.PolicyDocument({
@@ -385,7 +399,7 @@ export class TapStack extends cdk.Stack {
       'yum install -y amazon-cloudwatch-agent',
       'yum install -y aws-cli',
       // Install and configure CloudWatch agent
-      '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c ssm:AmazonCloudWatch-linux',
+      '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c ssm:AmazonCloudWatch-linux'
     );
 
     const instance = new ec2.Instance(this, 'TapEc2Instance', {
@@ -393,7 +407,10 @@ export class TapStack extends cdk.Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       securityGroup: this.securityGroup,
       role: ec2Role,
@@ -431,10 +448,7 @@ export class TapStack extends cdk.Stack {
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-              ],
+              actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
               resources: [cloudTrailLogGroup.logGroupArn],
             }),
           ],
@@ -480,10 +494,7 @@ export class TapStack extends cdk.Stack {
         new iam.PolicyStatement({
           sid: 'AllowManageOwnPasswords',
           effect: iam.Effect.ALLOW,
-          actions: [
-            'iam:ChangePassword',
-            'iam:GetUser',
-          ],
+          actions: ['iam:ChangePassword', 'iam:GetUser'],
           resources: ['arn:aws:iam::*:user/${aws:username}'],
         }),
         new iam.PolicyStatement({
@@ -545,7 +556,7 @@ export class TapStack extends cdk.Stack {
   private enableDdosProtection(): void {
     // Note: AWS Shield Advanced requires manual activation and has costs
     // This creates the WAF WebACL for additional protection
-    
+
     const webAcl = new wafv2.CfnWebACL(this, 'TapWebAcl', {
       scope: 'CLOUDFRONT',
       defaultAction: { allow: {} },
@@ -614,32 +625,42 @@ export class TapStack extends cdk.Stack {
     const configRole = new iam.Role(this, 'ConfigRole', {
       assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWS_ConfigServiceRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWS_ConfigServiceRole'
+        ),
       ],
     });
 
     // Enable GuardDuty (requires manual activation in console)
     // This is a placeholder for GuardDuty configuration
-    
+
     // Create SNS topic for security alerts
-    const securityAlertsTopic = new cdk.aws_sns.Topic(this, 'SecurityAlertsTopic', {
-      topicName: 'tap-security-alerts',
-      displayName: 'TAP Security Alerts',
-      masterKey: this.kmsKey,
-    });
+    const securityAlertsTopic = new cdk.aws_sns.Topic(
+      this,
+      'SecurityAlertsTopic',
+      {
+        topicName: 'tap-security-alerts',
+        displayName: 'TAP Security Alerts',
+        masterKey: this.kmsKey,
+      }
+    );
 
     // Create CloudWatch alarms for security monitoring
-    const unauthorizedApiCallsAlarm = new cdk.aws_cloudwatch.Alarm(this, 'UnauthorizedApiCallsAlarm', {
-      alarmName: 'tap-unauthorized-api-calls',
-      alarmDescription: 'Alarm for unauthorized API calls',
-      metric: new cdk.aws_cloudwatch.Metric({
-        namespace: 'CloudWatchLogs',
-        metricName: 'UnauthorizedAPICalls',
-        statistic: 'Sum',
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-    });
+    const unauthorizedApiCallsAlarm = new cdk.aws_cloudwatch.Alarm(
+      this,
+      'UnauthorizedApiCallsAlarm',
+      {
+        alarmName: 'tap-unauthorized-api-calls',
+        alarmDescription: 'Alarm for unauthorized API calls',
+        metric: new cdk.aws_cloudwatch.Metric({
+          namespace: 'CloudWatchLogs',
+          metricName: 'UnauthorizedAPICalls',
+          statistic: 'Sum',
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+      }
+    );
 
     unauthorizedApiCallsAlarm.addAlarmAction(
       new cdk.aws_cloudwatch_actions.SnsAction(securityAlertsTopic)
@@ -683,29 +704,34 @@ export class TapStack extends cdk.Stack {
 ## Key Security Features Implemented
 
 ### **IAM/MFA Enforcement**
+
 - Comprehensive MFA enforcement policy that denies all actions unless MFA is present
 - Strong password policy with 14+ character minimum and complexity requirements
 - Dedicated IAM group for financial services users
 
 ### **S3 Encryption**
+
 - KMS encryption with customer-managed keys
 - SSL/TLS enforcement for all connections
 - Versioning and lifecycle policies enabled
 - Complete public access blocking
 
 ### **VPC Flow Logs**
+
 - Comprehensive flow logging to CloudWatch
 - Encrypted log storage with KMS
 - One-year retention for compliance
 - VPC endpoints for secure AWS service access
 
 ### **EC2 Security Groups**
+
 - Restrictive ingress rules limited to specified IP addresses
 - Only HTTP (80), HTTPS (443), and SSH (22) allowed
 - No outbound rules except necessary HTTPS
 - IMDSv2 enforcement for metadata security
 
 ### **RDS Security**
+
 - Private subnet placement (isolated from internet)
 - Encryption at rest and in transit
 - Multi-AZ deployment for high availability
@@ -713,6 +739,7 @@ export class TapStack extends cdk.Stack {
 - Deletion protection enabled
 
 ### **CloudTrail**
+
 - Multi-region trail with global service events
 - KMS encryption for log files
 - File validation enabled
@@ -720,12 +747,14 @@ export class TapStack extends cdk.Stack {
 - API call rate insights enabled
 
 ### **DDoS Protection**
+
 - WAF WebACL with managed rule sets
 - Rate limiting rules (2000 requests per IP)
 - Common attack pattern protection
 - Known bad inputs filtering
 
 ### **Additional Security Configurations**
+
 - CloudWatch alarms for security monitoring
 - SNS topics for security alerts
 - Config service role for compliance monitoring

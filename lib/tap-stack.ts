@@ -97,7 +97,8 @@ export class TapStack extends cdk.Stack {
 
   private createKmsKey(): kms.Key {
     const key = new kms.Key(this, 'TapKmsKey', {
-      description: 'KMS Key for TAP Financial Services Application - LocalStack Community',
+      description:
+        'KMS Key for TAP Financial Services Application - LocalStack Community',
       enableKeyRotation: false, // LocalStack: Key rotation not supported in Community
       keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
       keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
