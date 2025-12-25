@@ -115,3 +115,9 @@ variable "enable_cloudwatch_alarms" {
   type        = bool
   default     = false
 }
+
+variable "enable_alb_access_logs" {
+  description = "Enable ALB access logs to S3. Set to false for LocalStack Community Edition (invalid attribute error)"
+  type        = bool
+  default     = false
+}

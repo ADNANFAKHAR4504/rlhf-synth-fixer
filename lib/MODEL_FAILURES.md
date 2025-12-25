@@ -103,6 +103,7 @@ The following modifications were made to ensure LocalStack Community Edition com
 | Feature | LocalStack Limitation | Solution Applied | Production Status |
 |---------|----------------------|------------------|-------------------|
 | CloudWatch Alarms | Serialization issue in Community | `enable_cloudwatch_alarms = false` by default | Enabled in AWS |
+| ALB Access Logs | Invalid attribute error | `enable_alb_access_logs = false` by default | Enabled in AWS |
 | VPN Gateway | Pro-only feature | Commented out VPN resources | Enabled in AWS |
 | AWS Config | Limited in Community | `enable_config = false` by default | Enabled in AWS |
 | NAT Gateway | EIP allocation works but limited | Working in Community | Enabled in AWS |
@@ -119,6 +120,17 @@ An unknown error occurred when trying to serialize the response
 This causes all alarm resources to fail with "Missing Resource Identity After Create" errors.
 
 **Solution**: Added `enable_cloudwatch_alarms` variable (default: false) to conditionally create alarms. All alarm resources use `count = var.enable_cloudwatch_alarms ? 1 : 0` pattern.
+
+### ALB Access Logs Issue
+
+Application Load Balancer access logs in LocalStack Community Edition trigger an invalid attribute error:
+```
+InvalidConfigurationRequest: Key health_check_logs.s3.enabled not valid
+```
+
+This error occurs when LocalStack attempts to process ALB attributes but incorrectly references health check logs instead of access logs.
+
+**Solution**: Added `enable_alb_access_logs` variable (default: false) and made the access_logs block conditional using dynamic block pattern.
 
 ### Services Verified Working in LocalStack
 

@@ -86,10 +86,14 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = false
 
-  access_logs {
-    bucket  = aws_s3_bucket.logs.bucket
-    prefix  = "alb-logs"
-    enabled = true
+  # Access logs disabled by default for LocalStack (invalid attribute error)
+  dynamic "access_logs" {
+    for_each = var.enable_alb_access_logs ? [1] : []
+    content {
+      bucket  = aws_s3_bucket.logs.bucket
+      prefix  = "alb-logs"
+      enabled = true
+    }
   }
 
   tags = local.common_tags
