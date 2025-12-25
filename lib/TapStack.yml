@@ -2,19 +2,32 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready serverless infrastructure with Lambda, API Gateway, S3, and CloudWatch - LocalStack Compatible'
 
 Parameters:
-  Environment:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment name for resource naming (e.g., dev, staging, prod)'
-    AllowedValues: ['dev', 'staging', 'prod']
-
   ApplicationName:
     Type: String
     Default: 'serverless-app'
     Description: 'Application name for resource naming'
 
-  # Performance Configuration Parameters
-  # Note: Provisioned concurrency removed for LocalStack compatibility
+  Environment:
+    Type: String
+    Default: 'prod'
+    Description: 'Environment name for resource naming (e.g., dev, staging, prod)'
+    AllowedValues: ['dev', 'staging', 'prod']
+
+  EnableProvisionedConcurrency:
+    Type: String
+    Default: 'true'
+    Description: 'Enable provisioned concurrency for Lambda function (note: may not work in LocalStack Community)'
+    AllowedValues: ['true', 'false']
+
+  LambdaProvisionedConcurrency:
+    Type: Number
+    Default: 100
+    Description: 'Number of provisioned concurrent executions for Lambda'
+    MinValue: 1
+    MaxValue: 1000
+
+Conditions:
+  EnableProvisionedConcurrency: !Equals [!Ref EnableProvisionedConcurrency, 'true']
 
 Resources:
   # =====================================================
@@ -43,11 +56,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub 'arn:aws:s3:::${ApplicationName}-${Environment}-data/*'
+                Resource: !Sub 'arn:aws:s3:::${ApplicationName}-${Environment}-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Sub 'arn:aws:s3:::${ApplicationName}-${Environment}-data'
+                Resource: !Sub 'arn:aws:s3:::${ApplicationName}-${Environment}-${AWS::AccountId}'
         - PolicyName: CloudWatchLogsPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -73,6 +86,8 @@ Resources:
             Principal:
               Service: apigateway.amazonaws.com
             Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
       Policies:
         - PolicyName: CloudWatchLogsPolicy
           PolicyDocument:
@@ -96,7 +111,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${ApplicationName}-${Environment}-data'
+      BucketName: !Sub '${ApplicationName}-${Environment}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -150,10 +165,11 @@ Resources:
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
-      MemorySize: 512
+      MemorySize: 1024
+      ReservedConcurrentExecutions: 500
       Environment:
         Variables:
-          BUCKET_NAME: !Sub '${ApplicationName}-${Environment}-data'
+          BUCKET_NAME: !Sub '${ApplicationName}-${Environment}-${AWS::AccountId}'
           ENVIRONMENT: !Ref Environment
       Code:
         ZipFile: |
@@ -197,7 +213,7 @@ Resources:
 
 
 
-  # Lambda Alias for Provisioned Concurrency (disabled for LocalStack)
+  # Lambda Alias for Provisioned Concurrency (conditional for LocalStack)
   LambdaAlias:
     Type: AWS::Lambda::Alias
     DeletionPolicy: Delete
@@ -205,6 +221,10 @@ Resources:
       FunctionName: !Ref MainLambdaFunction
       FunctionVersion: '$LATEST'
       Name: 'prod'
+      ProvisionedConcurrencyConfig: !If
+        - EnableProvisionedConcurrency
+        - ProvisionedConcurrentExecutions: !Ref LambdaProvisionedConcurrency
+        - !Ref AWS::NoValue
 
   # Lambda permission for API Gateway
   LambdaApiGatewayPermission:
@@ -311,6 +331,135 @@ Resources:
     Properties:
       LogGroupName: !Sub 'API-Gateway-Execution-Logs_${RestApi}/${Environment}'
       RetentionInDays: 7
+
+  # =====================================================
+  # CLOUDWATCH ALARMS FOR MONITORING
+  # =====================================================
+
+  # Lambda Error Rate Alarm
+  LambdaErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-${Environment}-lambda-errors'
+      AlarmDescription: 'Lambda function error rate'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref MainLambdaFunction
+      TreatMissingData: notBreaching
+
+  # Lambda Duration Alarm
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-${Environment}-lambda-duration'
+      AlarmDescription: 'Lambda function duration'
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref MainLambdaFunction
+      TreatMissingData: notBreaching
+
+  # Lambda Throttle Alarm
+  LambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-${Environment}-lambda-throttles'
+      AlarmDescription: 'Lambda function throttles'
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref MainLambdaFunction
+      TreatMissingData: notBreaching
+
+  # API Gateway 4XX Error Alarm
+  ApiGateway4XXErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-${Environment}-api-4xx-errors'
+      AlarmDescription: 'API Gateway 4XX errors'
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub '${ApplicationName}-${Environment}-api'
+      TreatMissingData: notBreaching
+
+  # API Gateway 5XX Error Alarm
+  ApiGateway5XXErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-${Environment}-api-5xx-errors'
+      AlarmDescription: 'API Gateway 5XX errors'
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub '${ApplicationName}-${Environment}-api'
+      TreatMissingData: notBreaching
+
+  # API Gateway Latency Alarm
+  ApiGatewayLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    Properties:
+      AlarmName: !Sub '${ApplicationName}-${Environment}-api-latency'
+      AlarmDescription: 'API Gateway latency'
+      MetricName: Latency
+      Namespace: AWS/ApiGateway
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub '${ApplicationName}-${Environment}-api'
+      TreatMissingData: notBreaching
+
+  # =====================================================
+  # API GATEWAY ACCOUNT
+  # =====================================================
+
+  # API Gateway Account resource for CloudWatch logging
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    DeletionPolicy: Delete
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
 
 # =====================================================
 # OUTPUTS
