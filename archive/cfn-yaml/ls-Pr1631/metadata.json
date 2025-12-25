@@ -11,6 +11,15 @@
   "subject_labels": [
     "General Infrastructure Tooling QA"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "VPC",
+    "S3",
+    "IAM",
+    "KMS",
+    "EC2",
+    "AutoScaling",
+    "ELB",
+    "CloudWatch"
+  ],
   "wave": "P0"
 }
