@@ -1976,24 +1976,68 @@ const endpoint = process.env.AWS_ENDPOINT_URL || "http://localhost:4566";\
 
     #
     # UNSUPPORTED SERVICES
+    # NOTE: With Pro/Ultimate license, many services work that don't in Community
     #
     unsupported_service)
       echo "Adding conditionals for unsupported services..."
-
-      # Check for known unsupported services and add conditionals
+      
+      # Check LocalStack license tier
+      LOCALSTACK_EDITION="${LOCALSTACK_EDITION:-community}"
+      if [[ -z "$LOCALSTACK_EDITION" ]]; then
+        LOCALSTACK_EDITION=$(curl -s http://localhost:4566/_localstack/info 2>/dev/null | jq -r '.edition // "community"' || echo "community")
+      fi
+      
+      echo "   LocalStack Edition: $LOCALSTACK_EDITION"
+      
+      # Services that work in Pro/Ultimate but not Community
+      PRO_SERVICES=("AppSync" "Amplify" "EKS" "CloudFront" "Route53" "WAFv2" "Cognito" "Neptune" "DocumentDB")
+      
       for ts_file in lib/*.ts; do
         if [[ -f "$ts_file" ]]; then
           if grep -qE "appsync|AppSync" "$ts_file"; then
-            echo "   AppSync found in $ts_file - Pro-only in LocalStack"
+            if [[ "$LOCALSTACK_EDITION" == "pro" ]] || [[ "$LOCALSTACK_EDITION" == "ultimate" ]]; then
+              echo "   ✅ AppSync found in $ts_file - SUPPORTED with $LOCALSTACK_EDITION license"
+            else
+              echo "   ⚠️ AppSync found in $ts_file - Requires Pro/Ultimate license"
+            fi
           fi
           if grep -qE "amplify|Amplify" "$ts_file"; then
-            echo "   Amplify found in $ts_file - Pro-only in LocalStack"
+            if [[ "$LOCALSTACK_EDITION" == "pro" ]] || [[ "$LOCALSTACK_EDITION" == "ultimate" ]]; then
+              echo "   ✅ Amplify found in $ts_file - SUPPORTED with $LOCALSTACK_EDITION license"
+            else
+              echo "   ⚠️ Amplify found in $ts_file - Requires Pro/Ultimate license"
+            fi
           fi
           if grep -qE "eks|EKS|Eks" "$ts_file"; then
-            echo "   EKS found in $ts_file - Limited in LocalStack Community"
+            if [[ "$LOCALSTACK_EDITION" == "pro" ]] || [[ "$LOCALSTACK_EDITION" == "ultimate" ]]; then
+              echo "   ✅ EKS found in $ts_file - SUPPORTED with $LOCALSTACK_EDITION license"
+            else
+              echo "   ⚠️ EKS found in $ts_file - Limited in Community, full support in Pro/Ultimate"
+            fi
+          fi
+          if grep -qE "CloudFront|cloudfront" "$ts_file"; then
+            if [[ "$LOCALSTACK_EDITION" == "pro" ]] || [[ "$LOCALSTACK_EDITION" == "ultimate" ]]; then
+              echo "   ✅ CloudFront found in $ts_file - SUPPORTED with $LOCALSTACK_EDITION license"
+            else
+              echo "   ⚠️ CloudFront found in $ts_file - Requires Pro/Ultimate license"
+            fi
+          fi
+          if grep -qE "Route53|route53" "$ts_file"; then
+            if [[ "$LOCALSTACK_EDITION" == "pro" ]] || [[ "$LOCALSTACK_EDITION" == "ultimate" ]]; then
+              echo "   ✅ Route53 found in $ts_file - SUPPORTED with $LOCALSTACK_EDITION license"
+            else
+              echo "   ⚠️ Route53 found in $ts_file - Requires Pro/Ultimate license"
+            fi
           fi
         fi
       done
+      
+      # If running Pro/Ultimate, skip service removal workarounds
+      if [[ "$LOCALSTACK_EDITION" == "pro" ]] || [[ "$LOCALSTACK_EDITION" == "ultimate" ]]; then
+        echo ""
+        echo "   🎉 Pro/Ultimate license detected - skipping service removal workarounds!"
+        echo "   Most services work natively. Only applying fixes for actual errors."
+      fi
 
       APPLIED_FIXES+=("unsupported_service")
       ;;
@@ -3337,14 +3381,18 @@ Moved the bucket creation above the Lambda definition.
 
 The following modifications were made to ensure LocalStack Community Edition compatibility. These are intentional architectural decisions, not bugs.
 
-| Feature | LocalStack Limitation | Solution Applied | Production Status |
-|---------|----------------------|------------------|-------------------|
-| NAT Gateway | EIP allocation fails in Community | `natGateways: isLocalStack ? 0 : 2` | Enabled in AWS |
-| CloudFront | Not supported in Community | Removed with conditional | Enabled in AWS |
-| Route53 | Not supported in Community | Removed | Enabled in AWS |
-| CloudTrail | Limited support | Conditional deployment | Enabled in AWS |
-| WAF/WAFv2 | Not supported | Removed | Enabled in AWS |
-| VPC Lattice | Pro-only feature | Removed entirely | Re-add for AWS |
+| Feature | Community Edition | Pro/Ultimate Edition | Solution Applied | Production Status |
+|---------|-------------------|---------------------|------------------|-------------------|
+| NAT Gateway | EIP allocation fails | ✅ Works | `natGateways: isLocalStack ? 0 : 2` | Enabled in AWS |
+| CloudFront | ❌ Not supported | ✅ Works | Removed with conditional | Enabled in AWS |
+| Route53 | ❌ Not supported | ✅ Works | Removed | Enabled in AWS |
+| CloudTrail | ⚠️ Limited | ✅ Full support | Conditional deployment | Enabled in AWS |
+| WAF/WAFv2 | ❌ Not supported | ✅ Works | Removed | Enabled in AWS |
+| VPC Lattice | ❌ Not supported | ✅ Works | Removed entirely | Re-add for AWS |
+| AppSync | ❌ Not supported | ✅ Works | Conditional | Enabled in AWS |
+| EKS | ⚠️ Limited | ✅ Full support | Conditional | Enabled in AWS |
+
+> **Note**: If running with Pro/Ultimate license, many workarounds above are unnecessary. The fixer will detect your license and skip unneeded fixes.
 | autoDeleteObjects | Lambda custom resources issue | Removed from S3 | Manual cleanup |
 | Complex IAM | Simplified IAM in LocalStack | Inline policies used | Full policies in AWS |
 
