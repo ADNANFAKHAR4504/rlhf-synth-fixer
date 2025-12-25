@@ -9,7 +9,10 @@
   "subtask": "Networking & Content Delivery",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Networking",
+    "VPC",
+    "Subnets",
+    "Route Tables"
   ],
   "aws_services": [
     "VPC",
