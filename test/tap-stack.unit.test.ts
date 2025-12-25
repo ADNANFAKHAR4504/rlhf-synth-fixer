@@ -26,8 +26,9 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
-    test('should have SAM transform', () => {
-      expect(template.Transform).toBe('AWS::Serverless-2016-10-31');
+    test('should not have SAM transform (converted to standard CloudFormation)', () => {
+      // Transform removed to avoid requiring CAPABILITY_AUTO_EXPAND
+      expect(template.Transform).toBeUndefined();
     });
 
     test('should have metadata section', () => {
@@ -41,7 +42,6 @@ describe('TapStack CloudFormation Template', () => {
       const expectedParameters = [
         'EnvironmentSuffix',
         'EnvironmentType',
-        'AllowedIPRange',
         'LambdaMemorySize',
         'LambdaTimeout'
       ];
@@ -99,9 +99,23 @@ describe('TapStack CloudFormation Template', () => {
         'CreatePromptFunction',
         'UpdatePromptFunction',
         'DeletePromptFunction',
-        'ApiGateway',
         'AuthorizerFunction',
-
+        'ApiGateway',
+        'ApiGatewayAuthorizer',
+        'PromptsResource',
+        'GetPromptsMethod',
+        'PostPromptsMethod',
+        'PutPromptsMethod',
+        'DeletePromptsMethod',
+        'OptionsPromptsMethod',
+        'GetPromptFunctionPermission',
+        'CreatePromptFunctionPermission',
+        'UpdatePromptFunctionPermission',
+        'DeletePromptFunctionPermission',
+        'AuthorizerFunctionPermission',
+        'ApiGatewayDeployment',
+        'ApiGatewayStage',
+        'ApiGatewayCloudWatchRole',
         'LambdaErrorAlarm',
         'APIGatewayErrorAlarm'
       ];
@@ -210,9 +224,9 @@ describe('TapStack CloudFormation Template', () => {
       ];
 
       lambdaFunctions.forEach(functionName => {
-        test(`${functionName} should be a SAM function`, () => {
+        test(`${functionName} should be a Lambda function`, () => {
           const func = template.Resources[functionName];
-          expect(func.Type).toBe('AWS::Serverless::Function');
+          expect(func.Type).toBe('AWS::Lambda::Function');
         });
 
         test(`${functionName} should have correct properties`, () => {
@@ -220,16 +234,16 @@ describe('TapStack CloudFormation Template', () => {
           const properties = func.Properties;
 
           expect(properties.FunctionName).toBeDefined();
-          expect(properties.InlineCode).toBeDefined();
+          expect(properties.Code).toBeDefined();
+          expect(properties.Code.ZipFile).toBeDefined();
           expect(properties.Handler).toBe('index.handler');
           expect(properties.Runtime).toBe('nodejs20.x');
           expect(properties.MemorySize).toBeDefined();
           expect(properties.Timeout).toBeDefined();
           expect(properties.Role).toBeDefined();
           expect(properties.Environment).toBeDefined();
-          expect(properties.Tracing).toBe('Active');
-          // AutoPublishAlias and DeploymentPreference are commented out for LocalStack compatibility
-          // These properties are optional and not required for basic Lambda functionality
+          expect(properties.TracingConfig).toBeDefined();
+          expect(properties.TracingConfig.Mode).toBe('Active');
           expect(properties.Tags).toBeDefined();
         });
 
@@ -245,40 +259,82 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     describe('API Gateway', () => {
-      test('should have API Gateway resource', () => {
+      test('should have API Gateway REST API resource', () => {
         const apiGateway = template.Resources.ApiGateway;
-        expect(apiGateway.Type).toBe('AWS::Serverless::Api');
+        expect(apiGateway.Type).toBe('AWS::ApiGateway::RestApi');
+        expect(apiGateway.Properties.Name).toBeDefined();
       });
 
-      test('API Gateway should have correct properties', () => {
-        const apiGateway = template.Resources.ApiGateway;
-        const properties = apiGateway.Properties;
-
-        expect(properties.Name).toBeDefined();
-        expect(properties.StageName).toBeDefined();
-        expect(properties.TracingEnabled).toBe(true);
-        expect(properties.MethodSettings).toBeDefined();
-        expect(properties.Cors).toBeDefined();
-        expect(properties.Auth).toBeDefined();
-        expect(properties.Tags).toBeDefined();
+      test('API Gateway should have authorizer configured', () => {
+        const authorizer = template.Resources.ApiGatewayAuthorizer;
+        expect(authorizer.Type).toBe('AWS::ApiGateway::Authorizer');
+        expect(authorizer.Properties.Name).toBe('LambdaAuthorizer');
+        expect(authorizer.Properties.Type).toBe('REQUEST');
+        expect(authorizer.Properties.RestApiId).toBeDefined();
+        expect(authorizer.Properties.AuthorizerUri).toBeDefined();
       });
 
-      test('API Gateway should have authorization configured', () => {
-        const apiGateway = template.Resources.ApiGateway;
-        const auth = apiGateway.Properties.Auth;
+      test('API Gateway should have prompts resource', () => {
+        const promptsResource = template.Resources.PromptsResource;
+        expect(promptsResource.Type).toBe('AWS::ApiGateway::Resource');
+        expect(promptsResource.Properties.PathPart).toBe('prompts');
+      });
 
-        expect(auth.DefaultAuthorizer).toBe('LambdaAuthorizer');
-        expect(auth.Authorizers).toBeDefined();
-        expect(auth.Authorizers.LambdaAuthorizer).toBeDefined();
+      test('API Gateway should have HTTP methods configured', () => {
+        const methods = ['GetPromptsMethod', 'PostPromptsMethod', 'PutPromptsMethod', 'DeletePromptsMethod'];
+        methods.forEach(methodName => {
+          const method = template.Resources[methodName];
+          expect(method.Type).toBe('AWS::ApiGateway::Method');
+          expect(method.Properties.HttpMethod).toBeDefined();
+          expect(method.Properties.AuthorizationType).toBe('CUSTOM');
+          expect(method.Properties.AuthorizerId).toBeDefined();
+          expect(method.Properties.Integration).toBeDefined();
+        });
+      });
+
+      test('API Gateway should have CORS configured', () => {
+        const optionsMethod = template.Resources.OptionsPromptsMethod;
+        expect(optionsMethod.Type).toBe('AWS::ApiGateway::Method');
+        expect(optionsMethod.Properties.HttpMethod).toBe('OPTIONS');
+        expect(optionsMethod.Properties.AuthorizationType).toBe('NONE');
+        expect(optionsMethod.Properties.Integration).toBeDefined();
+      });
+
+      test('API Gateway should have deployment and stage', () => {
+        const deployment = template.Resources.ApiGatewayDeployment;
+        expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
+        
+        const stage = template.Resources.ApiGatewayStage;
+        expect(stage.Type).toBe('AWS::ApiGateway::Stage');
+        expect(stage.Properties.StageName).toBeDefined();
+        expect(stage.Properties.TracingEnabled).toBe(true);
+        expect(stage.Properties.MethodSettings).toBeDefined();
+      });
+
+      test('API Gateway should have Lambda permissions', () => {
+        const permissions = [
+          'GetPromptFunctionPermission',
+          'CreatePromptFunctionPermission',
+          'UpdatePromptFunctionPermission',
+          'DeletePromptFunctionPermission',
+          'AuthorizerFunctionPermission'
+        ];
+        permissions.forEach(permissionName => {
+          const permission = template.Resources[permissionName];
+          expect(permission.Type).toBe('AWS::Lambda::Permission');
+          expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
+          expect(permission.Properties.Principal).toBe('apigateway.amazonaws.com');
+        });
       });
     });
 
     describe('Lambda Authorizer', () => {
       test('should have authorizer function', () => {
         const authorizer = template.Resources.AuthorizerFunction;
-        expect(authorizer.Type).toBe('AWS::Serverless::Function');
+        expect(authorizer.Type).toBe('AWS::Lambda::Function');
         expect(authorizer.Properties.FunctionName).toBeDefined();
-        expect(authorizer.Properties.InlineCode).toBeDefined();
+        expect(authorizer.Properties.Code).toBeDefined();
+        expect(authorizer.Properties.Code.ZipFile).toBeDefined();
         expect(authorizer.Properties.Handler).toBe('index.handler');
         expect(authorizer.Properties.Runtime).toBe('nodejs20.x');
       });
@@ -370,12 +426,13 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(6); // Should have multiple resources now (using SAM Events for API Gateway)
+      // Standard CloudFormation has more resources (API Gateway resources, methods, permissions, etc.)
+      expect(resourceCount).toBeGreaterThan(20);
     });
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5); // EnableWAF parameter is properly commented out
+      expect(parameterCount).toBe(4); // AllowedIPRange and EnableWAF parameters are commented out
     });
 
     test('should have correct number of outputs', () => {
@@ -454,7 +511,8 @@ describe('TapStack CloudFormation Template', () => {
 
       lambdaFunctions.forEach(functionName => {
         const func = template.Resources[functionName];
-        expect(func.Properties.Tracing).toBe('Active');
+        expect(func.Properties.TracingConfig).toBeDefined();
+        expect(func.Properties.TracingConfig.Mode).toBe('Active');
       });
     });
   });
