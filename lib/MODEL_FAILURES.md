@@ -45,9 +45,39 @@ Areas for AWS Nova Claude Improvement
 Based on this experience, the AWS Nova Claude model could significantly improve by:
 
 *   **Ensuring Code Completeness**: Generating full, runnable code for all components it outlines in its proposed architecture.
-    
+
 *   **Improving Functional Correctness**: Providing generated code that is immediately functional and adheres to the specific API signatures and best practices of the target framework (Pulumi, in this case), minimizing the need for extensive debugging of fundamental issues.
-    
+
 *   **Integrating Testing from the Start**: Including a basic, functional unit testing setup alongside the generated infrastructure code, or at least providing clear, executable guidance on how to implement one.
-    
+
 *   **Adhering to Idiomatic Patterns**: Avoiding common pitfalls like direct Output concatenation and incorrect resource argument passing, which are frequently encountered in Pulumi development.
+
+LocalStack Compatibility Adjustments
+------------------------------------
+
+The following modifications were made to ensure LocalStack Community Edition compatibility. These are intentional architectural decisions for local testing, not bugs.
+
+| Feature | Community Edition | Pro/Ultimate Edition | Solution Applied | Production Status |
+|---------|-------------------|---------------------|------------------|-------------------|
+| NAT Gateway | EIP allocation can fail | Works | Conditional: 0 NAT gateways in LocalStack | Enabled in AWS |
+| CloudFront | Not supported | Works | Conditional: Skip CloudFront in LocalStack | Enabled in AWS |
+| VPC Endpoints | Limited support | Full support | Service-specific endpoints may fail | Enabled in AWS |
+
+### Environment Detection Pattern Used
+
+```python
+import os
+is_localstack = os.environ.get('AWS_ENDPOINT_URL', '').find('localhost') != -1 or \
+                os.environ.get('AWS_ENDPOINT_URL', '').find('4566') != -1
+```
+
+### Services Verified Working in LocalStack
+
+- S3 (full support)
+- Lambda (basic support)
+- DynamoDB (full support)
+- Kinesis (basic support)
+- SNS (full support)
+- API Gateway (basic support)
+- IAM (basic support)
+- VPC (basic support)

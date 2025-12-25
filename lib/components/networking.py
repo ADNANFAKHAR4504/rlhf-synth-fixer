@@ -67,27 +67,34 @@ class NetworkInfrastructure(pulumi.ComponentResource):
             self.private_subnets.append(subnet)
             self.private_subnet_ids.append(subnet.id)
 
-        self.nat_eips = []
-        for i in range(len(self.public_subnets)):
-            eip = aws.ec2.Eip(
-                f"{name}-nat-eip-{i + 1}",
-                domain="vpc",
-                tags={**tags, "Name": f"{name}-nat-eip-{i + 1}"},
-                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.igw])
-            )
-            self.nat_eips.append(eip)
+        # LocalStack detection - skip NAT Gateways in LocalStack Community
+        import os
+        is_localstack = os.environ.get('AWS_ENDPOINT_URL', '').find('localhost') != -1 or \
+                        os.environ.get('AWS_ENDPOINT_URL', '').find('4566') != -1
 
+        self.nat_eips = []
         self.nat_gateways = []
-        for i, (subnet, eip) in enumerate(
-                zip(self.public_subnets, self.nat_eips)):
-            nat = aws.ec2.NatGateway(
-                f"{name}-nat-{i + 1}",
-                allocation_id=eip.id,
-                subnet_id=subnet.id,
-                tags={**tags, "Name": f"{name}-nat-{i + 1}"},
-                opts=pulumi.ResourceOptions(parent=self)
-            )
-            self.nat_gateways.append(nat)
+
+        if not is_localstack:
+            for i in range(len(self.public_subnets)):
+                eip = aws.ec2.Eip(
+                    f"{name}-nat-eip-{i + 1}",
+                    domain="vpc",
+                    tags={**tags, "Name": f"{name}-nat-eip-{i + 1}"},
+                    opts=pulumi.ResourceOptions(parent=self, depends_on=[self.igw])
+                )
+                self.nat_eips.append(eip)
+
+            for i, (subnet, eip) in enumerate(
+                    zip(self.public_subnets, self.nat_eips)):
+                nat = aws.ec2.NatGateway(
+                    f"{name}-nat-{i + 1}",
+                    allocation_id=eip.id,
+                    subnet_id=subnet.id,
+                    tags={**tags, "Name": f"{name}-nat-{i + 1}"},
+                    opts=pulumi.ResourceOptions(parent=self)
+                )
+                self.nat_gateways.append(nat)
 
         self.public_route_table = aws.ec2.RouteTable(
             f"{name}-public-rt",
@@ -113,31 +120,60 @@ class NetworkInfrastructure(pulumi.ComponentResource):
             )
 
         self.private_route_tables = []
-        for i, (subnet, nat) in enumerate(
-                zip(self.private_subnets, self.nat_gateways)):
-            rt = aws.ec2.RouteTable(
-                f"{name}-private-rt-{i + 1}",
-                vpc_id=self.vpc.id,
-                tags={**tags, "Name": f"{name}-private-rt-{i + 1}"},
-                opts=pulumi.ResourceOptions(parent=self)
-            )
 
-            aws.ec2.Route(
-                f"{name}-private-route-{i + 1}",
-                route_table_id=rt.id,
-                destination_cidr_block="0.0.0.0/0",
-                nat_gateway_id=nat.id,
-                opts=pulumi.ResourceOptions(parent=self)
-            )
+        if not is_localstack:
+            # Use NAT gateways for private subnets in AWS
+            for i, (subnet, nat) in enumerate(
+                    zip(self.private_subnets, self.nat_gateways)):
+                rt = aws.ec2.RouteTable(
+                    f"{name}-private-rt-{i + 1}",
+                    vpc_id=self.vpc.id,
+                    tags={**tags, "Name": f"{name}-private-rt-{i + 1}"},
+                    opts=pulumi.ResourceOptions(parent=self)
+                )
 
-            aws.ec2.RouteTableAssociation(
-                f"{name}-private-rta-{i + 1}",
-                subnet_id=subnet.id,
-                route_table_id=rt.id,
-                opts=pulumi.ResourceOptions(parent=self)
-            )
+                aws.ec2.Route(
+                    f"{name}-private-route-{i + 1}",
+                    route_table_id=rt.id,
+                    destination_cidr_block="0.0.0.0/0",
+                    nat_gateway_id=nat.id,
+                    opts=pulumi.ResourceOptions(parent=self)
+                )
 
-            self.private_route_tables.append(rt)
+                aws.ec2.RouteTableAssociation(
+                    f"{name}-private-rta-{i + 1}",
+                    subnet_id=subnet.id,
+                    route_table_id=rt.id,
+                    opts=pulumi.ResourceOptions(parent=self)
+                )
+
+                self.private_route_tables.append(rt)
+        else:
+            # In LocalStack, use IGW directly for private subnets (no NAT Gateway)
+            for i, subnet in enumerate(self.private_subnets):
+                rt = aws.ec2.RouteTable(
+                    f"{name}-private-rt-{i + 1}",
+                    vpc_id=self.vpc.id,
+                    tags={**tags, "Name": f"{name}-private-rt-{i + 1}"},
+                    opts=pulumi.ResourceOptions(parent=self)
+                )
+
+                aws.ec2.Route(
+                    f"{name}-private-route-{i + 1}",
+                    route_table_id=rt.id,
+                    destination_cidr_block="0.0.0.0/0",
+                    gateway_id=self.igw.id,
+                    opts=pulumi.ResourceOptions(parent=self)
+                )
+
+                aws.ec2.RouteTableAssociation(
+                    f"{name}-private-rta-{i + 1}",
+                    subnet_id=subnet.id,
+                    route_table_id=rt.id,
+                    opts=pulumi.ResourceOptions(parent=self)
+                )
+
+                self.private_route_tables.append(rt)
 
         self.lambda_security_group = aws.ec2.SecurityGroup(
             f"{name}-lambda-sg",
