@@ -38,7 +38,7 @@ IAM Roles and Policies:
 
 Define all required IAM roles, policies, and trust relationships for Lambda, S3, and Secrets Manager.
 
-All permissions must strictly adhere to the principle of least privilege.
+Each IAM policy must grant only the specific actions needed for each service. Use least-privilege access by specifying exact DynamoDB actions such as GetItem PutItem and Query instead of wildcards. Restrict resource ARNs to specific table names rather than using Resource: * patterns. Avoid FullAccess or AdministratorAccess policies.
 
 CloudWatch Monitoring:
 
