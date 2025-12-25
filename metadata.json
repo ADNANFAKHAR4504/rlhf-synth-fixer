@@ -6,15 +6,9 @@
   "po_id": "trainr911",
   "team": "synth-2",
   "startedAt": "2025-08-20T11:46:19+00:00",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Web Application Deployment",
-    "Security Configuration",
-    "Network Configuration",
-    "Database Management",
-    "Monitoring Setup",
-    "Resource Scaling",
-    "General Infrastructure Tooling QA"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "AWS::EC2::VPC",
