@@ -10,9 +10,7 @@
   "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Web Application Deployment",
-    "General Infrastructure Tooling QA",
-    "Security Configuration as Code"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "VPC",
