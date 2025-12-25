@@ -56,23 +56,49 @@ let secretsClient: SecretsManagerClient;
 let region: string;
 
 function loadOutputs() {
-  // CI/CD saves to cdk-outputs, local saves to cfn-outputs
-  const ciPath = path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json");
-  const localPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
+  // Try multiple possible locations (CI vs local, different working directories)
+  const cwd = process.cwd();
+  const possiblePaths = [
+    path.resolve(cwd, "cdk-outputs/flat-outputs.json"),
+    path.resolve(cwd, "cfn-outputs/flat-outputs.json"),
+    path.resolve(cwd, "../cdk-outputs/flat-outputs.json"),
+    path.resolve(cwd, "../cfn-outputs/flat-outputs.json"),
+    path.resolve(__dirname, "../cdk-outputs/flat-outputs.json"),
+    path.resolve(__dirname, "../cfn-outputs/flat-outputs.json"),
+  ];
 
-  const p = fs.existsSync(ciPath) ? ciPath : localPath;
+  let p: string | null = null;
+  for (const candidatePath of possiblePaths) {
+    if (fs.existsSync(candidatePath)) {
+      p = candidatePath;
+      break;
+    }
+  }
 
-  if (!fs.existsSync(p)) {
-    throw new Error("Outputs file not found. Please run terraform apply first.");
+  if (!p) {
+    throw new Error(`Outputs file not found. Searched: ${possiblePaths.join(", ")}`);
   }
 
   try {
-    const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Outputs;
+    const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, any>;
 
     const missing: string[] = [];
-    const req = <K extends keyof Outputs>(k: K) => {
-      const v = raw[k]?.value as any;
-      if (v === undefined || v === null) missing.push(String(k));
+
+    // Helper to get value - handles both nested {value: x} and flat x formats
+    const getValue = (key: string): any => {
+      const val = raw[key];
+      if (val === undefined || val === null) return undefined;
+      // If it's an object with a .value property, use that (terraform output -json format)
+      if (typeof val === 'object' && val !== null && 'value' in val) {
+        return val.value;
+      }
+      // Otherwise use the value directly (flat format)
+      return val;
+    };
+
+    const req = (k: string) => {
+      const v = getValue(k);
+      if (v === undefined || v === null) missing.push(k);
       return v;
     };
 
@@ -94,7 +120,9 @@ function loadOutputs() {
     };
 
     if (missing.length) {
-      throw new Error(`Missing required outputs: ${missing.join(", ")}`);
+      // Debug: log what we found in the file
+      const keys = Object.keys(raw);
+      throw new Error(`Missing required outputs: ${missing.join(", ")}. File contains keys: ${keys.join(", ")}`);
     }
     return o;
   } catch (error) {
