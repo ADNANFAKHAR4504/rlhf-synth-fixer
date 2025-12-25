@@ -43,6 +43,30 @@ variable "private_subnet_cidrs" {
   default     = ["10.0.10.0/24", "10.0.20.0/24"]
 }
 
+variable "enable_waf" {
+  description = "Enable WAF v2 Web ACL"
+  type        = bool
+  default     = true
+}
+
+variable "enable_nat_gateway" {
+  description = "Enable NAT Gateways"
+  type        = bool
+  default     = true
+}
+
+variable "enable_alb_access_logs" {
+  description = "Enable ALB access logs"
+  type        = bool
+  default     = true
+}
+
+variable "enable_alb" {
+  description = "Enable Application Load Balancer"
+  type        = bool
+  default     = true
+}
+
 ########################
 # Data Sources
 ########################
@@ -187,7 +211,7 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_eip" "nat" {
-  count  = length(aws_subnet.public)
+  count  = var.enable_nat_gateway ? length(aws_subnet.public) : 0
   domain = "vpc"
 
   depends_on = [aws_internet_gateway.main]
@@ -199,7 +223,7 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "main" {
-  count         = length(aws_subnet.public)
+  count         = var.enable_nat_gateway ? length(aws_subnet.public) : 0
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
@@ -229,9 +253,12 @@ resource "aws_route_table" "private" {
   count  = length(aws_subnet.private)
   vpc_id = aws_vpc.main.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  dynamic "route" {
+    for_each = var.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.main[count.index].id
+    }
   }
 
   tags = {
@@ -375,6 +402,7 @@ resource "aws_cloudwatch_log_group" "webapp_logs" {
 # Application Load Balancer
 ########################
 resource "aws_lb" "main" {
+  count              = var.enable_alb ? 1 : 0
   name               = "${var.project_name}-${var.environment_suffix}-alb"
   internal           = false
   load_balancer_type = "application"
@@ -383,16 +411,16 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = false
 
-  access_logs {
-    bucket  = aws_s3_bucket.webapp_assets.bucket
-    prefix  = "alb-access-logs"
-    enabled = true
+  dynamic "access_logs" {
+    for_each = var.enable_alb_access_logs ? [1] : []
+    content {
+      bucket  = aws_s3_bucket.webapp_assets.bucket
+      prefix  = "alb-access-logs"
+      enabled = true
+    }
   }
 
-  depends_on = [
-    aws_s3_bucket_policy.alb_logs,
-    aws_s3_bucket_public_access_block.webapp_assets
-  ]
+  depends_on = [aws_s3_bucket_public_access_block.webapp_assets]
 
   tags = {
     Name        = "${var.project_name}-${var.environment_suffix}-alb"
@@ -401,6 +429,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_s3_bucket_policy" "alb_logs" {
+  count  = var.enable_alb_access_logs ? 1 : 0
   bucket = aws_s3_bucket.webapp_assets.id
 
   policy = jsonencode({
@@ -430,6 +459,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
 # WAF v2
 ########################
 resource "aws_wafv2_web_acl" "main" {
+  count = var.enable_waf ? 1 : 0
   name  = "${var.project_name}-${var.environment_suffix}-web-acl"
   scope = "REGIONAL"
 
@@ -516,8 +546,9 @@ resource "aws_wafv2_web_acl" "main" {
 }
 
 resource "aws_wafv2_web_acl_association" "main" {
-  resource_arn = aws_lb.main.arn
-  web_acl_arn  = aws_wafv2_web_acl.main.arn
+  count        = var.enable_waf && var.enable_alb ? 1 : 0
+  resource_arn = aws_lb.main[0].arn
+  web_acl_arn  = aws_wafv2_web_acl.main[0].arn
 }
 
 ########################
@@ -804,7 +835,12 @@ output "private_subnet_ids" {
 
 output "alb_dns_name" {
   description = "DNS name of the load balancer"
-  value       = aws_lb.main.dns_name
+  value       = var.enable_alb ? aws_lb.main[0].dns_name : ""
+}
+
+output "enable_alb" {
+  description = "Whether ALB is enabled"
+  value       = var.enable_alb
 }
 
 output "s3_bucket_name" {
@@ -824,7 +860,22 @@ output "cloudwatch_log_group_name" {
 
 output "waf_web_acl_arn" {
   description = "ARN of the WAF Web ACL"
-  value       = aws_wafv2_web_acl.main.arn
+  value       = var.enable_waf ? aws_wafv2_web_acl.main[0].arn : ""
+}
+
+output "enable_waf" {
+  description = "Whether WAF is enabled"
+  value       = var.enable_waf
+}
+
+output "enable_nat_gateway" {
+  description = "Whether NAT Gateway is enabled"
+  value       = var.enable_nat_gateway
+}
+
+output "enable_alb_access_logs" {
+  description = "Whether ALB access logs are enabled"
+  value       = var.enable_alb_access_logs
 }
 
 output "ssm_parameter_database_host" {

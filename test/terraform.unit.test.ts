@@ -37,6 +37,26 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(tapStackContent).toContain('variable "vpc_cidr"');
       expect(tapStackContent).toContain('default     = "10.0.0.0/16"');
     });
+
+    test('should have enable_waf feature flag', () => {
+      expect(tapStackContent).toContain('variable "enable_waf"');
+      expect(tapStackContent).toMatch(/enable_waf[\s\S]*?type\s*=\s*bool/);
+    });
+
+    test('should have enable_nat_gateway feature flag', () => {
+      expect(tapStackContent).toContain('variable "enable_nat_gateway"');
+      expect(tapStackContent).toMatch(/enable_nat_gateway[\s\S]*?type\s*=\s*bool/);
+    });
+
+    test('should have enable_alb_access_logs feature flag', () => {
+      expect(tapStackContent).toContain('variable "enable_alb_access_logs"');
+      expect(tapStackContent).toMatch(/enable_alb_access_logs[\s\S]*?type\s*=\s*bool/);
+    });
+
+    test('should have enable_alb feature flag', () => {
+      expect(tapStackContent).toContain('variable "enable_alb"');
+      expect(tapStackContent).toMatch(/enable_alb[\s\S]*?type\s*=\s*bool/);
+    });
   });
 
   describe('KMS Configuration', () => {
@@ -72,10 +92,12 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(tapStackContent).toContain('map_public_ip_on_launch = true');
     });
 
-    test('should create NAT gateways for private subnets', () => {
+    test('should create conditional NAT gateways for private subnets', () => {
       expect(tapStackContent).toContain('resource "aws_nat_gateway" "main"');
       expect(tapStackContent).toContain('resource "aws_eip" "nat"');
       expect(tapStackContent).toContain('domain = "vpc"');
+      expect(tapStackContent).toMatch(/aws_nat_gateway[\s\S]*?count\s*=\s*var\.enable_nat_gateway/);
+      expect(tapStackContent).toMatch(/aws_eip[\s\S]*?count\s*=\s*var\.enable_nat_gateway/);
     });
 
     test('should create route tables and associations', () => {
@@ -139,9 +161,11 @@ describe('Terraform Infrastructure Unit Tests', () => {
   });
 
   describe('Application Load Balancer', () => {
-    test('should create ALB with access logs enabled', () => {
+    test('should create conditional ALB with conditional access logs', () => {
       expect(tapStackContent).toContain('resource "aws_lb" "main"');
-      expect(tapStackContent).toContain('enabled = true');
+      expect(tapStackContent).toMatch(/aws_lb[\s\S]*?count\s*=\s*var\.enable_alb/);
+      expect(tapStackContent).toContain('dynamic "access_logs"');
+      expect(tapStackContent).toMatch(/access_logs[\s\S]*?for_each\s*=\s*var\.enable_alb_access_logs/);
       expect(tapStackContent).toContain('prefix  = "alb-access-logs"');
     });
 
@@ -151,8 +175,9 @@ describe('Terraform Infrastructure Unit Tests', () => {
   });
 
   describe('WAF v2 Configuration', () => {
-    test('should create WAF Web ACL with managed rule sets', () => {
+    test('should create conditional WAF Web ACL with managed rule sets', () => {
       expect(tapStackContent).toContain('resource "aws_wafv2_web_acl" "main"');
+      expect(tapStackContent).toMatch(/aws_wafv2_web_acl[\s\S]*?count\s*=\s*var\.enable_waf/);
       expect(tapStackContent).toContain('AWSManagedRulesCommonRuleSet');
       expect(tapStackContent).toContain('AWSManagedRulesKnownBadInputsRuleSet');
     });
@@ -163,8 +188,9 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(tapStackContent).toContain('limit              = 2000');
     });
 
-    test('should associate WAF with ALB', () => {
+    test('should associate WAF with ALB conditionally', () => {
       expect(tapStackContent).toContain('resource "aws_wafv2_web_acl_association" "main"');
+      expect(tapStackContent).toMatch(/aws_wafv2_web_acl_association[\s\S]*?count\s*=\s*var\.enable_waf/);
     });
   });
 
@@ -255,10 +281,17 @@ describe('Terraform Infrastructure Unit Tests', () => {
         'output "eventbridge_bus_arn"',
         'output "eventbridge_logs_group"'
       ];
-      
+
       expectedOutputs.forEach(outputName => {
         expect(tapStackContent).toContain(outputName);
       });
+    });
+
+    test('should output feature flag states', () => {
+      expect(tapStackContent).toContain('output "enable_waf"');
+      expect(tapStackContent).toContain('output "enable_nat_gateway"');
+      expect(tapStackContent).toContain('output "enable_alb_access_logs"');
+      expect(tapStackContent).toContain('output "enable_alb"');
     });
   });
 

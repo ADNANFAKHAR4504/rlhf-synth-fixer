@@ -52,7 +52,7 @@ import {
 
 describe('Terraform Infrastructure Integration Tests', () => {
   let outputs: any;
-  const region = 'us-west-2';
+  const region = 'us-east-1';
 
   // LocalStack endpoint configuration
   const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
@@ -139,10 +139,18 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     test('should have deployed public subnets', async () => {
-      // Parse subnet IDs if they're stored as JSON strings
-      const subnetIds = Array.isArray(outputs.public_subnet_ids)
-        ? outputs.public_subnet_ids
-        : JSON.parse(outputs.public_subnet_ids || '[]');
+      // Handle different output formats: plain array, object with value, or JSON string
+      let subnetIds: string[];
+      const rawOutput = outputs.public_subnet_ids;
+      if (Array.isArray(rawOutput)) {
+        subnetIds = rawOutput;
+      } else if (rawOutput?.value && Array.isArray(rawOutput.value)) {
+        subnetIds = rawOutput.value;
+      } else if (typeof rawOutput === 'string') {
+        subnetIds = JSON.parse(rawOutput || '[]');
+      } else {
+        subnetIds = [];
+      }
 
       if (subnetIds.length === 0) {
         console.log('Public subnet test skipped: No subnet IDs found in outputs');
@@ -153,31 +161,40 @@ describe('Terraform Infrastructure Integration Tests', () => {
         SubnetIds: subnetIds
       });
       const response = await retryWithBackoff(() => ec2Client.send(command));
-      
+
       expect(response.Subnets).toHaveLength(2);
+      const vpcId = getStringOutput(outputs.vpc_id);
       response.Subnets!.forEach(subnet => {
         expect(subnet.State).toBe('available');
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
+        expect(subnet.VpcId).toBe(vpcId);
       });
     });
 
     test('should have deployed private subnets', async () => {
-      // Parse subnet IDs if they're stored as JSON strings
-      const subnetIds = Array.isArray(outputs.private_subnet_ids) 
-        ? outputs.private_subnet_ids 
-        : JSON.parse(outputs.private_subnet_ids || '[]');
-      
+      // Handle different output formats: plain array, object with value, or JSON string
+      let subnetIds: string[];
+      const rawOutput = outputs.private_subnet_ids;
+      if (Array.isArray(rawOutput)) {
+        subnetIds = rawOutput;
+      } else if (rawOutput?.value && Array.isArray(rawOutput.value)) {
+        subnetIds = rawOutput.value;
+      } else if (typeof rawOutput === 'string') {
+        subnetIds = JSON.parse(rawOutput || '[]');
+      } else {
+        subnetIds = [];
+      }
+
       if (subnetIds.length === 0) {
         console.log('Private subnet test skipped: No subnet IDs found in outputs');
         return;
       }
-      
+
       const command = new DescribeSubnetsCommand({
         SubnetIds: subnetIds
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.Subnets).toHaveLength(2);
       const vpcId = getStringOutput(outputs.vpc_id);
       response.Subnets!.forEach(subnet => {
@@ -187,7 +204,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
       });
     });
 
-    test('should have deployed NAT gateways', async () => {
+    test('should have deployed NAT gateways if enabled', async () => {
+      const enableNatGateway = outputs.enable_nat_gateway?.value ?? outputs.enable_nat_gateway ?? true;
+
+      if (!enableNatGateway) {
+        console.log('NAT gateway test skipped: NAT gateways are disabled via feature flag');
+        return;
+      }
+
       const vpcId = getStringOutput(outputs.vpc_id);
       const command = new DescribeNatGatewaysCommand({
         Filter: [
@@ -344,7 +368,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('Application Load Balancer', () => {
-    test('should have ALB deployed and active', async () => {
+    test('should have ALB deployed and active if enabled', async () => {
+      const enableAlb = outputs.enable_alb?.value ?? outputs.enable_alb ?? true;
+
+      if (!enableAlb) {
+        console.log('ALB test skipped: ALB is disabled via feature flag');
+        return;
+      }
+
       const albDnsName = getStringOutput(outputs.alb_dns_name);
       const arnParts = albDnsName.split('-');
       const command = new DescribeLoadBalancersCommand({});
@@ -360,7 +391,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(alb?.Scheme).toBe('internet-facing');
     });
 
-    test('should have ALB access logs enabled', async () => {
+    test('should have ALB access logs enabled if configured', async () => {
+      const enableAlb = outputs.enable_alb?.value ?? outputs.enable_alb ?? true;
+      const enableAlbAccessLogs = outputs.enable_alb_access_logs?.value ?? outputs.enable_alb_access_logs ?? true;
+
+      if (!enableAlb || !enableAlbAccessLogs) {
+        console.log('ALB access logs test skipped: ALB or access logs disabled via feature flag');
+        return;
+      }
+
       const albDnsName = getStringOutput(outputs.alb_dns_name);
       const describeCommand = new DescribeLoadBalancersCommand({});
       const describeResponse = await retryWithBackoff(() => elbClient.send(describeCommand));
@@ -368,7 +407,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const alb = describeResponse.LoadBalancers?.find(lb =>
         lb.DNSName === albDnsName
       );
-      
+
       if (alb?.LoadBalancerArn) {
         const attrCommand = new DescribeLoadBalancerAttributesCommand({
           LoadBalancerArn: alb.LoadBalancerArn
@@ -390,7 +429,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('WAF v2', () => {
-    test('should have WAF Web ACL deployed', async () => {
+    test('should have WAF Web ACL deployed if enabled', async () => {
+      const enableWaf = outputs.enable_waf?.value ?? outputs.enable_waf ?? true;
+
+      if (!enableWaf) {
+        console.log('WAF test skipped: WAF is disabled via feature flag');
+        return;
+      }
+
       const wafWebAclArn = getStringOutput(outputs.waf_web_acl_arn);
       const arnParts = wafWebAclArn.split('/');
       const webAclName = arnParts[arnParts.length - 2];
@@ -407,7 +453,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(response.WebACL?.Rules).toHaveLength(3);
     });
 
-    test('should have AWS managed rules configured', async () => {
+    test('should have AWS managed rules configured if WAF enabled', async () => {
+      const enableWaf = outputs.enable_waf?.value ?? outputs.enable_waf ?? true;
+
+      if (!enableWaf) {
+        console.log('WAF rules test skipped: WAF is disabled via feature flag');
+        return;
+      }
+
       const wafWebAclArn = getStringOutput(outputs.waf_web_acl_arn);
       const arnParts = wafWebAclArn.split('/');
       const webAclName = arnParts[arnParts.length - 2];
@@ -419,12 +472,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
         Scope: 'REGIONAL'
       });
       const response = await retryWithBackoff(() => wafClient.send(command));
-      
+
       const rules = response.WebACL?.Rules || [];
       const commonRuleSet = rules.find(r => r.Name === 'AWSManagedRulesCommonRuleSet');
       const knownBadInputs = rules.find(r => r.Name === 'AWSManagedRulesKnownBadInputsRuleSet');
       const rateLimit = rules.find(r => r.Name === 'RateLimitRule');
-      
+
       expect(commonRuleSet).toBeDefined();
       expect(knownBadInputs).toBeDefined();
       expect(rateLimit).toBeDefined();
@@ -605,64 +658,77 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('should have network isolation properly configured', async () => {
       // Parse subnet IDs if they're stored as JSON strings
-      const publicSubnetIds = Array.isArray(outputs.public_subnet_ids) 
-        ? outputs.public_subnet_ids 
+      const publicSubnetIds = Array.isArray(outputs.public_subnet_ids?.value ?? outputs.public_subnet_ids)
+        ? (outputs.public_subnet_ids?.value ?? outputs.public_subnet_ids)
         : JSON.parse(outputs.public_subnet_ids || '[]');
-      const privateSubnetIds = Array.isArray(outputs.private_subnet_ids) 
-        ? outputs.private_subnet_ids 
+      const privateSubnetIds = Array.isArray(outputs.private_subnet_ids?.value ?? outputs.private_subnet_ids)
+        ? (outputs.private_subnet_ids?.value ?? outputs.private_subnet_ids)
         : JSON.parse(outputs.private_subnet_ids || '[]');
-      
+
       const allSubnetIds = [...publicSubnetIds, ...privateSubnetIds];
-      
+
       if (allSubnetIds.length === 0) {
         console.log('Network isolation test skipped: No subnet IDs found in outputs');
         return;
       }
-      
+
       // Verify subnets are in different availability zones
       const subnetCommand = new DescribeSubnetsCommand({
         SubnetIds: allSubnetIds
       });
       const subnetResponse = await ec2Client.send(subnetCommand);
-      
+
       const azs = new Set(subnetResponse.Subnets?.map(s => s.AvailabilityZone));
       expect(azs.size).toBeGreaterThanOrEqual(2);
-      
-      // Verify NAT gateways provide internet access for private subnets
-      const natCommand = new DescribeNatGatewaysCommand({
-        Filter: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.vpc_id]
-          }
-        ]
-      });
-      const natResponse = await ec2Client.send(natCommand);
-      expect(natResponse.NatGateways?.filter(n => n.State === 'available')).toHaveLength(2);
+
+      // Verify NAT gateways if enabled
+      const enableNatGateway = outputs.enable_nat_gateway?.value ?? outputs.enable_nat_gateway ?? true;
+      if (enableNatGateway) {
+        const vpcId = getStringOutput(outputs.vpc_id);
+        const natCommand = new DescribeNatGatewaysCommand({
+          Filter: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId]
+            }
+          ]
+        });
+        const natResponse = await ec2Client.send(natCommand);
+        expect(natResponse.NatGateways?.filter(n => n.State === 'available')).toHaveLength(2);
+      }
     });
 
     test('should validate complete infrastructure deployment', () => {
-      // Verify all outputs are present
-      const requiredOutputs = [
+      // Verify all core outputs are present (conditional outputs may be empty)
+      const coreOutputs = [
         'vpc_id',
         'public_subnet_ids',
         'private_subnet_ids',
-        'alb_dns_name',
         's3_bucket_name',
         'kms_key_arn',
         'cloudwatch_log_group_name',
-        'waf_web_acl_arn',
         'ssm_parameter_database_host',
         'ssm_parameter_app_config',
         'ssm_parameter_api_key',
         'eventbridge_bus_arn',
         'eventbridge_logs_group'
       ];
-      
-      requiredOutputs.forEach(output => {
+
+      coreOutputs.forEach(output => {
         expect(outputs[output]).toBeDefined();
-        expect(outputs[output]).not.toBe('');
+        const value = outputs[output]?.value ?? outputs[output];
+        expect(value).toBeDefined();
       });
+
+      // Conditional outputs may be empty strings when disabled
+      expect(outputs['alb_dns_name']).toBeDefined();
+      expect(outputs['waf_web_acl_arn']).toBeDefined();
+
+      // Verify feature flags are present
+      expect(outputs['enable_alb']).toBeDefined();
+      expect(outputs['enable_waf']).toBeDefined();
+      expect(outputs['enable_nat_gateway']).toBeDefined();
+      expect(outputs['enable_alb_access_logs']).toBeDefined();
     });
   });
 });
