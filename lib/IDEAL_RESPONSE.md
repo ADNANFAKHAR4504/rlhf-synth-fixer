@@ -452,7 +452,7 @@ describe('High Availability Web App Integration Tests', () => {
       expect(lbDNS.length).toBeGreaterThan(0);
       // Verify LocalStack DNS format
       expect(lbDNS).toMatch(/\.elb\.(localhost\.)?localstack\.cloud$/);
-      console.log('⏭️  Skipping HTTP connectivity test for LocalStack (DNS verified)');
+      console.log('Skipping HTTP connectivity test for LocalStack (DNS verified)');
       return;
     }
 
@@ -466,7 +466,7 @@ describe('High Availability Web App Integration Tests', () => {
     } catch (error: any) {
       // If connection fails, verify DNS format as fallback
       expect(lbDNS).toMatch(/\.elb\.amazonaws\.com$/);
-      console.warn('⚠️  Load balancer HTTP test failed, but DNS format is valid');
+      console.warn('Load balancer HTTP test failed, but DNS format is valid');
     }
   });
 
@@ -476,7 +476,7 @@ describe('High Availability Web App Integration Tests', () => {
       expect(lbDNS).toBeDefined();
       expect(lbDNS.length).toBeGreaterThan(0);
       expect(lbDNS).toMatch(/\.elb\.(localhost\.)?localstack\.cloud$/);
-      console.log('⏭️  Skipping HTTP content test for LocalStack (DNS verified)');
+      console.log('Skipping HTTP content test for LocalStack (DNS verified)');
       return;
     }
 
@@ -492,12 +492,12 @@ describe('High Availability Web App Integration Tests', () => {
       } else {
         // If not 200, just verify DNS format
         expect(lbDNS).toMatch(/\.elb\.amazonaws\.com$/);
-        console.warn('⚠️  Service responded with non-200 status, skipping content check');
+        console.warn('Service responded with non-200 status, skipping content check');
       }
     } catch (error: any) {
       // If connection fails, verify DNS format as fallback
       expect(lbDNS).toMatch(/\.elb\.amazonaws\.com$/);
-      console.warn('⚠️  Load balancer content test failed, but DNS format is valid');
+      console.warn('Load balancer content test failed, but DNS format is valid');
     }
   });
 
