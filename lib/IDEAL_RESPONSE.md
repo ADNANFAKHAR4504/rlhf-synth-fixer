@@ -113,8 +113,7 @@ Parameters:
     MinValue: 50
     MaxValue: 100
     ConstraintDescription: Must be between 50 and 100
-Type: String
-  
+
 
 # ==========================================
 # CONDITIONS
@@ -493,7 +492,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref AmiId
+      ImageId: ami-0c55b159cbfafe1f0
       InstanceType: !Ref InstanceType
       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
       IamInstanceProfile: !Ref EC2InstanceProfile
