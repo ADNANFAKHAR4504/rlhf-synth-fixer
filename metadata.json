@@ -19,5 +19,6 @@
     "CloudWatch",
     "CloudWatch Logs"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 9
 }
