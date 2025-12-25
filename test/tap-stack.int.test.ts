@@ -358,8 +358,8 @@ describe('TapStack Integration Tests', () => {
 
       expect(db.DBInstanceStatus).toMatch(/available|backing-up|modifying/);
       expect(db.Engine).toBe('postgres');
-      // Template specifies EngineVersion 15.8
-      expect(db.EngineVersion).toMatch(/^15\./);
+      // Template specifies EngineVersion 16.3
+      expect(db.EngineVersion).toMatch(/^16\./);
       expect(db.DBInstanceClass).toBe('db.t3.micro');
       // MultiAZ and StorageEncrypted are false in the CloudFormation template
       expect(db.MultiAZ).toBe(false);

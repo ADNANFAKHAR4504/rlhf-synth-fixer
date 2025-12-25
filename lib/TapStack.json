@@ -1112,7 +1112,7 @@
                     "Fn::Sub": "rds-postgres-${EnvironmentSuffix}"
                 },
                 "Engine": "postgres",
-                "EngineVersion": "15.8",
+                "EngineVersion": "16.3",
                 "DBInstanceClass": {
                     "Ref": "DBInstanceClass"
                 },
