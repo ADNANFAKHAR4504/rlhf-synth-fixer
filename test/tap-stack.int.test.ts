@@ -149,7 +149,7 @@ describe('TapStack Integration Tests', () => {
     test('should exist and be configured', async () => {
       const apiUrl = outputs.ApiGatewayUrl;
       let apiId: string;
-      
+
       // Handle both AWS and LocalStack URL formats
       if (isLocalStack) {
         // LocalStack format: https://{api-id}.execute-api.amazonaws.com:4566/{stage}
@@ -167,7 +167,7 @@ describe('TapStack Integration Tests', () => {
         } else {
           throw new Error(`Unexpected LocalStack API Gateway URL format: ${apiUrl}`);
         }
-        
+
         const response = await apigateway.send(new GetRestApiCommand({ restApiId: apiId }));
         expect(response.id).toBe(apiId);
       } else {
@@ -230,7 +230,7 @@ describe('TapStack Integration Tests', () => {
   describe('End-to-End', () => {
     test('API Gateway should invoke Lambda and return expected response', async () => {
       let apiUrl = outputs.ApiGatewayUrl;
-      
+
       // For LocalStack, convert AWS-style URL to localhost format
       if (isLocalStack && apiUrl.includes(':4566') && apiUrl.includes('.execute-api.amazonaws.com')) {
         // Convert: https://{api-id}.execute-api.amazonaws.com:4566/{stage}
@@ -242,7 +242,7 @@ describe('TapStack Integration Tests', () => {
           apiUrl = `http://localhost:4566/restapis/${apiId}/${stage}/_user_request/data`;
         }
       }
-      
+
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
