@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291296",
+  "team": "synth-2",
+  "startedAt": "2025-08-15T11:09:58.097Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "Route Tables",
+    "Subnets"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291296",
+    "pr": "Pr1349"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
