@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291776",
+  "team": "synth-2",
+  "wave": "P1",
+  "provider": "aws",
+  "startedAt": "2025-08-14T05:34:23.564Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohit-bairagi-turing",
+  "dockerS3Location": "",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Access Control",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Performance Optimization"
+  ],
+  "aws_services": [
+    "EC2",
+    "S3",
+    "IAM",
+    "RDS",
+    "CloudTrail",
+    "CloudWatch",
+    "SecretsManager",
+    "SecurityGroups"
+  ],
+  "localstack_migrated": true,
+  "localstack_migration_date": "2025-12-26"
+}
+
