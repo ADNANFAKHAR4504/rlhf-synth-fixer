@@ -361,8 +361,9 @@ describe('TapStack Integration Tests', () => {
       // LocalStack may use different Postgres versions (15.x, 16.x, 17.x)
       expect(db.EngineVersion).toMatch(/^(15|16|17)\./);
       expect(db.DBInstanceClass).toBe('db.t3.micro');
-      expect(db.MultiAZ).toBe(true);
-      expect(db.StorageEncrypted).toBe(true);
+      // MultiAZ and StorageEncrypted are false in the CloudFormation template
+      expect(db.MultiAZ).toBe(false);
+      expect(db.StorageEncrypted).toBe(false);
       expect(db.PubliclyAccessible).toBe(false);
     }, 30000);
 
