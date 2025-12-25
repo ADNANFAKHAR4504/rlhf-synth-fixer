@@ -597,6 +597,54 @@ monitor_cfn_stack() {
     return 1
 }
 
+# Function to detect if template is a SAM template
+is_sam_template() {
+    local template=$1
+
+    # Check for SAM transform or AWS::Serverless:: resources or CodeUri
+    if grep -qE "(AWS::Serverless::|Transform:.*AWS::Serverless|CodeUri:)" "$template" 2>/dev/null; then
+        return 0  # Is SAM template
+    fi
+    return 1  # Not SAM template
+}
+
+# Function to package SAM template for LocalStack
+package_sam_template() {
+    local template=$1
+    local packaged_template=$2
+    local s3_bucket=$3
+
+    print_status $CYAN "📦 SAM template detected - packaging Lambda code..."
+
+    # Check if samlocal is available
+    if command -v samlocal >/dev/null 2>&1; then
+        print_status $BLUE "   Using samlocal for packaging"
+        samlocal package \
+            --template-file "$template" \
+            --output-template-file "$packaged_template" \
+            --s3-bucket "$s3_bucket" \
+            --s3-prefix lambda-artifacts \
+            --force-upload 2>&1
+    else
+        print_status $BLUE "   Using awslocal cloudformation package"
+        awslocal cloudformation package \
+            --template-file "$template" \
+            --output-template-file "$packaged_template" \
+            --s3-bucket "$s3_bucket" \
+            --s3-prefix lambda-artifacts \
+            --force-upload 2>&1
+    fi
+
+    local exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        print_status $RED "❌ SAM packaging failed with exit code: $exit_code"
+        return $exit_code
+    fi
+
+    print_status $GREEN "✅ SAM packaging completed"
+    return 0
+}
+
 # CloudFormation deployment
 # Languages: yaml, json
 deploy_cloudformation() {
@@ -608,7 +656,7 @@ deploy_cloudformation() {
 
     # Find CloudFormation template based on language
     local template=""
-    
+
     if [ "$language" == "yaml" ]; then
         # Look for YAML templates
         for name in "template.yaml" "template.yml" "TapStack.yaml" "TapStack.yml" "main.yaml" "main.yml" "stack.yaml" "stack.yml"; do
@@ -648,28 +696,53 @@ deploy_cloudformation() {
 
     print_status $BLUE "📄 Using template: $template"
 
+    # Check if this is a SAM template
+    local is_sam=false
+    local template_to_deploy="$template"
+    local sam_s3_bucket="sam-artifacts-localstack-${ENVIRONMENT_SUFFIX:-dev}"
+
+    if is_sam_template "$template"; then
+        is_sam=true
+        print_status $YELLOW "🔍 SAM template detected"
+
+        # Create S3 bucket for SAM artifacts
+        print_status $YELLOW "📦 Creating S3 bucket for SAM artifacts: $sam_s3_bucket"
+        awslocal s3 mb "s3://${sam_s3_bucket}" 2>/dev/null || print_status $BLUE "   Bucket already exists"
+
+        # Package the SAM template
+        local packaged_template="packaged-${template}"
+        if ! package_sam_template "$template" "$packaged_template" "$sam_s3_bucket"; then
+            print_status $RED "❌ Failed to package SAM template"
+            exit 1
+        fi
+
+        # Use the packaged template for deployment
+        template_to_deploy="$packaged_template"
+        print_status $BLUE "📄 Using packaged template: $template_to_deploy"
+    fi
+
     # Deploy using AWS CLI with LocalStack endpoint
     local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
     local cfn_bucket="cfn-templates-localstack-${ENVIRONMENT_SUFFIX:-dev}"
-    local template_size=$(stat -f%z "$template" 2>/dev/null || stat -c%s "$template" 2>/dev/null || echo 0)
+    local template_size=$(stat -f%z "$template_to_deploy" 2>/dev/null || stat -c%s "$template_to_deploy" 2>/dev/null || echo 0)
     local max_inline_size=51200  # 51KB CloudFormation limit
     local use_s3=false
     local template_url=""
-    
+
     print_status $BLUE "📏 Template size: $template_size bytes (limit: $max_inline_size)"
-    
+
     # Use S3 for large templates
     if [ "$template_size" -gt "$max_inline_size" ]; then
         use_s3=true
         print_status $YELLOW "📦 Template exceeds 51KB limit, using S3..."
-        
+
         # Create S3 bucket (ignore error if exists)
         awslocal s3 mb "s3://${cfn_bucket}" 2>/dev/null || true
-        
+
         # Upload template to S3
         print_status $YELLOW "📤 Uploading template to S3..."
-        awslocal s3 cp "$template" "s3://${cfn_bucket}/template.yml"
-        
+        awslocal s3 cp "$template_to_deploy" "s3://${cfn_bucket}/template.yml"
+
         template_url="${AWS_ENDPOINT_URL}/${cfn_bucket}/template.yml"
         print_status $BLUE "📄 Template URL: $template_url"
     fi
@@ -748,7 +821,7 @@ deploy_cloudformation() {
         print_status $YELLOW "📦 Creating stack resources..."
         awslocal cloudformation create-stack \
             --stack-name "$stack_name" \
-            --template-body "file://$template" \
+            --template-body "file://$template_to_deploy" \
             --parameters \
                 ParameterKey=EnvironmentSuffix,ParameterValue="$env_suffix" \
                 ParameterKey=KeyPairName,ParameterValue="$key_pair_name" \
@@ -761,13 +834,21 @@ deploy_cloudformation() {
         print_status $RED "❌ CloudFormation create-stack command failed with exit code: $deploy_exit"
         echo ""
         describe_cfn_failure "$stack_name"
-        
-        # Cleanup S3 bucket on failure
+
+        # Cleanup S3 buckets on failure
         if [ "$use_s3" = true ]; then
-            print_status $YELLOW "🧹 Cleaning up S3 bucket..."
+            print_status $YELLOW "🧹 Cleaning up CloudFormation S3 bucket..."
             awslocal s3 rm "s3://${cfn_bucket}" --recursive 2>/dev/null || true
             awslocal s3 rb "s3://${cfn_bucket}" 2>/dev/null || true
         fi
+
+        # Cleanup SAM artifacts bucket on failure
+        if [ "$is_sam" = true ]; then
+            print_status $YELLOW "🧹 Cleaning up SAM artifacts S3 bucket..."
+            awslocal s3 rm "s3://${sam_s3_bucket}" --recursive 2>/dev/null || true
+            awslocal s3 rb "s3://${sam_s3_bucket}" 2>/dev/null || true
+        fi
+
         exit $deploy_exit
     fi
 
@@ -776,13 +857,21 @@ deploy_cloudformation() {
         print_status $RED "❌ CloudFormation deployment failed"
         echo ""
         describe_cfn_failure "$stack_name"
-        
-        # Cleanup S3 bucket on failure
+
+        # Cleanup S3 buckets on failure
         if [ "$use_s3" = true ]; then
-            print_status $YELLOW "🧹 Cleaning up S3 bucket..."
+            print_status $YELLOW "🧹 Cleaning up CloudFormation S3 bucket..."
             awslocal s3 rm "s3://${cfn_bucket}" --recursive 2>/dev/null || true
             awslocal s3 rb "s3://${cfn_bucket}" 2>/dev/null || true
         fi
+
+        # Cleanup SAM artifacts bucket on failure
+        if [ "$is_sam" = true ]; then
+            print_status $YELLOW "🧹 Cleaning up SAM artifacts S3 bucket..."
+            awslocal s3 rm "s3://${sam_s3_bucket}" --recursive 2>/dev/null || true
+            awslocal s3 rb "s3://${sam_s3_bucket}" 2>/dev/null || true
+        fi
+
         exit 1
     fi
 
