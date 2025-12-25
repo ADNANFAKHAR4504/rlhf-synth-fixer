@@ -1,12 +1,14 @@
 **Prompt – Performance-Optimized Serverless Infrastructure**
 
 > You are an **AWS Solutions Architect** specializing in **high-performance serverless systems**.
-> Create a **production-ready AWS CloudFormation YAML template** that provisions a **serverless application** in the **us-west-2** region using:
+> Create a **production-ready AWS CloudFormation YAML template** that provisions a **serverless application** in the **us-west-2** region.
 >
-> * **AWS Lambda** (backend compute)
-> * **Amazon API Gateway** (RESTful API endpoints)
-> * **Amazon S3** (storage)
-> * **Amazon CloudWatch** (monitoring & logging)
+> **Architecture Flow:**
+>
+> * **API Gateway** receives incoming HTTP requests and invokes **Lambda** function
+> * **Lambda** processes the requests and reads/writes data to **S3** bucket
+> * **CloudWatch** captures logs and metrics from both API Gateway and Lambda
+> * **IAM roles** grant Lambda permissions to access S3 with least privilege
 >
 > **Performance & Scalability Requirements:**
 >
