@@ -1,5 +1,3 @@
-Hey team,
-
 We need to build a production-grade AWS WAF security solution for our API protection infrastructure. Our fintech startup is getting increasingly sophisticated attack traffic, and we need robust, auditable security controls deployed through Infrastructure as Code. I've been asked to create this using CloudFormation with JSON format.
 
 The business wants comprehensive web application firewall protection with multiple layers: rate limiting to prevent DDoS attacks, SQL injection blocking, geo-blocking for high-risk countries, and centralized logging for compliance audits. All of this needs to integrate with our existing Application Load Balancer that's already serving production traffic.
