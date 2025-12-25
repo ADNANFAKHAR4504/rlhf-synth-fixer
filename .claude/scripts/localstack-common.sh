@@ -217,11 +217,24 @@ check_localstack() {
     return 1
   fi
   
-  local version
-  version=$(curl -s "${endpoint}/_localstack/health" | jq -r '.version // "unknown"' 2>/dev/null || echo "unknown")
-  log_success "LocalStack is running (version: $version)"
+  local version edition is_licensed
+  local info_response
+  info_response=$(curl -s "${endpoint}/_localstack/info" 2>/dev/null)
+  version=$(echo "$info_response" | jq -r '.version // "unknown"' 2>/dev/null || echo "unknown")
+  edition=$(echo "$info_response" | jq -r '.edition // "community"' 2>/dev/null || echo "community")
+  is_licensed=$(echo "$info_response" | jq -r '.is_license_activated // false' 2>/dev/null || echo "false")
+  
+  if [ "$is_licensed" = "true" ]; then
+    log_success "LocalStack is running (version: $version, edition: ${edition^^} 🔑)"
+  else
+    log_success "LocalStack is running (version: $version, edition: community)"
+    log_warn "Pro/Ultimate license not activated - some services may have limited functionality"
+    echo "  💡 Set LOCALSTACK_AUTH_TOKEN environment variable for Pro features"
+  fi
   
   export LOCALSTACK_VERSION="$version"
+  export LOCALSTACK_EDITION="$edition"
+  export LOCALSTACK_LICENSED="$is_licensed"
   return 0
 }
 
