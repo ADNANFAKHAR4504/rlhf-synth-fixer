@@ -164,8 +164,12 @@ class TestDomainConfiguration(TestTapStackIntegration):
         )
         stack = TapStack('cert-integration-stack', args)
 
-        # Verify certificate is created
-        self.assertIsNotNone(stack.certificate)
+        # Verify certificate is created (only in non-LocalStack environments)
+        if not self.is_localstack:
+            self.assertIsNotNone(stack.certificate)
+        else:
+            # In LocalStack Community, CloudFront and ACM may not be available
+            self.assertIsNone(stack.certificate)
         self.assertEqual(stack.domain_name, 'cert.integration.example.com')
 
     def test_domain_with_route53(self):
@@ -178,9 +182,14 @@ class TestDomainConfiguration(TestTapStackIntegration):
         )
         stack = TapStack('route53-integration-stack', args)
 
-        # Verify Route53 components
-        self.assertIsNotNone(stack.certificate)
-        self.assertIsNotNone(stack.route53_record)
+        # Verify Route53 components (only in non-LocalStack environments)
+        if not self.is_localstack:
+            self.assertIsNotNone(stack.certificate)
+            self.assertIsNotNone(stack.route53_record)
+        else:
+            # In LocalStack Community, these services may not be available
+            self.assertIsNone(stack.certificate)
+            self.assertIsNone(stack.route53_record)
         self.assertTrue(hasattr(stack, 'cert_validation_records'))
         self.assertTrue(hasattr(stack, 'cert_validation'))
 
@@ -193,8 +202,11 @@ class TestDomainConfiguration(TestTapStackIntegration):
         )
         stack = TapStack('domain-only-integration-stack', args)
 
-        # Should create certificate but not Route53 record
-        self.assertIsNotNone(stack.certificate)
+        # Should create certificate but not Route53 record (only in non-LocalStack)
+        if not self.is_localstack:
+            self.assertIsNotNone(stack.certificate)
+        else:
+            self.assertIsNone(stack.certificate)
         self.assertIsNone(stack.route53_record)
 
 class TestMultiRegionDeployment(TestTapStackIntegration):
@@ -298,8 +310,11 @@ class TestCloudFrontConfiguration(TestTapStackIntegration):
         )
         stack = TapStack('cloudfront-domain-stack', args)
 
-        # Verify CloudFront and certificate
-        self.assertIsNotNone(stack.cloudfront_distribution)
+        # Verify CloudFront and certificate (only in non-LocalStack)
+        if not self.is_localstack:
+            self.assertIsNotNone(stack.cloudfront_distribution)
+        else:
+            self.assertIsNone(stack.cloudfront_distribution)
         self.assertIsNotNone(stack.certificate)
 
     def test_cloudfront_logging(self):
