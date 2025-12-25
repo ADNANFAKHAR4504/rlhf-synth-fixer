@@ -20,11 +20,11 @@ VPC in us-east-1 with 10.0.0.0/16 CIDR. Need 2 public subnets and 2 private subn
 
 S3 bucket with encryption and versioning turned on. Block all public access. When files land in this bucket, they should automatically trigger a Lambda function through S3 event notifications.
 
-Lambda runs on Python 3.9. Gets invoked when objects are created in the S3 bucket. Should have an IAM role that allows it to read from that specific S3 bucket and write logs to CloudWatch. Don't give it wildcards or broad permissions - just what it needs.
+Lambda runs on Python 3.9. Gets invoked when objects are created in the S3 bucket. Should have an IAM role that allows it to read from that specific S3 bucket and write logs to CloudWatch. Keep it scoped - just what it needs.
 
 CloudWatch log group for the Lambda with 14-day retention. Lambda writes there automatically through its execution role.
 
-IAM roles and policies should follow least privilege - specific resources, specific actions. No wildcards in resource ARNs. No AdministratorAccess or FullAccess policies.
+IAM roles and policies should follow least privilege - specific resources, specific actions. No wildcards in resource ARNs. Don't use overly broad managed policies.
 
 Make everything parameterized with environment variables like STAGE and BUCKET so we can deploy to dev, staging, prod without code changes. Tag all resources with Project, Stage, and Managed tags for tracking.
 
