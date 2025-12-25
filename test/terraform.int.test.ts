@@ -54,10 +54,12 @@ let elbClient: ElasticLoadBalancingV2Client;
 let region: string;
 
 function loadOutputs() {
-  // Try multiple possible output file locations
+  // Try multiple possible output file locations (both cfn-outputs and cdk-outputs)
   const possiblePaths = [
     path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
     path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
+    path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json"),
+    path.resolve(process.cwd(), "cdk-outputs/all-outputs.json"),
   ];
 
   let p: string | undefined;
@@ -73,12 +75,25 @@ function loadOutputs() {
   }
 
   try {
-    const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Outputs;
+    const raw = JSON.parse(fs.readFileSync(p, "utf8"));
+
+    // Helper to extract value - handles both Terraform output format (with sensitive/type/value)
+    // and flat format (direct values)
+    const getValue = (key: string): any => {
+      const entry = raw[key];
+      if (entry === undefined || entry === null) return undefined;
+      // Check if it's Terraform format with value property
+      if (typeof entry === 'object' && 'value' in entry) {
+        return entry.value;
+      }
+      // Otherwise it's a flat format - return directly
+      return entry;
+    };
 
     const missing: string[] = [];
-    const req = <K extends keyof Outputs>(k: K) => {
-      const v = raw[k]?.value as any;
-      if (v === undefined || v === null) missing.push(String(k));
+    const req = (key: string): any => {
+      const v = getValue(key);
+      if (v === undefined || v === null) missing.push(key);
       return v;
     };
 
