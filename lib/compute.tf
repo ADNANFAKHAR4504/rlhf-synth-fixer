@@ -90,6 +90,20 @@ resource "aws_lb" "main" {
   enable_deletion_protection = false
 
   tags = local.common_tags
+
+  # Ignore attributes not supported by LocalStack
+  lifecycle {
+    ignore_changes = [
+      enable_http2,
+      enable_cross_zone_load_balancing,
+      enable_waf_fail_open,
+      desync_mitigation_mode,
+      xff_header_processing_mode,
+      idle_timeout,
+      drop_invalid_header_fields,
+      client_keep_alive
+    ]
+  }
 }
 
 # Target Group
