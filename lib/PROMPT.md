@@ -2,87 +2,93 @@
 
 So we got this client - a financial services company moving their old loan processing system to AWS. They're doing like 50k transactions a day right now on-prem and need everything audit-ready because, you know, finance regulations.
 
-They specifically want CloudFormation JSON (yeah I know, not my first choice either but that's what they're comfortable with). We're deploying to us-east-1.
+They specifically want CloudFormation JSON - yeah I know, not my first choice either but that's what they're comfortable with. We're deploying to us-east-1.
 
 The tricky part is they want one template that works for both dev and prod - dev should be single-AZ to keep costs down, prod needs multi-AZ obviously.
 
 ## What I need
 
-Here's what needs to be in the CFN template:
+Here's the setup:
 
-**Database**
-- Aurora MySQL cluster (just one writer instance)
-- Has to be encrypted with KMS (customer-managed keys, not AWS-managed)
+**Database and how it connects**
+- Aurora MySQL cluster - just one writer instance
+- Has to be encrypted with customer-managed KMS keys
 - Multi-AZ only if it's prod environment
-- DB creds in Secrets Manager with 30-day rotation
+- Lambda functions will connect to this database for loan validation
+- DB password stored in Secrets Manager with 30-day rotation, and Lambda pulls creds from there
 
-**Lambda**
+**Lambda compute**
 - One function for loan validation
 - 1GB memory
-- Need to set reserved concurrency so it doesn't get throttled
-- CloudWatch logs with 90 day retention (compliance thing)
+- Need reserved concurrency set so it doesn't get throttled
+- Lambda accesses database through VPC security groups
+- CloudWatch logs with 90 day retention - compliance is really strict about this
 
-**Storage**
+**Storage integration**
 - S3 bucket for loan docs
 - Versioning enabled
-- Encrypted, proper access controls
+- Encrypted storage
+- Lambda might write processed results here
 
-**Network**
-- VPC across 2+ AZs
-- Public + private subnets in each AZ
-- NAT gateways for private subnet internet access
-- Security groups and NACLs
+**Network setup**
+- VPC across 2 or more AZs
+- Public and private subnets in each AZ
+- NAT gateways so private subnets can access internet
+- Security groups controlling Lambda access to RDS
+- Network ACLs for subnet-level controls
 
-**Secrets**
-- Secrets Manager for DB passwords
+**Secrets and how services access them**
+- Secrets Manager holds DB passwords
 - Auto-rotate every 30 days
-- Make sure Lambda can access it
+- Lambda IAM role grants access to read from Secrets Manager
+- Lambda execution role also needs VPC execution permissions
 
-**Monitoring**
-- CloudWatch log groups for everything
-- 90 day retention exactly (their compliance team is really strict about this)
+**Monitoring across everything**
+- CloudWatch log groups for Lambda execution
+- 90 day retention exactly - not 89, not 91
+- Logs need to capture Lambda invocations and any database connection issues
 
-**Template Parameters**
-- Environment type (dev vs prod)
-- Instance sizes should be configurable
-- Use Conditions to handle the multi-AZ stuff
+**Template configuration**
+- Parameters for environment type - dev vs prod
+- Instance sizes configurable
+- Conditions to handle the multi-AZ logic - dev is single-AZ, prod is multi-AZ
 
-## Technical stuff to remember
+## Technical requirements
 
-- CloudFormation JSON format (not YAML)
-- Aurora MySQL for the DB
+- CloudFormation JSON format - not YAML
+- Aurora MySQL for the database
 - Lambda for compute
-- S3 for storage
-- Secrets Manager for passwords
-- CloudWatch for logs
-- KMS for encryption
+- S3 for document storage
+- Secrets Manager for password management
+- CloudWatch for logging
+- KMS for encryption keys
 - us-east-1 region
-- All resource names need to include the `environmentSuffix` parameter - something like `{resource-type}-{purpose}-{environmentSuffix}`
-- Everything needs to be destroyable - NO DeletionPolicy Retain or DeletionProtection on anything (we're testing this setup multiple times)
+- All resource names include the environmentSuffix parameter - like db-loanprocessing-dev123 or lambda-validator-prod456
+- Everything needs to be destroyable - NO DeletionPolicy Retain or DeletionProtection on anything since we're testing this setup multiple times
 
-## Important constraints
+## Key constraints
 
-- DB passwords ONLY in Secrets Manager (not hardcoded anywhere, obviously)
-- Customer-managed KMS keys for RDS encryption
-- Lambda needs reserved concurrency set
-- Tag everything with Environment, CostCenter, and MigrationPhase
-- 90 days log retention - not 89, not 91, exactly 90 (compliance is picky)
-- Use CFN Conditions for the dev/prod differences
-- NO retention policies or deletion protection - has to be fully teardown-able
-- Need proper error handling and logging everywhere
+- DB passwords ONLY in Secrets Manager - not hardcoded anywhere
+- Customer-managed KMS keys for RDS encryption - not AWS-managed
+- Lambda needs reserved concurrency set to prevent throttling under load
+- Tag everything with Environment, CostCenter, and MigrationPhase tags
+- 90 days log retention - compliance team is picky about this exact number
+- Use CFN Conditions for the dev vs prod differences
+- NO retention policies or deletion protection - has to be fully tear-down-able
+- IAM roles need specific permissions - Lambda execution role needs VPC access, Secrets Manager read, RDS network access, CloudWatch write
 
 ## What needs to be in the final template
 
-- Parameters section (environment type, instance sizes, etc)
-- Conditions section (for the multi-AZ logic)
-- VPC with public/private subnets across multiple AZs
-- Aurora MySQL cluster with KMS encryption + Secrets Manager
-- Lambda function with proper config
+- Parameters section for environment type, instance sizes, other configs
+- Conditions section for the multi-AZ logic
+- VPC with public and private subnets across multiple AZs
+- Aurora MySQL cluster with KMS encryption integrated with Secrets Manager
+- Lambda function with proper IAM role attached to it
 - S3 bucket with versioning
-- CloudWatch log groups (90 day retention)
-- KMS keys
-- IAM roles and policies
-- Tags on everything
+- CloudWatch log groups with 90 day retention
+- KMS keys for encrypting database storage
+- IAM roles and policies - Lambda execution role connects to RDS through security groups, reads from Secrets Manager, writes to CloudWatch
+- Tags on all resources
 - Some docs explaining how to use the parameters
 
-That's pretty much it. Let me know if you need clarification on anything.
+That's pretty much it. The main thing is making sure Lambda can actually connect to RDS through the VPC security groups and pull credentials from Secrets Manager at runtime.
