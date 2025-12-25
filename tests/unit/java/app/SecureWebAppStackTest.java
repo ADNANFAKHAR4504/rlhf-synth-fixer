@@ -172,6 +172,7 @@ public class SecureWebAppStackTest {
     
     /**
      * Test CloudWatch alarms for security monitoring
+     * Note: CloudTrail is not created but alarms use an imported log group
      */
     @Test
     public void testSecurityAlarms() {
@@ -186,7 +187,7 @@ public class SecureWebAppStackTest {
                 )
             )
         )));
-        
+
         // Verify metric filter for root account usage
         template.hasResourceProperties("AWS::Logs::MetricFilter", Match.objectLike(Map.of(
             "MetricTransformations", Arrays.asList(
@@ -198,7 +199,7 @@ public class SecureWebAppStackTest {
                 )
             )
         )));
-        
+
         // Verify CloudWatch alarm for unauthorized calls
         template.hasResourceProperties("AWS::CloudWatch::Alarm", Match.objectLike(Map.of(
             "MetricName", "UnauthorizedAPICalls",
@@ -207,7 +208,7 @@ public class SecureWebAppStackTest {
             "EvaluationPeriods", 1,
             "TreatMissingData", "notBreaching"
         )));
-        
+
         // Verify CloudWatch alarm for root usage
         template.hasResourceProperties("AWS::CloudWatch::Alarm", Match.objectLike(Map.of(
             "MetricName", "RootAccountUsage",
