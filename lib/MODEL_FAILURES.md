@@ -46,9 +46,11 @@ LocalStack Community Edition has a bug in its S3 Control API where `ListTagsForR
 
 This is a terraform provider issue where the AWS provider attempts to read tags during the refresh phase, triggering the S3 Control API call regardless of whether tags exist.
 
-Fix Attempted: Removed tags from S3 bucket configuration for LocalStack deployments. However, terraform still invokes S3 Control API during state refresh.
+Fix Applied:
+1. Removed tags from S3 bucket configuration for LocalStack deployments
+2. Removed `s3control` endpoint from the LocalStack provider configuration to prevent terraform from routing S3 Control API calls to LocalStack
 
-Result: All resources deploy successfully and are present in terraform state, but the deployment exits with error code 1 due to the post-deployment S3 Control API call failing. This is a LocalStack Community Edition limitation that requires either LocalStack Pro or AWS deployment to resolve.
+Result: S3 bucket deploys successfully without triggering the S3 Control API bug. By not defining the s3control endpoint, terraform skips S3 Control API operations for LocalStack.
 
 ## What Works in LocalStack
 

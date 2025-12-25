@@ -66,9 +66,10 @@ class TapStack(TerraformStack):
                 "skip_metadata_api_check": "true",
                 "skip_requesting_account_id": True,
                 "s3_use_path_style": True,
+                # S3 Control API not needed for LocalStack - skip it entirely
+                # This avoids AccountId validation errors
                 "endpoints": [{
                     "s3": "http://localhost:4566",
-                    "s3control": "http://localhost:4566",
                     "ec2": "http://localhost:4566",
                     "iam": "http://localhost:4566",
                     "cloudwatch": "http://localhost:4566",
