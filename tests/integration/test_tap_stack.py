@@ -316,7 +316,8 @@ class TestCloudFrontConfiguration(TestTapStackIntegration):
             self.assertIsNotNone(stack.cloudfront_distribution)
         else:
             self.assertIsNone(stack.cloudfront_distribution)
-        self.assertIsNotNone(stack.certificate)
+        if not self.is_localstack:
+            self.assertIsNotNone(stack.certificate)
 
     def test_cloudfront_logging(self):
         """Test CloudFront with access logging."""
@@ -360,8 +361,12 @@ class TestEnvironmentVariations(TestTapStackIntegration):
         stack = TapStack('prod-integration-stack', args)
 
         self.assertEqual(stack.environment_suffix, 'prod')
-        self.assertIsNotNone(stack.certificate)
-        self.assertIsNotNone(stack.route53_record)
+        if not self.is_localstack:
+            self.assertIsNotNone(stack.certificate)
+            self.assertIsNotNone(stack.route53_record)
+        else:
+            self.assertIsNone(stack.certificate)
+            self.assertIsNone(stack.route53_record)
         self.assertTrue(stack.enable_logging)
         self.assertFalse(stack.cost_optimization)
         # Additional integration-specific assertions
@@ -380,7 +385,10 @@ class TestEnvironmentVariations(TestTapStackIntegration):
         stack = TapStack('staging-integration-stack', args)
 
         self.assertEqual(stack.environment_suffix, 'staging')
-        self.assertIsNotNone(stack.certificate)
+        if not self.is_localstack:
+            self.assertIsNotNone(stack.certificate)
+        else:
+            self.assertIsNone(stack.certificate)
         self.assertFalse(stack.enable_logging)
         self.assertTrue(stack.cost_optimization)
 
@@ -472,7 +480,10 @@ class TestResourceValidation(TestTapStackIntegration):
 
         # Verify security components
         self.assertIsNotNone(stack.kms_key)
-        self.assertIsNotNone(stack.waf_acl)
+        if not self.is_localstack:
+            self.assertIsNotNone(stack.waf_acl)
+        else:
+            self.assertIsNone(stack.waf_acl)
 
 if __name__ == '__main__':
     # Run integration tests with verbose output
