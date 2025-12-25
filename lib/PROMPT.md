@@ -14,34 +14,38 @@ Create a **CloudFormation with JSON** template that provisions a complete multi-
 
 1. **Network Infrastructure**
    - VPC with environment-specific CIDR blocks (dev: 10.0.0.0/16, staging: 10.1.0.0/16, prod: 10.2.0.0/16)
-   - Public subnets in 2 AZs for load balancer
-   - Private subnets in 2 AZs for application servers
-   - NAT Gateway for private subnet egress
-   - Internet Gateway for public access
+   - Public subnets in 2 AZs host Application Load Balancer receiving internet traffic via Internet Gateway
+   - Private subnets in 2 AZs run ECS Fargate tasks that connect to DynamoDB via VPC endpoints
+   - NAT Gateway in public subnets provides internet access for private subnet resources to pull container images
+   - Internet Gateway attached to VPC routes public traffic to ALB in public subnets
+   - Route tables direct traffic from private subnets through NAT Gateway and from public subnets through Internet Gateway
 
 2. **Container Orchestration**
    - ECS Fargate cluster with environment-specific names
-   - Application Load Balancer in public subnets
-   - CloudWatch Logs for container output
-   - Auto-scaling capability (min 2, max 6 tasks)
-   - Health check endpoints configured
+   - Application Load Balancer in public subnets routes traffic to ECS Fargate tasks running in private subnets
+   - ECS tasks send container logs to CloudWatch Logs log groups
+   - ECS services integrate with ALB target groups for health checks
+   - Auto-scaling policies monitor CloudWatch metrics to scale tasks between 2 and 6 based on CPU utilization
+   - ECS task execution role grants permissions to pull container images and write to CloudWatch
 
 3. **Data Persistence (Fast)**
    - DynamoDB On-Demand tables instead of RDS Aurora (instant deployment, no 30min provisioning)
-   - DynamoDB Streams for event processing
+   - ECS Fargate tasks query and write to DynamoDB tables using IAM role permissions
+   - DynamoDB Streams capture table changes that trigger downstream event processing
    - Point-in-time recovery enabled
-   - CloudWatch alarms for throttling and latency
+   - CloudWatch alarms monitor DynamoDB for throttling and latency, publishing alerts to SNS topics
 
 4. **Monitoring and Logging**
-   - CloudWatch Alarms for CPU, memory, and network metrics
-   - CloudWatch Logs for ECS tasks
-   - SNS topics for alarm notifications
-   - CloudWatch Dashboard for environment-specific views
+   - CloudWatch Alarms track ECS CPU, memory, and network metrics from Fargate tasks
+   - CloudWatch Logs receive container output from ECS tasks via awslogs driver
+   - SNS topics receive alarm notifications from CloudWatch and distribute to subscribers
+   - CloudWatch Dashboard aggregates metrics from ECS, ALB, and DynamoDB for environment-specific views
 
 5. **Configuration Management**
-   - Systems Manager Parameter Store for environment-specific settings
+   - Systems Manager Parameter Store stores environment-specific settings accessed by ECS tasks at runtime
+   - ECS task role grants GetParameter permissions to retrieve configuration from Parameter Store
    - Separate parameters for each environment (database endpoint, API keys, etc.)
-   - Secure String type for sensitive values
+   - Secure String type encrypts sensitive values retrieved by ECS tasks during startup
 
 ### Technical Requirements
 
