@@ -56,8 +56,8 @@ Create a complete CI/CD pipeline infrastructure using **CloudFormation with JSON
 - Use **KMS** for encryption with customer-managed keys
 - Use **CloudWatch Events** for pipeline triggers
 - Use **VPC endpoints** for CodeBuild, S3, and ECR access
-- Resource names must include **environmentSuffix** for uniqueness across deployments
-- Follow naming convention: {resource-type}-{purpose}-environment-suffix
+- All resource names must include environmentSuffix for uniqueness across deployments
+- Follow naming convention with resource type, purpose, and environment suffix
 - Deploy to **us-east-1** region
 - All resources must be destroyable with no Retain deletion policies
 
@@ -66,8 +66,8 @@ Create a complete CI/CD pipeline infrastructure using **CloudFormation with JSON
 - CodeBuild must run in VPC with no internet access
 - VPC endpoints required for CodeBuild to access S3, ECR, and other AWS services
 - All pipeline artifacts must be encrypted with customer-managed KMS keys
-- Pipeline execution logs retained for exactly 30 days (no more, no less)
-- All IAM roles must follow least-privilege principle with no wildcard actions
+- Pipeline execution logs retained for exactly 30 days
+- All IAM roles must follow least-privilege principle with specific actions only
 - Each pipeline must include manual approval stage before production deployment
 - Cross-account IAM trust relationships for multi-account deployments
 
@@ -78,13 +78,13 @@ If time permits after core implementation:
 - SNS topic for pipeline notifications to enhance team communication
 - Lambda function for custom deployment validation to enable advanced deployment checks
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - CRITICAL
 
 - All resource names MUST include environmentSuffix parameter for uniqueness
 - Example: MyPipeline-environment-suffix, ArtifactBucket-environment-suffix
 - All resources MUST use RemovalPolicy: Delete or DeletionPolicy: Delete
 - FORBIDDEN: RetainPolicy or Retain on any resources
-- VPC and subnets must be provided as parameters (not created in template)
+- VPC and subnets must be provided as parameters, not created in template
 - KMS key must support service principals for CodePipeline, CodeBuild, S3, and CloudWatch Logs
 
 ## Success Criteria
@@ -94,7 +94,7 @@ If time permits after core implementation:
 - **Cost Optimization**: BUILD_GENERAL1_SMALL compute type used, efficient resource sizing
 - **Compliance**: Logs retained exactly 30 days, manual approval before production
 - **Automation**: Pipeline triggers automatically on code commits to main branch
-- **Resource Naming**: All resources include environmentSuffix for multi-environment support
+- Naming Convention: All resources include environmentSuffix for multi-environment support
 - **Reusability**: Template can be deployed multiple times for different microservices
 - **Code Quality**: Well-structured CloudFormation JSON, properly documented
 
@@ -104,7 +104,7 @@ If time permits after core implementation:
 - Parameters for environmentSuffix, VPC configuration, ECS cluster, and ECR repository
 - KMS key for artifact encryption with proper key policies
 - S3 bucket for artifacts with versioning and lifecycle policies
-- CodePipeline with source (CodeCommit), build (CodeBuild), and deploy (ECS) stages
+- CodePipeline with source from CodeCommit, build from CodeBuild, and deploy to ECS stages
 - Manual approval action between staging and production
 - CloudWatch Events rule for automatic pipeline triggering
 - IAM roles and policies following least-privilege principle
