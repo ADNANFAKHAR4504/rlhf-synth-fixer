@@ -6,13 +6,10 @@
   "po_id": "LS-291430",
   "team": "synth-2",
   "startedAt": "2025-08-07T10:15:43.021Z",
-  "subtask": "Networking & Content Delivery",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "Networking",
-    "VPC",
-    "Subnets",
-    "Route Tables"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
@@ -22,5 +19,9 @@
     "SecurityGroups",
     "RouteTables"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291430",
+    "pr": "Pr711"
+  }
 }
