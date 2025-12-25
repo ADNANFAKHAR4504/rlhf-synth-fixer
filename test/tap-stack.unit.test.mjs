@@ -80,7 +80,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
 // Import after mocking
-import { TapStack } from "../lib/tap-stack.mjs";
+import { TapStack } from "../lib/TapStack.mjs";
 
 describe("TapStack Structure", () => {
   beforeEach(() => {
