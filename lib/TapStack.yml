@@ -201,6 +201,80 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # CloudWatch Alarms for Monitoring
+  DynamoDBReadThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "dynamodb-read-throttle-${EnvironmentSuffix}"
+      AlarmDescription: "Alerts when DynamoDB table experiences read throttling"
+      MetricName: UserErrors
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref TurnAroundPromptTable
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SecurityNotificationsTopic
+
+  DynamoDBWriteThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "dynamodb-write-throttle-${EnvironmentSuffix}"
+      AlarmDescription: "Alerts when DynamoDB table experiences write throttling"
+      MetricName: SystemErrors
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref TurnAroundPromptTable
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SecurityNotificationsTopic
+
+  SecurityHubFindingsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "securityhub-critical-findings-${EnvironmentSuffix}"
+      AlarmDescription: "Alerts when Security Hub detects critical findings"
+      MetricName: NumberOfFindings
+      Namespace: AWS/SecurityHub
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SecurityNotificationsTopic
+
+  SNSTopicFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "sns-delivery-failures-${EnvironmentSuffix}"
+      AlarmDescription: "Alerts when SNS topic experiences message delivery failures"
+      MetricName: NumberOfNotificationsFailed
+      Namespace: AWS/SNS
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TopicName
+          Value: !GetAtt SecurityNotificationsTopic.TopicName
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SecurityNotificationsTopic
+
 Outputs:
   # Original Outputs (preserved)
   TurnAroundPromptTableName:

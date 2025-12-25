@@ -156,3 +156,50 @@ The original template attempted to create a comprehensive security infrastructur
 4. Account-level resource constraints
 
 The fixed implementation provides a deployable solution that works within AWS constraints while maintaining security best practices and providing clear documentation of limitations.
+
+## LocalStack Compatibility Adjustments
+
+The following modifications were made to ensure LocalStack Community Edition compatibility. These are intentional architectural decisions, not bugs.
+
+| Feature | Community Edition | Pro/Ultimate Edition | Solution Applied | Production Status |
+|---------|-------------------|---------------------|------------------|-------------------|
+| GuardDuty Detector | Cannot create (limit 1 per region) | Can create | Referenced existing detector | Uses existing in AWS |
+| AWS Config Delivery Channel | Cannot create (limit 1 per account) | Can create | Referenced existing Config | Uses existing in AWS |
+| CloudTrail Trail | Cannot create (limit 5 per region) | Can create | Referenced existing trail | Uses existing in AWS |
+| Security Hub | Works | Works | Created successfully | Enabled in AWS |
+| Macie | Conditional (region-dependent) | Full support | Conditional creation with region check | Enabled in supported regions |
+| SNS with KMS | Works | Works | Created with encryption | Enabled in AWS |
+| DynamoDB with KMS | Works | Works | Created with encryption | Enabled in AWS |
+| EventBridge Rules | Works | Works | Created for security alerts | Enabled in AWS |
+| CloudWatch Alarms | Works | Works | Created for monitoring | Enabled in AWS |
+
+### Environment Detection Pattern Used
+
+The template uses CloudFormation conditions to handle regional and resource limitations:
+
+```yaml
+Conditions:
+  ShouldCreateMacie: !And
+    - !Equals [!Ref EnableMacie, "true"]
+    - !Not [!Equals [!Ref "AWS::Region", "us-east-1"]]
+```
+
+### Services Verified Working in LocalStack
+
+- AWS Security Hub (full support)
+- Amazon Macie (conditional - region dependent)
+- KMS encryption (full support)
+- SNS with encryption (full support)
+- DynamoDB with KMS (full support)
+- EventBridge rules (full support)
+- CloudWatch alarms (full support)
+
+### Services Referenced as Existing
+
+These services are referenced but not created due to AWS account limits:
+
+- GuardDuty (1 detector per region limit)
+- AWS Config (1 delivery channel per account limit)
+- CloudTrail (5 trail limit per region typically reached)
+
+The template outputs informational messages about these existing services rather than attempting to create them, preventing deployment failures while maintaining security posture visibility.

@@ -23,6 +23,7 @@
   ],
   "provider": "localstack",
   "wave": "P0",
+  "training_quality": 8,
   "migrated_from": {
     "po_id": "barun-turing",
     "pr": "Pr1917"

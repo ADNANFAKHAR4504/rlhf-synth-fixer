@@ -317,4 +317,10 @@ Outputs:
 - **Clear Outputs**: Informational outputs about existing vs. created resources
 - **Error Handling**: Graceful handling of resource limitations and regional constraints
 
-This implementation provides a simplified yet robust foundation for AWS security services that handles real-world constraints like existing resources and regional service availability.
+### 7. CloudWatch Monitoring & Alarms
+- **DynamoDB Monitoring**: Alarms for read and write throttling to detect capacity issues
+- **Security Hub Alerts**: Alarm when critical findings are detected
+- **SNS Delivery Monitoring**: Alarm for notification delivery failures
+- **Automated Notifications**: All alarms notify the security team via SNS topic
+
+This implementation provides a simplified yet robust foundation for AWS security services that handles real-world constraints like existing resources and regional service availability while ensuring comprehensive monitoring and alerting capabilities.
