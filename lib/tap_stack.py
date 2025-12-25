@@ -230,14 +230,20 @@ class TapStack(TerraformStack):
         )
         
         # S3 Bucket for logs
-        s3_logs_bucket = S3Bucket(self, "s3_logs_bucket",
-            bucket=f"logs-bucket-{environment_suffix}-{aws_region}",
-            force_destroy=True,  # Required for LocalStack cleanup
-            tags={
+        # Note: Tags removed for LocalStack due to S3 Control API account ID validation bug
+        s3_bucket_config = {
+            "bucket": f"logs-bucket-{environment_suffix}-{aws_region}",
+            "force_destroy": True  # Required for LocalStack cleanup
+        }
+
+        # Only add tags for non-LocalStack deployments (S3 Control API issue in LocalStack)
+        if not is_localstack:
+            s3_bucket_config["tags"] = {
                 "Name": f"logs-bucket-{environment_suffix}",
                 "Environment": "Production"
             }
-        )
+
+        s3_logs_bucket = S3Bucket(self, "s3_logs_bucket", **s3_bucket_config)
         
         # S3 Bucket Server-Side Encryption - Disabled for LocalStack
         # LocalStack has strict AccountId validation that causes errors
