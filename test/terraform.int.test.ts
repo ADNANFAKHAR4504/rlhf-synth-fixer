@@ -352,7 +352,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(outputs.account_id).toBeDefined();
       expect(outputs.account_id).toMatch(/^\d{12}$/); // AWS account IDs are 12 digits
       expect(outputs.region).toBe('us-east-1');
-      expect(outputs.caller_arn).toMatch(new RegExp(`^arn:aws:iam::${outputs.account_id}:user/[a-zA-Z0-9-_]+$`));
+      // Accept both user ARN and root ARN (LocalStack returns root)
+      expect(outputs.caller_arn).toMatch(new RegExp(`^arn:aws:iam::${outputs.account_id}:(user/[a-zA-Z0-9-_]+|root)$`));
     });
 
     test('should have valid ARN formats', () => {
