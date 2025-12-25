@@ -224,72 +224,85 @@ export function createSecurityMonitoring(
     }
   );
 
-  // Use a simpler approach to handle existing GuardDuty detector
-  const guardDutyDetector = pulumi.output(
-    aws.guardduty
-      .getDetector({}, { provider })
-      .then(result => {
-        // If detector exists, reference it
-        return aws.guardduty.Detector.get(
-          'existing-detector',
-          result.id,
-          undefined,
-          { provider }
-        );
-      })
-      .catch(() => {
-        // If detector doesn't exist, create one
-        return new aws.guardduty.Detector(
-          'main-detector',
-          {
-            enable: true,
-            findingPublishingFrequency: 'FIFTEEN_MINUTES',
-            tags: {
-              Name: `guardduty-${environment}`,
-              Environment: environment,
-              ManagedBy: 'Pulumi',
+  // Check if deploying to LocalStack (GuardDuty not supported in LocalStack free tier)
+  const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                       process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
+                       environment.toLowerCase().includes('localstack');
+
+  // GuardDuty detector ID (placeholder for LocalStack)
+  let guardDutyDetectorId: pulumi.Output<string>;
+
+  if (!isLocalStack) {
+    // Use a simpler approach to handle existing GuardDuty detector
+    const guardDutyDetector = pulumi.output(
+      aws.guardduty
+        .getDetector({}, { provider })
+        .then(result => {
+          // If detector exists, reference it
+          return aws.guardduty.Detector.get(
+            'existing-detector',
+            result.id,
+            undefined,
+            { provider }
+          );
+        })
+        .catch(() => {
+          // If detector doesn't exist, create one
+          return new aws.guardduty.Detector(
+            'main-detector',
+            {
+              enable: true,
+              findingPublishingFrequency: 'FIFTEEN_MINUTES',
+              tags: {
+                Name: `guardduty-${environment}`,
+                Environment: environment,
+                ManagedBy: 'Pulumi',
+              },
             },
-          },
-          { provider }
-        );
-      })
-  );
+            { provider }
+          );
+        })
+    );
 
-  // Get the detector ID as a Pulumi Output
-  const guardDutyDetectorId = guardDutyDetector.apply(d => d.id);
+    // Get the detector ID as a Pulumi Output
+    guardDutyDetectorId = guardDutyDetector.apply(d => d.id);
 
-  // Enable S3 protection for GuardDuty
-  new aws.guardduty.DetectorFeature(
-    `guardduty-s3-protection-${environment}`,
-    {
-      detectorId: guardDutyDetectorId,
-      name: 'S3_DATA_EVENTS',
-      status: 'ENABLED',
-    },
-    { provider }
-  );
+    // Enable S3 protection for GuardDuty
+    new aws.guardduty.DetectorFeature(
+      `guardduty-s3-protection-${environment}`,
+      {
+        detectorId: guardDutyDetectorId,
+        name: 'S3_DATA_EVENTS',
+        status: 'ENABLED',
+      },
+      { provider }
+    );
 
-  // Enable EKS protection for GuardDuty
-  new aws.guardduty.DetectorFeature(
-    `guardduty-eks-protection-${environment}`,
-    {
-      detectorId: guardDutyDetectorId,
-      name: 'EKS_AUDIT_LOGS',
-      status: 'ENABLED',
-    },
-    { provider }
-  );
+    // Enable EKS protection for GuardDuty
+    new aws.guardduty.DetectorFeature(
+      `guardduty-eks-protection-${environment}`,
+      {
+        detectorId: guardDutyDetectorId,
+        name: 'EKS_AUDIT_LOGS',
+        status: 'ENABLED',
+      },
+      { provider }
+    );
 
-  // Enable malware protection for GuardDuty
-  new aws.guardduty.DetectorFeature(
-    `guardduty-malware-protection-${environment}`,
-    {
-      detectorId: guardDutyDetectorId,
-      name: 'EBS_MALWARE_PROTECTION',
-      status: 'ENABLED',
-    },
-    { provider }
-  );
+    // Enable malware protection for GuardDuty
+    new aws.guardduty.DetectorFeature(
+      `guardduty-malware-protection-${environment}`,
+      {
+        detectorId: guardDutyDetectorId,
+        name: 'EBS_MALWARE_PROTECTION',
+        status: 'ENABLED',
+      },
+      { provider }
+    );
+  } else {
+    // For LocalStack, return a placeholder ID since GuardDuty is not supported
+    guardDutyDetectorId = pulumi.output('guardduty-not-available-in-localstack');
+  }
 
   // Create S3 bucket for Config
   const configBucket = new aws.s3.Bucket(
