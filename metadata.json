@@ -1,0 +1,26 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr485cdkjava",
+  "team": "synth-2",
+  "startedAt": "2025-08-26T20:42:54+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "CloudTrail",
+    "CloudWatch",
+    "DynamoDB",
+    "Config",
+    "Logs"
+  ],
+  "wave": "P0"
+}
