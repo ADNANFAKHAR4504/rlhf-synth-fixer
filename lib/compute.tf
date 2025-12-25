@@ -77,7 +77,8 @@ resource "aws_autoscaling_policy" "scale_down" {
 }
 
 # Application Load Balancer
-# Note: Name includes configuration suffix to force recreation when settings change
+# Note: Simplified configuration for LocalStack compatibility
+# LocalStack Community Edition has limited ALB attribute support
 resource "aws_lb" "main" {
   name               = "${local.name_prefix}-alb${var.enable_alb_access_logs ? "" : "-nologs"}"
   internal           = false
@@ -85,23 +86,10 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
+  # Minimal configuration for LocalStack
   enable_deletion_protection = false
 
-  # Access logs disabled by default for LocalStack (invalid attribute error)
-  dynamic "access_logs" {
-    for_each = var.enable_alb_access_logs ? [1] : []
-    content {
-      bucket  = aws_s3_bucket.logs.bucket
-      prefix  = "alb-logs"
-      enabled = true
-    }
-  }
-
   tags = local.common_tags
-
-  lifecycle {
-    create_before_destroy = true
-  }
 }
 
 # Target Group
