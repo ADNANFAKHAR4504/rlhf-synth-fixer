@@ -48,7 +48,6 @@ Conditions:
     - !Equals [!Ref EnableHTTPS, 'true']
     - !Not [!Equals [!Ref CertificateArn, '']]
   CloudTrailEnabled: !Equals [!Ref EnableCloudTrail, 'true']
-  IsAWS: !Equals [!Ref IsLocalStack, 'false']
   EnableVPCFlowLogs: !Equals [!Ref IsLocalStack, 'false']
   EnableDynamoDBPITR: !Equals [!Ref IsLocalStack, 'false']
   EnableMFA: !Equals [!Ref IsLocalStack, 'false']
