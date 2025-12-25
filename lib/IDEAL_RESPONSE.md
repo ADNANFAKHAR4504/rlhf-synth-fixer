@@ -1,19 +1,4 @@
-#  **ideal_response.md**
-
-## Functional scope (build everything new)
-
-A fully self-contained CloudFormation stack must be produced in YAML, deploying a new, production-grade multi-AZ application environment. The configuration must not reference any existing infrastructure and must provision every required module directly inside the template. The environment must span three Availability Zones and include VPC networking, public and private subnets, internet and NAT gateways, route tables per subnet, an Application Load Balancer, Auto Scaling capabilities, a highly available RDS instance with Secrets Manager integration, and a secure S3 storage layer with cross-region-ready replication. All resources created must include the EnvironmentSuffix to avoid naming conflicts across deployments, follow strict tagging requirements, and adopt high-availability, least-privilege, and encryption best practices throughout.
-
-## Requirements to be implemented
-
-The template must define parameters and validations, construct network layers across AZs, establish security groups for ALB, EC2, and RDS, and create a launch template and Auto Scaling group using Amazon Linux 2 with CloudWatch monitoring enabled. The RDS instance must be deployed into private subnets with multi-AZ enabled and credentials sourced from a newly created Secrets Manager secret. The S3 storage tier must include an encrypted source bucket, a replica bucket, replication IAM role, replication configuration, and customer-managed KMS key. The entire solution must be delivered through a single YAML file named TapStack.yml, representing a clean, complete, and ready-to-deploy environment.
-
-## Deliverable
-
-A single, fully formatted YAML CloudFormation template named TapStack.yml containing parameters, networking, compute, database, IAM, S3, replication, secrets generation, observations, and outputs. The file must include all logic inline, declare all resources explicitly, and produce a complete, deployable system without external dependencies.
-
-```yaml
-
+```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-grade multi-AZ infrastructure stack with ALB, ASG, RDS, and S3 with cross-region-ready replication'
 
@@ -850,7 +835,7 @@ Resources:
         - !Ref PublicSubnetC
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       MinSize: 2
       MaxSize: 5
       DesiredCapacity: 2
@@ -937,15 +922,13 @@ Resources:
 
   DBInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub 'myapp-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: postgres
       EngineVersion: '14'
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}::password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp3
       StorageEncrypted: true
@@ -1006,4 +989,5 @@ Outputs:
     Value: !GetAtt DBInstance.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-db-endpoint'
+
 ```

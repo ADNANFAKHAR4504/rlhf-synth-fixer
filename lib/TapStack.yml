@@ -834,7 +834,7 @@ Resources:
         - !Ref PublicSubnetC
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       MinSize: 2
       MaxSize: 5
       DesiredCapacity: 2
@@ -921,15 +921,13 @@ Resources:
 
   DBInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub 'myapp-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: postgres
       EngineVersion: '14'
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}::password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp3
       StorageEncrypted: true

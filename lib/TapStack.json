@@ -1601,12 +1601,7 @@
                     "LaunchTemplateId": {
                         "Ref": "LaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "MinSize": 2,
                 "MaxSize": 5,
@@ -1748,8 +1743,6 @@
         },
         "DBInstance": {
             "Type": "AWS::RDS::DBInstance",
-            "DeletionPolicy": "Snapshot",
-            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "myapp-db-${EnvironmentSuffix}"
@@ -1761,7 +1754,7 @@
                     "Ref": "DBMasterUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}::password}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}"
                 },
                 "AllocatedStorage": 20,
                 "StorageType": "gp3",

@@ -66,7 +66,6 @@
     "EC2InstanceProfile",
     "CloudWatchLogGroup"
   ],
-  "background": "This task provisions a complete multi-AZ application infrastructure using a single TapStack.yml in us-west-2. The environment includes a VPC with six subnets across three availability zones, dedicated public and private routing layers, NAT and Internet gateways, ALB, Auto Scaling Group, PostgreSQL RDS deployment, IAM roles, KMS encryption, and an S3 bucket with cross-region-ready replication. The solution emphasizes high availability, security, and consistency across the stack, using environment-suffixed resource names and strict YAML-based CloudFormation best practices.",
   "provider": "localstack",
   "wave": "P1"
 }
