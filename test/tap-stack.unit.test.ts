@@ -265,10 +265,14 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(pitrEnabled).toBeDefined();
 
       // Accept boolean true, boolean false, or CloudFormation conditional (!If expression)
+      // CloudFormation conditionals can be in two forms:
+      // 1. JSON form: { "Fn::If": ["EnableDynamoDBPITR", true, false] }
+      // 2. YAML array form: ["EnableDynamoDBPITR", true, false]
       expect(
         pitrEnabled === true ||
         pitrEnabled === false ||
-        (typeof pitrEnabled === 'object' && pitrEnabled['Fn::If'])
+        (typeof pitrEnabled === 'object' && pitrEnabled['Fn::If']) ||
+        (Array.isArray(pitrEnabled) && pitrEnabled[0] === 'EnableDynamoDBPITR')
       ).toBe(true);
     });
 
