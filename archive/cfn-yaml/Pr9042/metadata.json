@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912330",
+  "team": "synth",
+  "startedAt": "2025-11-13T09:37:39.636Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "SQS",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "EventBridge",
+    "SNS",
+    "SSM",
+    "IAM"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

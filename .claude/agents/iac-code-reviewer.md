@@ -332,6 +332,68 @@ Final Score = Base(8) + MODEL_FAILURES_Adjustment + Complexity_Adjustment
 
 **Step-by-step Process**:
 
+**Step 0.5: LocalStack Migration Detection (CRITICAL)**
+
+**🚨 STOP: LocalStack PRs require different evaluation criteria 🚨**
+
+Before checking critical blockers, determine if this is a LocalStack migration:
+
+```bash
+# Detect LocalStack migration
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+IS_LOCALSTACK_MIGRATION=false
+if [[ "$BRANCH_NAME" == ls-* ]] || [[ "$BRANCH_NAME" == *localstack* ]]; then
+  IS_LOCALSTACK_MIGRATION=true
+  echo "🔧 LocalStack migration detected - ADJUSTED REVIEW MODE ACTIVE"
+fi
+```
+
+**If LocalStack migration (`IS_LOCALSTACK_MIGRATION=true`) - MANDATORY RULES:**
+
+**RULE 1: DO NOT FAIL for LocalStack Limitations**
+LocalStack Community Edition does not support many AWS services. The following are NOT failures:
+- CloudFront, Route53, WAF, ACM → Not supported, removal is correct
+- EKS, AppSync, Amplify, SageMaker, Cognito-idp → Pro-only, removal is correct
+- NAT Gateways disabled → EIP issues in LocalStack, correct decision
+- Simplified IAM → LocalStack IAM is basic, simplification is correct
+- autoDeleteObjects removed → Lambda custom resources fail, removal is correct
+
+**RULE 2: Score Based on What Works, Not What's Disabled**
+- Only evaluate services that LocalStack actually supports
+- If S3, Lambda, DynamoDB, SQS, SNS work correctly → That's success
+- Do not penalize for "missing" services that can't work in LocalStack
+
+**RULE 3: Fair Scoring for LocalStack PRs**
+If MODEL_FAILURES.md has a "LocalStack Compatibility" section documenting the adaptations:
+- Start with base score = 8 (standard)
+- Do NOT apply "missing services" penalties for documented LocalStack limitations
+- LocalStack adaptations are Category B (±0) - they don't reduce score
+- Only deduct for actual code quality issues in SUPPORTED services
+
+**If LocalStack migration (`IS_LOCALSTACK_MIGRATION=true`)**:
+
+1. **Check for LocalStack Compatibility section in MODEL_FAILURES.md**:
+   ```bash
+   if grep -q "LocalStack Compatibility" lib/MODEL_FAILURES.md 2>/dev/null; then
+     echo "✅ LocalStack compatibility documented"
+   else
+     echo "⚠️ Missing LocalStack Compatibility section - recommend adding"
+   fi
+   ```
+
+2. **Exclude documented LocalStack limitations from "Missing Services" check**:
+   - Services documented as pro-only (EKS, AppSync, Cognito-idp) → Don't count as missing
+   - Services documented as unsupported (CloudFront, Route53, WAF) → Don't count as missing
+   - Services with conditional deployment (`isLocalStack`) → Count as implemented
+
+3. **Categorize LocalStack changes properly**:
+   | LocalStack Adaptation | Category | Why |
+   |----------------------|----------|-----|
+   | `isLocalStack` conditional logic | Category B (±0) | Environment awareness pattern |
+   | Documented service removal | Category B (±0) | Valid architectural decision |
+   | Conditional KMS/IAM simplification | Category B (±0) | LocalStack limitation workaround |
+   | Undocumented commenting-out | Category C (-1) | Needs proper documentation |
+
 **Step 1: Check Critical Blockers (Evaluate Fixability)**
 
 | Blocker                                                                     | Set Score To | Fixable?           | Action                                     |
@@ -339,7 +401,12 @@ Final Score = Base(8) + MODEL_FAILURES_Adjustment + Complexity_Adjustment
 | Platform/language mismatch (e.g., task needs Pulumi+Go, got CDK+TypeScript) | 3            | YES (regenerate)   | Attempt regeneration → If fails, ERROR     |
 | Wrong AWS region (if specified in task)                                     | 5            | YES (redeploy)     | Attempt region fix → If fails, ERROR       |
 | Wrong AWS account                                                           | 3            | NO (manual)        | ERROR immediately                          |
-| Missing ≥50% of required AWS services                                       | 4            | YES (add services) | Attempt service addition → If fails, ERROR |
+| Missing ≥50% of required AWS services*                                      | 4            | YES (add services) | Attempt service addition → If fails, ERROR |
+
+**\*LocalStack Exception**: For LocalStack migrations, only count services as "missing" if they are:
+- NOT documented in MODEL_FAILURES.md LocalStack Compatibility section
+- NOT in the pro-only/unsupported list (see `.claude/config/localstack.yaml`)
+- NOT conditionally deployed with `isLocalStack` pattern
 
 **Fix Attempt Logic**:
 

@@ -1,6 +1,38 @@
 # LocalStack Migration Configuration
 # Central configuration for localstack-migrate command and related agents
-# Version: 1.0.0
+# Version: 1.1.0
+
+# ═══════════════════════════════════════════════════════════════
+# CLAUDE REVIEW COMPATIBILITY REQUIREMENTS
+# CRITICAL: Follow these patterns to avoid Claude Review failures
+# ═══════════════════════════════════════════════════════════════
+claude_review:
+  # Required: MODEL_FAILURES.md must have LocalStack Compatibility section
+  require_compatibility_section: true
+  
+  # Preferred patterns (use instead of commenting out code)
+  preferred_patterns:
+    - pattern: 'isLocalStack conditional'
+      description: 'Use environment detection for conditional features'
+      example: 'natGateways: isLocalStack ? 0 : 2'
+    - pattern: 'documented removal'
+      description: 'Document removed features in MODEL_FAILURES.md table'
+      example: '| CloudFront | Not supported | Removed | Enabled in AWS |'
+  
+  # Anti-patterns (avoid these - will cause review failures)
+  anti_patterns:
+    - pattern: 'commented out code without docs'
+      reason: 'Looks like incomplete implementation to Claude'
+    - pattern: 'removed services without table entry'
+      reason: 'Triggers missing services penalty'
+    - pattern: 'hardcoded isLocalStack=true'
+      reason: 'Should detect from environment'
+  
+  # Environment detection (REQUIRED pattern)
+  environment_detection: |
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 # ═══════════════════════════════════════════════════════════════
 # ITERATION SETTINGS

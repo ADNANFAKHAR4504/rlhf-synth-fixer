@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "po_id": "101912847",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-28T05:11:19Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "Step Functions",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "ECR",
+    "CloudWatch",
+    "KMS",
+    "IAM"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

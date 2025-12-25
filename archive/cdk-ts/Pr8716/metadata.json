@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291857",
+  "team": "synth-2",
+  "startedAt": "2025-12-23T10:30:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "IAM",
+    "CloudWatch"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291857",
+    "pr": "Pr432"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "siddhantr-sudo",
+  "dockerS3Location": ""
+}
