@@ -14,7 +14,7 @@
   "aws_services": [
     "IAM"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291325",
     "pr": "Pr1677"
