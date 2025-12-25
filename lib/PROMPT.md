@@ -16,7 +16,7 @@ Create a **CloudFormation with JSON** template that provisions a complete multi-
    - VPC with environment-specific CIDR blocks: dev uses 10.0.0.0/16, staging uses 10.1.0.0/16, prod uses 10.2.0.0/16
    - Public subnets in 2 AZs host Application Load Balancer receiving internet traffic via Internet Gateway
    - Private subnets in 2 AZs run ECS Fargate tasks that connect to DynamoDB via VPC endpoints
-   - NAT Gateway in public subnets provides internet access for private subnet resources to pull container images
+   - NAT Gateway in public subnets provides internet access for private subnet infrastructure components to pull container images
    - Internet Gateway attached to VPC routes public traffic to ALB in public subnets
    - Route tables direct traffic from private subnets through NAT Gateway and from public subnets through Internet Gateway
 
@@ -52,14 +52,14 @@ Create a **CloudFormation with JSON** template that provisions a complete multi-
 - All infrastructure defined using **CloudFormation with JSON** syntax
 - Deploy to **us-east-1** region
 - Use Conditions to toggle features for different environments like IsProduction, IsDev, IsStaging
-- All resource names must include **EnvironmentSuffix** parameter for uniqueness
-- Follow naming convention with EnvironmentSuffix dynamically included in resource names
+- All infrastructure component names must include **EnvironmentSuffix** parameter for uniqueness
+- Follow naming convention with EnvironmentSuffix dynamically included in infrastructure component names
 - Use CloudFormation Parameters for environment customization
 - DynamoDB On-Demand billing for automatic scaling without capacity planning
 
 ### Deployment Requirements - CRITICAL
 
-- ALL resources must be fully destroyable with NO Retain policies and NO DeletionProtection
+- ALL infrastructure components must be fully destroyable with NO Retain policies and NO DeletionProtection
 - No AWS Config or property validation issues
 - All infrastructure names must dynamically include environmentSuffix
 - Parameters must be clearly documented with default values
@@ -71,7 +71,7 @@ Create a **CloudFormation with JSON** template that provisions a complete multi-
 - Fast deployment under 10 minutes by using DynamoDB instead of RDS Aurora
 - Environment isolation with separate VPCs
 - Production environment has higher alarm thresholds
-- All resources must support cleanup and deletion
+- All infrastructure components must support cleanup and deletion
 - Proper error handling and monitoring configured
 - CloudFormation outputs for application endpoints
 
@@ -81,15 +81,15 @@ Create a **CloudFormation with JSON** template that provisions a complete multi-
 - **Performance**: Infrastructure deployed in <10 minutes, DynamoDB responds in milliseconds
 - **Reliability**: Multi-AZ setup, auto-scaling configured, health checks active
 - **Security**: Private subnets for compute, encryption at rest for DynamoDB, IAM roles properly scoped
-- **Naming Convention**: All resources include environmentSuffix parameter dynamically
-- **Destroyability**: `aws cloudformation delete-stack` cleanly removes all resources
+- **Naming Convention**: All infrastructure components include environmentSuffix parameter dynamically
+- **Destroyability**: `aws cloudformation delete-stack` cleanly removes all infrastructure components
 
 ## What to deliver
 
 - Complete CloudFormation JSON template as single file or multiple stacked templates
 - Parameters section with environment-specific configurations
 - Conditions for IsProduction, IsDev, IsStaging environment detection
-- Outputs section with application endpoints and resource identifiers
+- Outputs section with application endpoints and infrastructure component identifiers
 - Comprehensive Comments explaining complex sections
 - CloudFormation best practices with no hardcoded values and parameters for customization
 - Documentation on template usage and environment-specific outputs
