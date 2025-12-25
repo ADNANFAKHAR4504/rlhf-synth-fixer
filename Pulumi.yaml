@@ -2,4 +2,4 @@ name: TapStack
 runtime:
   name: nodejs
 description: Pulumi infrastructure for TAP
-main: dist/bin/tap.js
+main: bin/tap.ts
