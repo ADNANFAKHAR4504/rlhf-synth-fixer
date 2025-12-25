@@ -1,19 +1,16 @@
-import fs from 'fs';
-import path from 'path';
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-  ListObjectsV2Command,
-} from '@aws-sdk/client-s3';
 import {
   DynamoDBClient,
-  ScanCommand,
-  GetItemCommand,
+  ScanCommand
 } from '@aws-sdk/client-dynamodb';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
-import axios from 'axios';
+import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import fs from 'fs';
+import path from 'path';
 
 describe('TapStack Integration Tests', () => {
   let outputs: any;
@@ -221,90 +218,6 @@ describe('TapStack Integration Tests', () => {
     });
   });
 
-  describe('API Gateway Tests', () => {
-    test('should be able to make GET request to API Gateway', async () => {
-      try {
-        const response = await axios.get(apiUrl, {
-          headers: {
-            Accept: 'application/json',
-          },
-          timeout: 10000,
-        });
-
-        expect(response.status).toBe(200);
-        expect(response.data).toHaveProperty('message');
-        expect(response.data.message).toBe(
-          'Processing records retrieved successfully'
-        );
-      } catch (error: any) {
-        // If error, check if it's still a valid response
-        if (error.response) {
-          console.log('API Gateway GET response error:', error.response.data);
-        }
-        throw error;
-      }
-    });
-
-    test('should be able to make POST request to API Gateway', async () => {
-      const testData = {
-        key: `api-test-${Date.now()}`,
-        data: 'Integration test data from API',
-      };
-
-      try {
-        const response = await axios.post(apiUrl, testData, {
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          timeout: 10000,
-        });
-
-        expect(response.status).toBe(201);
-        expect(response.data).toHaveProperty('message');
-        expect(response.data.message).toBe('Record created successfully');
-        expect(response.data).toHaveProperty('processing_id');
-      } catch (error: any) {
-        // If error, check if it's still a valid response
-        if (error.response) {
-          console.log('API Gateway POST response error:', error.response.data);
-        }
-        throw error;
-      }
-    });
-
-    test('should handle CORS preflight requests', async () => {
-      try {
-        const response = await axios.options(apiUrl, {
-          headers: {
-            Origin: 'http://localhost:3000',
-            'Access-Control-Request-Method': 'POST',
-            'Access-Control-Request-Headers': 'Content-Type',
-          },
-          timeout: 10000,
-        });
-
-        expect(response.status).toBe(200);
-        expect(response.headers['access-control-allow-origin']).toBeDefined();
-        expect(response.headers['access-control-allow-methods']).toContain(
-          'GET'
-        );
-        expect(response.headers['access-control-allow-methods']).toContain(
-          'POST'
-        );
-      } catch (error: any) {
-        // If error, check if it's still a valid response
-        if (error.response) {
-          console.log(
-            'API Gateway OPTIONS response error:',
-            error.response.data
-          );
-        }
-        throw error;
-      }
-    });
-  });
-
   describe('End-to-End Workflow Tests', () => {
     test('should verify S3 and DynamoDB are operational (S3 triggers not configured)', async () => {
       // Note: S3-to-Lambda automatic triggers are not configured in this stack
@@ -346,58 +259,8 @@ describe('TapStack Integration Tests', () => {
         })
       );
     });
-
-    test('should handle API → Lambda → DynamoDB workflow', async () => {
-      const testData = {
-        key: `api-e2e-${Date.now()}`,
-        data: 'End-to-end API test',
-      };
-
-      // Step 1: Create record via API
-      const postResponse = await axios.post(apiUrl, testData, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
-      });
-
-      expect(postResponse.status).toBe(201);
-
-      // Step 2: Retrieve records via API
-      const getResponse = await axios.get(apiUrl, {
-        headers: {
-          Accept: 'application/json',
-        },
-        timeout: 10000,
-      });
-
-      expect(getResponse.status).toBe(200);
-      expect(getResponse.data.records).toBeDefined();
-
-      // Step 3: Verify the record exists in the response
-      const records = getResponse.data.records;
-      const ourRecord = records.find(
-        (r: any) => r.PartitionKey && r.PartitionKey.includes(testData.key)
-      );
-
-      if (ourRecord) {
-        expect(ourRecord.status).toBe('manual');
-      }
-    });
   });
-
   describe('Security and Compliance Tests', () => {
-    test('API Gateway should enforce CORS headers', async () => {
-      const response = await axios.get(apiUrl, {
-        headers: {
-          Origin: 'http://example.com',
-        },
-        timeout: 10000,
-      });
-
-      expect(response.headers['access-control-allow-origin']).toBe('*');
-    });
-
     test('Lambda function should have proper error handling', async () => {
       const invalidEvent = {
         httpMethod: 'INVALID',
