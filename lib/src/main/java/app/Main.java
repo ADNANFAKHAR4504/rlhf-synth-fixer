@@ -124,7 +124,7 @@ public final class Main {
      *
      * @param args Command line arguments
      */
-    static void main(final String[] args) {
+    public static void main(final String[] args) {
         App app = new App();
 
         // Get environment suffix from context or default to 'dev'
