@@ -152,7 +152,15 @@ run('Secure AWS Infrastructure Integration Tests', () => {
 
       // Load balancer DNS validation
       const albDns = outputs.LoadBalancerDNS;
-      expect(albDns.includes('elb.amazonaws.com')).toBe(true);
+      if (isLocalStack) {
+        expect(
+          albDns.includes('elb.localhost.localstack.cloud') ||
+            albDns.includes('localhost') ||
+            albDns.includes('127.0.0.1')
+        ).toBe(true);
+      } else {
+        expect(albDns.includes('elb.amazonaws.com')).toBe(true);
+      }
 
       // Security Group validation
       expect(outputs.WebSecurityGroupId.startsWith('sg-')).toBe(true);
@@ -196,9 +204,16 @@ run('Secure AWS Infrastructure Integration Tests', () => {
     test('should validate Load Balancer is application-type (from DNS pattern)', () => {
       // Application Load Balancer DNS follows specific pattern
       const albDns = outputs.LoadBalancerDNS;
-      expect(albDns).toMatch(
-        /^[a-z0-9-]+-\d+\.[a-z0-9-]+\.elb\.amazonaws\.com$/
-      );
+      if (isLocalStack) {
+        // LocalStack uses different DNS patterns
+        expect(albDns).toMatch(
+          /^[a-z0-9-]+\.(elb\.localhost\.localstack\.cloud|localhost|127\.0\.0\.1)/
+        );
+      } else {
+        expect(albDns).toMatch(
+          /^[a-z0-9-]+-\d+\.[a-z0-9-]+\.elb\.amazonaws\.com$/
+        );
+      }
     });
   });
 
