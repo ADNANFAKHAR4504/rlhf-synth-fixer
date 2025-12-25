@@ -1,6 +1,6 @@
 ## Comparison Summary
 
-| Aspect | Ideal Response (✅) | Model Response (❌) | Comments |
+| Aspect | Ideal Response | Model Response | Comments |
 | --- | --- | --- | --- |
 | Parameters | Exactly 6 parameters: Environment, InstanceType, KeyPairName, MinSize, MaxSize, DesiredCapacity. | Adds extra params: VpcCidr, EnablePrivateSubnets; regex on VpcCidr. | Over-parameterized; adds complexity not required by the task and CI assumptions. |
 | Environment default | Environment default is "production"; IsProduction condition checks 'production'. | Environment default is "production" initially, later mixed; some places expect 'prod' versus 'production'. | Inconsistency can break conditions (IsProduction) and cause unexpected behavior. |
@@ -20,7 +20,7 @@
 
 * * *
 
-## 🔥 Model Failure Diagnosis Prompt
+## Model Failure Diagnosis Prompt
 
 Use the checklist below to correct the model response and align it with the ideal response.
 
