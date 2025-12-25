@@ -464,21 +464,25 @@ class TapStack extends Stack {
         CfnOutput.Builder.create(this, "ApiGatewayUrl")
                 .description("API Gateway URL")
                 .value(api.getUrl())
+                .exportName(String.format("tap-%s-api-url", this.environmentSuffix))
                 .build();
 
         CfnOutput.Builder.create(this, "DynamoDBTableName")
                 .description("DynamoDB Table Name")
                 .value(dynamoTable.getTableName())
+                .exportName(String.format("tap-%s-dynamodb-table", this.environmentSuffix))
                 .build();
 
         CfnOutput.Builder.create(this, "LambdaFunctionArn")
                 .description("Lambda Function ARN")
                 .value(backendFunction.getFunctionArn())
+                .exportName(String.format("tap-%s-lambda-arn", this.environmentSuffix))
                 .build();
 
         CfnOutput.Builder.create(this, "VpcId")
                 .description("VPC ID")
                 .value(vpc.getVpcId())
+                .exportName(String.format("tap-%s-vpc-id", this.environmentSuffix))
                 .build();
     }
 
