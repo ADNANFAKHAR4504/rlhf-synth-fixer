@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291210",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T12:48:38.443Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Route53",
+    "CloudFront",
+    "KMS",
+    "SecretsManager",
+    "EIP",
+    "NATGateway",
+    "InternetGateway",
+    "SecurityGroup",
+    "Subnet",
+    "RouteTable"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291210",
+    "pr": "Pr1950"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
