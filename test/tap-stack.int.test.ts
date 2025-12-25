@@ -55,7 +55,7 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should have valid cluster endpoint URL', () => {
       // LocalStack uses localhost.localstack.cloud, AWS uses .eks.amazonaws.com
-      expect(deploymentOutputs.ClusterEndpoint).toMatch(/^https:\/\/.+(\.eks\.amazonaws\.com|localhost\.localstack\.cloud:\d+)$/);
+      expect(deploymentOutputs.ClusterEndpoint).toMatch(/^https:\/\/(.+\.eks\.amazonaws\.com|localhost\.localstack\.cloud:\d+)$/);
     });
 
     test('should have cluster name matching environment pattern', () => {
