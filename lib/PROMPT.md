@@ -1,23 +1,32 @@
-I need to create a comprehensive CI/CD pipeline infrastructure using Terraform HCL that deploys applications to both development and production AWS environments. The pipeline should automate the entire release process from code commit to deployment with proper approval gates and rollback mechanisms.
+Need to build a CI/CD pipeline infrastructure using Terraform that handles deployments for both dev and production AWS environments. The pipeline should automate everything from code commit through deployment with approval gates and rollback capability.
 
-The infrastructure must include:
+What I need:
 
-1. Create separate environments for development and production with appropriate resource isolation
-2. Set up AWS CodePipeline to orchestrate the entire CI/CD workflow from source to deployment 
-3. Configure AWS CodeBuild for automated testing and building of infrastructure code
-4. Implement manual approval gates before production deployments to ensure quality control
-5. Design automatic rollback functionality for failed production deployments
-6. Use AWS Secrets Manager to securely store and manage sensitive configuration data
-7. Configure CloudWatch Alarms and SNS notifications for deployment status updates
-8. Centralize all deployment logs using CloudWatch Logs for audit and troubleshooting
-9. Apply consistent resource tagging for environment identification and cost tracking
-10. Include AWS EventBridge for enhanced event-driven automation capabilities
+1. Separate dev and production environments with proper isolation
+2. AWS CodePipeline to orchestrate the workflow from source to deployment
+3. CodeBuild for automated testing and building
+4. Manual approval before prod deployments
+5. Automatic rollback when prod deployments fail
+6. Secrets Manager to store sensitive configs
+7. CloudWatch Alarms that send SNS notifications for deployment status
+8. CloudWatch Logs for centralizing deployment logs
+9. EventBridge for event-driven automation
+10. AWS Config for compliance monitoring
 
-Additional requirements:
-- Use the naming convention: [env]-myapp-[resource] for all resources
-- Deploy to us-east-1 region
-- Implement proper IAM roles and policies following least privilege principles  
-- Include AWS Config for compliance monitoring
-- All resources must have appropriate tags: Environment, Project, ManagedBy, and CostCenter
+Service connectivity:
+- S3 bucket stores source code and triggers CodePipeline on new commits
+- CodePipeline connects to CodeBuild project to execute build and test stages
+- CodeBuild publishes build logs and results to CloudWatch Logs for debugging
+- Lambda function watches CodePipeline execution state via EventBridge and triggers automatic rollback on failures
+- SNS topic sends deployment notifications to operations team when stages complete
+- EventBridge captures pipeline state changes and routes events to Lambda for processing
+- Secrets Manager integrates with CodeBuild to inject database credentials and API keys during builds
+- Config continuously monitors all resources and sends compliance alerts to SNS
 
-Please provide complete Terraform HCL infrastructure code with all necessary files including main configuration, variables, outputs, and any supporting resources. The code should be production-ready and follow AWS best practices for CI/CD implementations.
+Technical details:
+- Naming: dev-myapp-codepipeline, prod-myapp-codebuild, etc
+- Region: us-east-1
+- IAM: least privilege roles for all services
+- Tags: Environment, Project, ManagedBy, CostCenter on all resources
+
+Give me production-ready Terraform code with main config, variables, outputs, and supporting resources following AWS best practices.
