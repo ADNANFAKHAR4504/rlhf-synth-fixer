@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: "Production-ready secure infrastructure with VPC, EC2 Auto Scaling, monitoring, and compliance features (NO AWS Config resources)"
 
 Parameters:
-  IsLocalStack:
+  UseLocalStack:
     Type: String
     Default: "false"
     AllowedValues: ["true", "false"]
@@ -61,12 +61,12 @@ Parameters:
   # Amazon Linux 2023 AMI (x86_64) - hardcoded for LocalStack compatibility
   # In production, use SSM Parameter Store: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
   AmiId:
-    Type: String
+    Type: AWS::EC2::Image::Id
     Default: "ami-0abcdef1234567890"
     Description: AMI ID for EC2 instances (use region-specific AMI in production)
 
 Conditions:
-  CreateNATGateway: !Equals [!Ref IsLocalStack, "false"]
+  CreateNATGateway: !Equals [!Ref UseLocalStack, "false"]
 
 Resources:
   # ===============================
@@ -511,7 +511,7 @@ Resources:
       AutoScalingGroupName: !Sub "TapStack${EnvironmentSuffix}-ASG"
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: "$Latest"
       MinSize: 1
       MaxSize: 4
       DesiredCapacity: 2
