@@ -113,7 +113,7 @@ Parameters:
 
   AmiId:
     Description: Amazon Machine Image ID for EC2 instances
-    Type: Number
+    Type: AWS::EC2::Image::Id
     Default: ami-12345678
   
 
