@@ -30,7 +30,6 @@ import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.UserData;
 import software.amazon.awscdk.services.ec2.Vpc;
-import software.amazon.awscdk.services.guardduty.CfnDetector;
 import software.amazon.awscdk.services.iam.AnyPrincipal;
 import software.amazon.awscdk.services.iam.CfnInstanceProfile;
 import software.amazon.awscdk.services.iam.Effect;
@@ -54,8 +53,6 @@ import software.amazon.awscdk.services.s3.BlockPublicAccess;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
 import software.amazon.awscdk.services.s3.LifecycleRule;
-import software.amazon.awscdk.services.securityhub.CfnHub;
-// AWS Config imports removed - need role-based config setup
 import software.constructs.Construct;
 
 public class SecurityStack extends Stack {
@@ -95,8 +92,8 @@ public class SecurityStack extends Stack {
         this.appSecurityGroup = createAppSecurityGroup();
         this.dbSecurityGroup = createDbSecurityGroup();
 
-        // Enable security services
-        // enableSecurityServices(); // Temporarily disabled for debugging
+        // Security services (GuardDuty, Security Hub) can be enabled separately
+        // if needed for production environments
 
         // Create secure S3 bucket
         createSecureS3Bucket();
@@ -252,22 +249,6 @@ public class SecurityStack extends Stack {
                 Port.tcp(5432), "From app tier");
 
         return sg;
-    }
-
-    @SuppressWarnings("unused")
-    private void enableSecurityServices() {
-        // Enable GuardDuty
-        CfnDetector.Builder.create(this, "GuardDutyDetector-" + environmentSuffix)
-                .enable(true)
-                .findingPublishingFrequency("FIFTEEN_MINUTES")
-                .build();
-
-        // Enable Security Hub
-        CfnHub.Builder.create(this, "SecurityHub-" + environmentSuffix)
-                .build();
-
-        // AWS Config setup requires service role and bucket configuration
-        // This would be set up separately with proper IAM roles and S3 buckets
     }
 
     private void createSecureS3Bucket() {
