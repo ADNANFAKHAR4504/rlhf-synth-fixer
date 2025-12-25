@@ -169,7 +169,8 @@ Resources:
   DBSecret:
     Type: 'AWS::SecretsManager::Secret'
     Properties:
-      Description: !Sub 'RDS PostgreSQL credentials for ${ProjectName}'
+      Name: !Sub '${AWS::StackName}-database-credentials'
+      Description: !Sub 'RDS database credentials for ${ProjectName}'
       GenerateSecretString:
         SecretStringTemplate: !Sub |
           {
@@ -988,7 +989,6 @@ Resources:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
       LaunchTemplateData:
-        ImageId: !Ref LatestAmiId
         InstanceType: !Ref EC2InstanceType
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -999,127 +999,14 @@ Resources:
             Ebs:
               VolumeSize: !If [IsProduction, 50, 20]
               VolumeType: gp3
-              Iops: 3000
-              Throughput: 125
               Encrypted: true
               DeleteOnTermination: true
         MetadataOptions:
-          HttpTokens: required  # Enforce IMDSv2
+          HttpTokens: required
           HttpPutResponseHopLimit: 1
           InstanceMetadataTags: enabled
         Monitoring:
           Enabled: !If [EnableEnhancedMonitoring, true, false]
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            set -e
-            
-            # Update system
-            yum update -y
-            
-            # Install required packages
-            yum install -y amazon-cloudwatch-agent aws-cli jq
-            
-            # Set environment variables
-            echo "export PROJECT_NAME=${ProjectName}" >> /etc/environment
-            echo "export ENVIRONMENT=${Environment}" >> /etc/environment
-            echo "export AWS_DEFAULT_REGION=${AWS::Region}" >> /etc/environment
-            echo "export S3_BUCKET=${S3Bucket}" >> /etc/environment
-            
-            # Configure CloudWatch agent
-            cat << EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-            {
-              "metrics": {
-                "namespace": "${ProjectName}/${Environment}",
-                "metrics_collected": {
-                  "cpu": {
-                    "measurement": [
-                      {"name": "cpu_usage_idle", "rename": "CPU_IDLE", "unit": "Percent"},
-                      {"name": "cpu_usage_iowait", "rename": "CPU_IOWAIT", "unit": "Percent"},
-                      {"name": "cpu_usage_system", "rename": "CPU_SYSTEM", "unit": "Percent"},
-                      {"name": "cpu_usage_user", "rename": "CPU_USER", "unit": "Percent"}
-                    ],
-                    "metrics_collection_interval": 60,
-                    "totalcpu": false
-                  },
-                  "disk": {
-                    "measurement": [
-                      {"name": "used_percent", "rename": "DISK_USED", "unit": "Percent"},
-                      {"name": "free", "rename": "DISK_FREE", "unit": "Bytes"}
-                    ],
-                    "metrics_collection_interval": 60,
-                    "resources": ["*"],
-                    "ignore_file_system_types": ["sysfs", "devtmpfs", "tmpfs"]
-                  },
-                  "mem": {
-                    "measurement": [
-                      {"name": "mem_used_percent", "rename": "MEM_USED", "unit": "Percent"},
-                      {"name": "mem_available", "rename": "MEM_AVAILABLE", "unit": "Bytes"}
-                    ],
-                    "metrics_collection_interval": 60
-                  },
-                  "netstat": {
-                    "measurement": [
-                      {"name": "tcp_established", "rename": "TCP_ESTABLISHED", "unit": "Count"},
-                      {"name": "tcp_time_wait", "rename": "TCP_TIME_WAIT", "unit": "Count"}
-                    ],
-                    "metrics_collection_interval": 60
-                  }
-                }
-              },
-              "logs": {
-                "logs_collected": {
-                  "files": {
-                    "collect_list": [
-                      {
-                        "file_path": "/var/log/messages",
-                        "log_group_name": "/aws/ec2/${ProjectName}/${Environment}/system",
-                        "log_stream_name": "{instance_id}/messages",
-                        "retention_in_days": 30
-                      },
-                      {
-                        "file_path": "/var/log/secure",
-                        "log_group_name": "/aws/ec2/${ProjectName}/${Environment}/security",
-                        "log_stream_name": "{instance_id}/secure",
-                        "retention_in_days": 90
-                      },
-                      {
-                        "file_path": "/var/log/cloud-init-output.log",
-                        "log_group_name": "/aws/ec2/${ProjectName}/${Environment}/cloud-init",
-                        "log_stream_name": "{instance_id}/cloud-init",
-                        "retention_in_days": 7
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-            EOF
-            
-            # Start CloudWatch agent
-            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-              -a fetch-config \
-              -m ec2 \
-              -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
-              -s
-            
-            # Enable auto-recovery
-            INSTANCE_ID=$(ec2-metadata --instance-id | cut -d " " -f 2)
-            aws cloudwatch put-metric-alarm \
-              --alarm-name "${ProjectName}-${Environment}-$INSTANCE_ID-auto-recovery" \
-              --alarm-description "Auto recover instance when it fails" \
-              --metric-name StatusCheckFailed_System \
-              --namespace AWS/EC2 \
-              --statistic Maximum \
-              --dimensions Name=InstanceId,Value=$INSTANCE_ID \
-              --period 60 \
-              --evaluation-periods 2 \
-              --threshold 0 \
-              --comparison-operator GreaterThanThreshold \
-              --alarm-actions arn:aws:automate:${AWS::Region}:ec2:recover
-            
-            # Signal success
-            echo "User data script completed successfully"
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -1155,9 +1042,10 @@ Resources:
       - NATGateway1
       - S3KMSKey
     Properties:
+      ImageId: !Ref LatestAmiId
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
-        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       SubnetId: !Ref PrivateSubnet1
       Tags:
         - Key: Name
@@ -1177,9 +1065,10 @@ Resources:
       - NATGateway1
       - S3KMSKey
     Properties:
+      ImageId: !Ref LatestAmiId
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
-        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       SubnetId: !Ref PrivateSubnet2
       Tags:
         - Key: Name
@@ -1239,6 +1128,8 @@ Resources:
 
   RDSPostgreSQLInstance:
     Type: 'AWS::RDS::DBInstance'
+    DependsOn:
+      - DBSecret
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-postgres-db'
       DBName: 'appdb'
@@ -1248,9 +1139,8 @@ Resources:
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp3
       StorageEncrypted: true
-      KmsKeyId: alias/aws/rds
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${AWS::StackName}-database-credentials:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-database-credentials:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup

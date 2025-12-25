@@ -216,8 +216,11 @@
         "DBSecret": {
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-database-credentials"
+                },
                 "Description": {
-                    "Fn::Sub": "RDS PostgreSQL credentials for ${ProjectName}"
+                    "Fn::Sub": "RDS database credentials for ${ProjectName}"
                 },
                 "GenerateSecretString": {
                     "SecretStringTemplate": {
@@ -1916,9 +1919,6 @@
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateData": {
-                    "ImageId": {
-                        "Ref": "LatestAmiId"
-                    },
                     "InstanceType": {
                         "Ref": "EC2InstanceType"
                     },
@@ -1947,8 +1947,6 @@
                                     ]
                                 },
                                 "VolumeType": "gp3",
-                                "Iops": 3000,
-                                "Throughput": 125,
                                 "Encrypted": true,
                                 "DeleteOnTermination": true
                             }
@@ -1966,11 +1964,6 @@
                                 true,
                                 false
                             ]
-                        }
-                    },
-                    "UserData": {
-                        "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nset -e\n\n# Update system\nyum update -y\n\n# Install required packages\nyum install -y amazon-cloudwatch-agent aws-cli jq\n\n# Set environment variables\necho \"export PROJECT_NAME=${ProjectName}\" >> /etc/environment\necho \"export ENVIRONMENT=${Environment}\" >> /etc/environment\necho \"export AWS_DEFAULT_REGION=${AWS::Region}\" >> /etc/environment\necho \"export S3_BUCKET=${S3Bucket}\" >> /etc/environment\n\n# Configure CloudWatch agent\ncat << EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n{\n  \"metrics\": {\n    \"namespace\": \"${ProjectName}/${Environment}\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          {\"name\": \"cpu_usage_idle\", \"rename\": \"CPU_IDLE\", \"unit\": \"Percent\"},\n          {\"name\": \"cpu_usage_iowait\", \"rename\": \"CPU_IOWAIT\", \"unit\": \"Percent\"},\n          {\"name\": \"cpu_usage_system\", \"rename\": \"CPU_SYSTEM\", \"unit\": \"Percent\"},\n          {\"name\": \"cpu_usage_user\", \"rename\": \"CPU_USER\", \"unit\": \"Percent\"}\n        ],\n        \"metrics_collection_interval\": 60,\n        \"totalcpu\": false\n      },\n      \"disk\": {\n        \"measurement\": [\n          {\"name\": \"used_percent\", \"rename\": \"DISK_USED\", \"unit\": \"Percent\"},\n          {\"name\": \"free\", \"rename\": \"DISK_FREE\", \"unit\": \"Bytes\"}\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"],\n        \"ignore_file_system_types\": [\"sysfs\", \"devtmpfs\", \"tmpfs\"]\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\"name\": \"mem_used_percent\", \"rename\": \"MEM_USED\", \"unit\": \"Percent\"},\n          {\"name\": \"mem_available\", \"rename\": \"MEM_AVAILABLE\", \"unit\": \"Bytes\"}\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"netstat\": {\n        \"measurement\": [\n          {\"name\": \"tcp_established\", \"rename\": \"TCP_ESTABLISHED\", \"unit\": \"Count\"},\n          {\"name\": \"tcp_time_wait\", \"rename\": \"TCP_TIME_WAIT\", \"unit\": \"Count\"}\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/${ProjectName}/${Environment}/system\",\n            \"log_stream_name\": \"{instance_id}/messages\",\n            \"retention_in_days\": 30\n          },\n          {\n            \"file_path\": \"/var/log/secure\",\n            \"log_group_name\": \"/aws/ec2/${ProjectName}/${Environment}/security\",\n            \"log_stream_name\": \"{instance_id}/secure\",\n            \"retention_in_days\": 90\n          },\n          {\n            \"file_path\": \"/var/log/cloud-init-output.log\",\n            \"log_group_name\": \"/aws/ec2/${ProjectName}/${Environment}/cloud-init\",\n            \"log_stream_name\": \"{instance_id}/cloud-init\",\n            \"retention_in_days\": 7\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config \\\n  -m ec2 \\\n  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \\\n  -s\n\n# Enable auto-recovery\nINSTANCE_ID=$(ec2-metadata --instance-id | cut -d \" \" -f 2)\naws cloudwatch put-metric-alarm \\\n  --alarm-name \"${ProjectName}-${Environment}-$INSTANCE_ID-auto-recovery\" \\\n  --alarm-description \"Auto recover instance when it fails\" \\\n  --metric-name StatusCheckFailed_System \\\n  --namespace AWS/EC2 \\\n  --statistic Maximum \\\n  --dimensions Name=InstanceId,Value=$INSTANCE_ID \\\n  --period 60 \\\n  --evaluation-periods 2 \\\n  --threshold 0 \\\n  --comparison-operator GreaterThanThreshold \\\n  --alarm-actions arn:aws:automate:${AWS::Region}:ec2:recover\n\n# Signal success\necho \"User data script completed successfully\"\n"
                         }
                     },
                     "TagSpecifications": [
@@ -2051,16 +2044,14 @@
                 "S3KMSKey"
             ],
             "Properties": {
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "EC2LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "SubnetId": {
                     "Ref": "PrivateSubnet1"
@@ -2104,16 +2095,14 @@
                 "S3KMSKey"
             ],
             "Properties": {
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "EC2LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "SubnetId": {
                     "Ref": "PrivateSubnet2"
@@ -2241,6 +2230,9 @@
         },
         "RDSPostgreSQLInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "DependsOn": [
+                "DBSecret"
+            ],
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${ProjectName}-${Environment}-postgres-db"
@@ -2256,12 +2248,11 @@
                 },
                 "StorageType": "gp3",
                 "StorageEncrypted": true,
-                "KmsKeyId": "alias/aws/rds",
                 "MasterUsername": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${AWS::StackName}-database-credentials:SecretString:username}}"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${AWS::StackName}-database-credentials:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {
