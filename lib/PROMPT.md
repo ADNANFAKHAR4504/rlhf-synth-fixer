@@ -1,16 +1,17 @@
-I need to set up a complete VPC infrastructure in the us-west-2 region using Terraform. Here are the specific requirements:
+I need to set up a complete VPC infrastructure in the us-west-2 region using Terraform for hosting a production web application.
 
-1. Create a VPC with appropriate CIDR block in the us-west-2 region
-2. Set up at least two public subnets in different availability zones within the VPC 
-3. Set up at least two private subnets in different availability zones within the VPC
-4. Configure proper route tables - public subnets should route to internet gateway, private subnets should route to NAT gateway
-5. Associate the subnets with their respective route tables
-6. Create security groups that allow HTTP (port 80) and HTTPS (port 443) traffic from anywhere
-7. Implement restricted SSH access - only allow SSH (port 22) from CIDR block 203.0.113.0/24
-8. Use Terraform modules to organize the code in a clean and reusable way
-9. Tag all resources with 'Environment: Production'
-10. Use AWS provider version 3.42.0 or later
-11. Include AWS VPC Lattice service mesh for modern microservices communication
-12. Add AWS VPC Reachability Analyzer for network troubleshooting capabilities
+Create a VPC with appropriate CIDR block that serves as the network foundation. The VPC connects to an Internet Gateway to enable public internet access for web-facing resources.
 
-The infrastructure should be production-ready and follow AWS best practices. Please provide the complete Terraform HCL code with proper module structure. Each file should be in a separate code block.
+Set up two public subnets distributed across different availability zones within the VPC. These public subnets route outbound traffic through the Internet Gateway, allowing EC2 instances to receive inbound HTTP and HTTPS requests from users.
+
+Set up two private subnets in different availability zones for backend services. Private subnets connect to a NAT Gateway deployed in the public subnet, enabling instances to download updates and patches from the internet while remaining inaccessible from external networks.
+
+Configure route tables that define the traffic flow between subnets and gateways. Public route tables direct internet-bound traffic to the Internet Gateway, while private route tables forward outbound requests through the NAT Gateway.
+
+Create security groups that control traffic between the VPC resources and external networks. The web tier security group allows inbound HTTP on port 80 and HTTPS on port 443 from any source. Implement restricted SSH access that only permits connections from the CIDR block 203.0.113.0/24 for administrative access.
+
+The NAT Gateway requires an Elastic IP address that provides a static public IP for outbound connections from private subnets.
+
+Use Terraform modules to organize the VPC and security group configurations in a clean and reusable structure. Tag all resources with Environment set to Production. Use AWS provider version 3.42.0 or later.
+
+The infrastructure should follow AWS best practices for network isolation, high availability across multiple availability zones, and secure access patterns.
