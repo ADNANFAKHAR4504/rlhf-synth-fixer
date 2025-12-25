@@ -1,4 +1,4 @@
-Need help refactoring our transaction processing CloudFormation template. Current stack has circular dependencies causing deployment failures. Lambda role depends on DynamoDB, but DynamoDB permissions also depend on the role. Plus we have hardcoded ARNs everywhere.
+Need help refactoring our transaction processing CloudFormation template. Current stack has circular dependencies causing deployment failures. Lambda role depends on DynamoDB but DynamoDB permissions also depend on the role. Plus we have hardcoded ARNs everywhere.
 
 Business needs this for payment processing so reliability is critical. Must use CloudFormation JSON format.
 
@@ -16,20 +16,21 @@ Transaction processing infrastructure using CloudFormation JSON that actually de
 ### Core Components
 
 1. DynamoDB Transaction Table
-   - PAY_PER_REQUEST billing (no provisioned capacity)
-   - Must be destroyable for testing (no deletion protection)
+   - PAY_PER_REQUEST billing, no provisioned capacity
+   - Must be destroyable for testing, no deletion protection
    - Parameterized table name
 
 2. Lambda Payment Processor  
    - 256MB memory for transaction processing
+   - Lambda needs to read from and write to the DynamoDB table during payment processing
    - Parameterized function name
-   - Proper IAM role with minimal permissions
+   - Proper IAM role allowing Lambda to access the DynamoDB table
 
 3. Fix the Circular Dependencies
    - Break dependency cycle between Lambda role and DynamoDB
-   - Use CloudFormation intrinsic functions (!Ref, !GetAtt) instead of hardcoded values
+   - Use CloudFormation intrinsic functions like Ref and GetAtt instead of hardcoded values
    - Add DependsOn where needed to force correct creation order
-   - Consolidate IAM policies
+   - Consolidate IAM policies so Lambda can access DynamoDB without circular refs
 
 4. Parameters and Outputs
    - Parameters for table name, function name, environment suffix
@@ -38,26 +39,26 @@ Transaction processing infrastructure using CloudFormation JSON that actually de
 
 ### Technical Details
 
-- CloudFormation JSON format (not YAML)
+- CloudFormation JSON format, not YAML
 - DynamoDB for transaction storage
-- Lambda for payment processing
-- IAM for access control
+- Lambda function calls DynamoDB API for reads/writes during transaction processing
+- IAM for access control between Lambda and DynamoDB
 - Resources must include environment suffix for uniqueness  
 - Deploy to us-east-1
-- Everything must be destroyable (no Retain policies)
+- Everything must be destroyable, no Retain policies
 
 ### Requirements
 
 - No hardcoded ARNs
-- Use !Ref and !GetAtt for all resource references
+- Use Ref and GetAtt for all resource references
 - Least-privilege IAM policies
 - No circular dependencies
 - All resources destroyable
 - Proper error handling
 
-### Nice to Have (if easy to add)
+### Nice to Have
 
-- API Gateway REST endpoint for webhooks
+- API Gateway REST endpoint for webhooks that triggers the Lambda function
 - CloudWatch alarm for DynamoDB throttling
 - Lambda reserved concurrency
 
@@ -65,6 +66,7 @@ Transaction processing infrastructure using CloudFormation JSON that actually de
 
 - Template deploys without circular dependency errors
 - All resources created with proper parameters
+- Lambda can successfully connect to and query DynamoDB table
 - IAM policies consolidated with minimal permissions
 - Resources named with environment suffix
 - Valid CloudFormation JSON
@@ -73,8 +75,8 @@ Transaction processing infrastructure using CloudFormation JSON that actually de
 
 - CloudFormation JSON template
 - DynamoDB table with PAY_PER_REQUEST billing
-- Lambda function with execution role
-- IAM managed policy with required permissions
+- Lambda function with execution role that grants access to DynamoDB
+- IAM managed policy with required permissions for Lambda to DynamoDB connectivity
 - Parameters section for configuration
 - Outputs section with exported values
 - Brief explanation of dependency resolution approach
