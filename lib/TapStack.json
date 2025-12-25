@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Serverless backend for mobile app user profile management",
+    "Description": "Serverless backend for mobile app user profile management - LocalStack Compatible",
     "Parameters": {
         "EnvironmentSuffix": {
             "Type": "String",
@@ -9,14 +9,14 @@
         },
         "DynamoDBReadCapacity": {
             "Type": "Number",
-            "Default": 1,
+            "Default": 5,
             "MinValue": 1,
             "MaxValue": 10,
             "Description": "Initial read capacity for DynamoDB table"
         },
         "DynamoDBWriteCapacity": {
             "Type": "Number",
-            "Default": 1,
+            "Default": 5,
             "MinValue": 1,
             "MaxValue": 10,
             "Description": "Initial write capacity for DynamoDB table"
@@ -47,37 +47,6 @@
         }
     },
     "Resources": {
-        "ApiGatewayCloudWatchLogsRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "apigateway.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
-                ]
-            }
-        },
-        "ApiGatewayAccount": {
-            "Type": "AWS::ApiGateway::Account",
-            "Properties": {
-                "CloudWatchRoleArn": {
-                    "Fn::GetAtt": [
-                        "ApiGatewayCloudWatchLogsRole",
-                        "Arn"
-                    ]
-                }
-            }
-        },
         "UserProfilesTable": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
@@ -192,9 +161,6 @@
                         "Ref": "DynamoDBWriteCapacity"
                     }
                 },
-                "PointInTimeRecoverySpecification": {
-                    "PointInTimeRecoveryEnabled": true
-                },
                 "SSESpecification": {
                     "SSEEnabled": true
                 },
@@ -210,122 +176,6 @@
                         "Value": "UserProfile"
                     }
                 ]
-            }
-        },
-        "DynamoDBAutoScalingRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": [
-                                    "application-autoscaling.amazonaws.com"
-                                ]
-                            },
-                            "Action": [
-                                "sts:AssumeRole"
-                            ]
-                        }
-                    ]
-                },
-                "Policies": [
-                    {
-                        "PolicyName": "DynamoDBAutoscalePolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "dynamodb:DescribeTable",
-                                        "dynamodb:UpdateTable",
-                                        "cloudwatch:PutMetricAlarm",
-                                        "cloudwatch:DescribeAlarms",
-                                        "cloudwatch:GetMetricStatistics",
-                                        "cloudwatch:SetAlarmState",
-                                        "cloudwatch:DeleteAlarms"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "TableReadCapacityScalableTarget": {
-            "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
-            "Properties": {
-                "ServiceNamespace": "dynamodb",
-                "ResourceId": {
-                    "Fn::Sub": "table/${UserProfilesTable}"
-                },
-                "ScalableDimension": "dynamodb:table:ReadCapacityUnits",
-                "MinCapacity": 2,
-                "MaxCapacity": 20,
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "DynamoDBAutoScalingRole",
-                        "Arn"
-                    ]
-                }
-            }
-        },
-        "TableWriteCapacityScalableTarget": {
-            "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
-            "Properties": {
-                "ServiceNamespace": "dynamodb",
-                "ResourceId": {
-                    "Fn::Sub": "table/${UserProfilesTable}"
-                },
-                "ScalableDimension": "dynamodb:table:WriteCapacityUnits",
-                "MinCapacity": 2,
-                "MaxCapacity": 20,
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "DynamoDBAutoScalingRole",
-                        "Arn"
-                    ]
-                }
-            }
-        },
-        "TableReadScalingPolicy": {
-            "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
-            "Properties": {
-                "PolicyName": {
-                    "Fn::Sub": "${UserProfilesTable}-read-scaling"
-                },
-                "PolicyType": "TargetTrackingScaling",
-                "ScalingTargetId": {
-                    "Ref": "TableReadCapacityScalableTarget"
-                },
-                "TargetTrackingScalingPolicyConfiguration": {
-                    "TargetValue": 70,
-                    "PredefinedMetricSpecification": {
-                        "PredefinedMetricType": "DynamoDBReadCapacityUtilization"
-                    }
-                }
-            }
-        },
-        "TableWriteScalingPolicy": {
-            "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
-            "Properties": {
-                "PolicyName": {
-                    "Fn::Sub": "${UserProfilesTable}-write-scaling"
-                },
-                "PolicyType": "TargetTrackingScaling",
-                "ScalingTargetId": {
-                    "Ref": "TableWriteCapacityScalableTarget"
-                },
-                "TargetTrackingScalingPolicyConfiguration": {
-                    "TargetValue": 70,
-                    "PredefinedMetricSpecification": {
-                        "PredefinedMetricType": "DynamoDBWriteCapacityUtilization"
-                    }
-                }
             }
         },
         "LambdaExecutionRole": {
@@ -344,8 +194,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
                 ],
                 "Policies": [
                     {
@@ -482,9 +331,6 @@
                         }
                     }
                 },
-                "TracingConfig": {
-                    "Mode": "Active"
-                },
                 "Code": {
                     "ZipFile": "import json\nimport boto3\nimport os\nimport uuid\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef lambda_handler(event, context):\n    try:\n        body = json.loads(event.get('body', '{}'))\n        \n        # Validate required fields\n        required_fields = ['email', 'firstName', 'lastName']\n        for field in required_fields:\n            if field not in body:\n                return {\n                    'statusCode': 400,\n                    'headers': {\n                        'Content-Type': 'application/json',\n                        'Access-Control-Allow-Origin': '*'\n                    },\n                    'body': json.dumps({'error': f'Missing required field: {field}'})\n                }\n        \n        # Generate user ID and timestamp\n        user_id = str(uuid.uuid4())\n        timestamp = datetime.utcnow().isoformat()\n        \n        # Create user item\n        user_item = {\n            'userId': user_id,\n            'email': body['email'],\n            'firstName': body['firstName'],\n            'lastName': body['lastName'],\n            'createdAt': timestamp,\n            'updatedAt': timestamp,\n            'active': True\n        }\n        \n        # Add optional fields\n        if 'phoneNumber' in body:\n            user_item['phoneNumber'] = body['phoneNumber']\n        if 'metadata' in body:\n            user_item['metadata'] = body['metadata']\n        \n        # Store in DynamoDB\n        table.put_item(Item=user_item)\n        \n        return {\n            'statusCode': 201,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(user_item, default=str)\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
                 }
@@ -552,9 +398,6 @@
                             "Ref": "EnvironmentSuffix"
                         }
                     }
-                },
-                "TracingConfig": {
-                    "Mode": "Active"
                 },
                 "Code": {
                     "ZipFile": "import json\nimport boto3\nimport os\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\nclass DecimalEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, Decimal):\n            return float(obj)\n        return super(DecimalEncoder, self).default(obj)\n\ndef lambda_handler(event, context):\n    try:\n        # Get user ID from path parameters\n        user_id = event.get('pathParameters', {}).get('userId')\n        \n        if not user_id:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User ID is required'})\n            }\n        \n        # Get user from DynamoDB\n        response = table.get_item(Key={'userId': user_id})\n        \n        if 'Item' not in response:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User not found'})\n            }\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(response['Item'], cls=DecimalEncoder)\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
@@ -624,9 +467,6 @@
                         }
                     }
                 },
-                "TracingConfig": {
-                    "Mode": "Active"
-                },
                 "Code": {
                     "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\nclass DecimalEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, Decimal):\n            return float(obj)\n        return super(DecimalEncoder, self).default(obj)\n\ndef lambda_handler(event, context):\n    try:\n        # Get user ID from path parameters\n        user_id = event.get('pathParameters', {}).get('userId')\n        \n        if not user_id:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User ID is required'})\n            }\n        \n        body = json.loads(event.get('body', '{}'))\n        \n        # Build update expression\n        update_expression = \"SET updatedAt = :updatedAt\"\n        expression_values = {':updatedAt': datetime.utcnow().isoformat()}\n        \n        # Add fields to update\n        updateable_fields = ['firstName', 'lastName', 'email', 'phoneNumber', 'metadata', 'active']\n        for field in updateable_fields:\n            if field in body:\n                update_expression += f\", {field} = :{field}\"\n                expression_values[f\":{field}\"] = body[field]\n        \n        # Update user in DynamoDB\n        response = table.update_item(\n            Key={'userId': user_id},\n            UpdateExpression=update_expression,\n            ExpressionAttributeValues=expression_values,\n            ReturnValues=\"ALL_NEW\"\n        )\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(response['Attributes'], cls=DecimalEncoder)\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
                 }
@@ -695,9 +535,6 @@
                         }
                     }
                 },
-                "TracingConfig": {
-                    "Mode": "Active"
-                },
                 "Code": {
                     "ZipFile": "import json\nimport boto3\nimport os\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef lambda_handler(event, context):\n    try:\n        # Get user ID from path parameters\n        user_id = event.get('pathParameters', {}).get('userId')\n        \n        if not user_id:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User ID is required'})\n            }\n        \n        # Delete user from DynamoDB\n        table.delete_item(Key={'userId': user_id})\n        \n        return {\n            'statusCode': 204,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': ''\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
                 }
@@ -765,9 +602,6 @@
                             "Ref": "EnvironmentSuffix"
                         }
                     }
-                },
-                "TracingConfig": {
-                    "Mode": "Active"
                 },
                 "Code": {
                     "ZipFile": "import json\nimport boto3\nimport os\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\nclass DecimalEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, Decimal):\n            return float(obj)\n        return super(DecimalEncoder, self).default(obj)\n\ndef lambda_handler(event, context):\n    try:\n        # Get query parameters\n        query_params = event.get('queryStringParameters') or {}\n        limit = int(query_params.get('limit', 20))\n        last_evaluated_key = query_params.get('lastKey')\n        \n        # Build scan parameters\n        scan_params = {'Limit': limit}\n        if last_evaluated_key:\n            scan_params['ExclusiveStartKey'] = {'userId': last_evaluated_key}\n        \n        # Scan table\n        response = table.scan(**scan_params)\n        \n        result = {\n            'users': response.get('Items', []),\n            'count': response.get('Count', 0)\n        }\n        \n        if 'LastEvaluatedKey' in response:\n            result['lastKey'] = response['LastEvaluatedKey']['userId']\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(result, cls=DecimalEncoder)\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
@@ -1111,8 +945,7 @@
                 "DeleteUserMethod",
                 "ListUsersMethod",
                 "UsersOptionsMethod",
-                "UserIdOptionsMethod",
-                "ApiGatewayAccount"
+                "UserIdOptionsMethod"
             ],
             "Properties": {
                 "RestApiId": {
@@ -1135,7 +968,6 @@
                 "DeploymentId": {
                     "Ref": "ApiDeployment"
                 },
-                "TracingEnabled": true,
                 "MethodSettings": [
                     {
                         "ResourcePath": "/*",
@@ -1269,303 +1101,6 @@
                 },
                 "Description": "Current environment",
                 "Tier": "Standard"
-            }
-        },
-        "DynamoDBThrottleAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmName": {
-                    "Fn::Sub": [
-                        "dynamodb-throttle-${LowerStackName}-${EnvironmentSuffix}",
-                        {
-                            "LowerStackName": {
-                                "Fn::Join": [
-                                    "",
-                                    {
-                                        "Fn::Split": [
-                                            "-",
-                                            {
-                                                "Fn::Join": [
-                                                    "-",
-                                                    {
-                                                        "Fn::Split": [
-                                                            "_",
-                                                            {
-                                                                "Fn::Select": [
-                                                                    0,
-                                                                    {
-                                                                        "Fn::Split": [
-                                                                            "/",
-                                                                            {
-                                                                                "Ref": "AWS::StackName"
-                                                                            }
-                                                                        ]
-                                                                    }
-                                                                ]
-                                                            }
-                                                        ]
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "AlarmDescription": "Alarm when DynamoDB table experiences throttling",
-                "MetricName": "ConsumedReadCapacityUnits",
-                "Namespace": "AWS/DynamoDB",
-                "Statistic": "Sum",
-                "Period": 300,
-                "EvaluationPeriods": 1,
-                "Threshold": 80,
-                "ComparisonOperator": "GreaterThanThreshold",
-                "Dimensions": [
-                    {
-                        "Name": "TableName",
-                        "Value": {
-                            "Ref": "UserProfilesTable"
-                        }
-                    }
-                ]
-            }
-        },
-        "LambdaErrorAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmName": {
-                    "Fn::Sub": [
-                        "lambda-errors-${LowerStackName}-${EnvironmentSuffix}",
-                        {
-                            "LowerStackName": {
-                                "Fn::Join": [
-                                    "",
-                                    {
-                                        "Fn::Split": [
-                                            "-",
-                                            {
-                                                "Fn::Join": [
-                                                    "-",
-                                                    {
-                                                        "Fn::Split": [
-                                                            "_",
-                                                            {
-                                                                "Fn::Select": [
-                                                                    0,
-                                                                    {
-                                                                        "Fn::Split": [
-                                                                            "/",
-                                                                            {
-                                                                                "Ref": "AWS::StackName"
-                                                                            }
-                                                                        ]
-                                                                    }
-                                                                ]
-                                                            }
-                                                        ]
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "AlarmDescription": "Alarm when Lambda functions have errors",
-                "MetricName": "Errors",
-                "Namespace": "AWS/Lambda",
-                "Statistic": "Sum",
-                "Period": 300,
-                "EvaluationPeriods": 1,
-                "Threshold": 5,
-                "ComparisonOperator": "GreaterThanThreshold",
-                "TreatMissingData": "notBreaching"
-            }
-        },
-        "ApiGateway4XXAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmName": {
-                    "Fn::Sub": [
-                        "api-4xx-errors-${LowerStackName}-${EnvironmentSuffix}",
-                        {
-                            "LowerStackName": {
-                                "Fn::Join": [
-                                    "",
-                                    {
-                                        "Fn::Split": [
-                                            "-",
-                                            {
-                                                "Fn::Join": [
-                                                    "-",
-                                                    {
-                                                        "Fn::Split": [
-                                                            "_",
-                                                            {
-                                                                "Fn::Select": [
-                                                                    0,
-                                                                    {
-                                                                        "Fn::Split": [
-                                                                            "/",
-                                                                            {
-                                                                                "Ref": "AWS::StackName"
-                                                                            }
-                                                                        ]
-                                                                    }
-                                                                ]
-                                                            }
-                                                        ]
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "AlarmDescription": "Alarm when API Gateway has high 4XX error rate",
-                "MetricName": "4XXError",
-                "Namespace": "AWS/ApiGateway",
-                "Statistic": "Sum",
-                "Period": 300,
-                "EvaluationPeriods": 2,
-                "Threshold": 10,
-                "ComparisonOperator": "GreaterThanThreshold",
-                "Dimensions": [
-                    {
-                        "Name": "ApiName",
-                        "Value": {
-                            "Ref": "RestApi"
-                        }
-                    },
-                    {
-                        "Name": "Stage",
-                        "Value": {
-                            "Ref": "ApiStage"
-                        }
-                    }
-                ]
-            }
-        },
-        "ApiGateway5XXAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmName": {
-                    "Fn::Sub": [
-                        "api-5xx-errors-${LowerStackName}-${EnvironmentSuffix}",
-                        {
-                            "LowerStackName": {
-                                "Fn::Join": [
-                                    "",
-                                    {
-                                        "Fn::Split": [
-                                            "-",
-                                            {
-                                                "Fn::Join": [
-                                                    "-",
-                                                    {
-                                                        "Fn::Split": [
-                                                            "_",
-                                                            {
-                                                                "Fn::Select": [
-                                                                    0,
-                                                                    {
-                                                                        "Fn::Split": [
-                                                                            "/",
-                                                                            {
-                                                                                "Ref": "AWS::StackName"
-                                                                            }
-                                                                        ]
-                                                                    }
-                                                                ]
-                                                            }
-                                                        ]
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "AlarmDescription": "Alarm when API Gateway has 5XX errors",
-                "MetricName": "5XXError",
-                "Namespace": "AWS/ApiGateway",
-                "Statistic": "Sum",
-                "Period": 60,
-                "EvaluationPeriods": 1,
-                "Threshold": 1,
-                "ComparisonOperator": "GreaterThanThreshold",
-                "Dimensions": [
-                    {
-                        "Name": "ApiName",
-                        "Value": {
-                            "Ref": "RestApi"
-                        }
-                    },
-                    {
-                        "Name": "Stage",
-                        "Value": {
-                            "Ref": "ApiStage"
-                        }
-                    }
-                ]
-            }
-        },
-        "MonitoringDashboard": {
-            "Type": "AWS::CloudWatch::Dashboard",
-            "Properties": {
-                "DashboardName": {
-                    "Fn::Sub": [
-                        "user-profile-${LowerStackName}-${EnvironmentSuffix}",
-                        {
-                            "LowerStackName": {
-                                "Fn::Join": [
-                                    "",
-                                    {
-                                        "Fn::Split": [
-                                            "-",
-                                            {
-                                                "Fn::Join": [
-                                                    "-",
-                                                    {
-                                                        "Fn::Split": [
-                                                            "_",
-                                                            {
-                                                                "Fn::Select": [
-                                                                    0,
-                                                                    {
-                                                                        "Fn::Split": [
-                                                                            "/",
-                                                                            {
-                                                                                "Ref": "AWS::StackName"
-                                                                            }
-                                                                        ]
-                                                                    }
-                                                                ]
-                                                            }
-                                                        ]
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "DashboardBody": {
-                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ApiGateway\", \"Count\", {\"stat\": \"Sum\", \"label\": \"Total Requests\"}],\n          [\".\", \"4XXError\", {\"stat\": \"Sum\", \"label\": \"4XX Errors\"}],\n          [\".\", \"5XXError\", {\"stat\": \"Sum\", \"label\": \"5XX Errors\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"API Gateway Metrics\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"ApiName\": \"${RestApi}\",\n          \"Stage\": \"${ApiStage}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\"}],\n          [\".\", \"Duration\", {\"stat\": \"Average\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Function Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\"}],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Capacity\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${UserProfilesTable}\"\n        }\n      }\n    }\n  ]\n}\n"
-                }
             }
         }
     },

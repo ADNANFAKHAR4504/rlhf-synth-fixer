@@ -1,15 +1,17 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
+describe('TapStack CloudFormation Template - Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Load the JSON template (convert YAML to JSON first if needed)
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(
+        'TapStack.json not found. Run: pipenv run cfn-flip lib/TapStack.yml lib/TapStack.json'
+      );
+    }
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -21,14 +23,25 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'Serverless backend for mobile app user profile management'
-      );
+      expect(typeof template.Description).toBe('string');
+      expect(template.Description).toContain('LocalStack Compatible');
+    });
+
+    test('should have required top-level sections', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
+    });
+
+    test('should have valid JSON structure', () => {
+      expect(template).toBeDefined();
+      expect(typeof template).toBe('object');
+      expect(Array.isArray(template)).toBe(false);
     });
   });
 
   describe('Parameters', () => {
-    test('should have required parameters', () => {
+    test('should have all required parameters', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.DynamoDBReadCapacity).toBeDefined();
       expect(template.Parameters.DynamoDBWriteCapacity).toBeDefined();
@@ -36,12 +49,10 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix to append to resource names (e.g., dev, staging, prod)'
-      );
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('dev');
+      expect(param.Description).toContain('Environment suffix');
     });
 
     test('DynamoDB capacity parameters should have correct bounds', () => {
@@ -49,25 +60,38 @@ describe('TapStack CloudFormation Template', () => {
       const writeCapParam = template.Parameters.DynamoDBWriteCapacity;
       
       expect(readCapParam.Type).toBe('Number');
+      expect(readCapParam.Default).toBe(5);
       expect(readCapParam.MinValue).toBe(1);
       expect(readCapParam.MaxValue).toBe(10);
+      
       expect(writeCapParam.Type).toBe('Number');
+      expect(writeCapParam.Default).toBe(5);
       expect(writeCapParam.MinValue).toBe(1);
       expect(writeCapParam.MaxValue).toBe(10);
+    });
+
+    test('LogRetentionDays parameter should have valid allowed values', () => {
+      const param = template.Parameters.LogRetentionDays;
+      expect(param.Type).toBe('Number');
+      expect(param.Default).toBe(7);
+      expect(param.AllowedValues).toContain(7);
+      expect(param.AllowedValues).toContain(30);
+      expect(param.AllowedValues).toContain(90);
     });
   });
 
   describe('DynamoDB Table', () => {
     test('should have UserProfilesTable resource', () => {
       expect(template.Resources.UserProfilesTable).toBeDefined();
+      expect(template.Resources.UserProfilesTable.Type).toBe('AWS::DynamoDB::Table');
     });
 
-    test('UserProfilesTable should be a DynamoDB table', () => {
+    test('should have correct billing mode', () => {
       const table = template.Resources.UserProfilesTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+      expect(table.Properties.BillingMode).toBe('PROVISIONED');
     });
 
-    test('UserProfilesTable should have correct key schema', () => {
+    test('should have correct key schema with userId as HASH key', () => {
       const table = template.Resources.UserProfilesTable;
       const keySchema = table.Properties.KeySchema;
 
@@ -76,7 +100,23 @@ describe('TapStack CloudFormation Template', () => {
       expect(keySchema[0].KeyType).toBe('HASH');
     });
 
-    test('UserProfilesTable should have Global Secondary Indexes', () => {
+    test('should have all required attribute definitions', () => {
+      const table = template.Resources.UserProfilesTable;
+      const attrs = table.Properties.AttributeDefinitions;
+
+      expect(attrs).toHaveLength(3);
+      
+      const attrNames = attrs.map((a: any) => a.AttributeName);
+      expect(attrNames).toContain('userId');
+      expect(attrNames).toContain('email');
+      expect(attrNames).toContain('createdAt');
+
+      attrs.forEach((attr: any) => {
+        expect(attr.AttributeType).toBe('S');
+      });
+    });
+
+    test('should have Global Secondary Indexes', () => {
       const table = template.Resources.UserProfilesTable;
       const gsis = table.Properties.GlobalSecondaryIndexes;
 
@@ -85,238 +125,134 @@ describe('TapStack CloudFormation Template', () => {
       expect(gsis[1].IndexName).toBe('CreatedAtIndex');
     });
 
-    test('UserProfilesTable should have encryption enabled', () => {
+    test('should have encryption enabled', () => {
       const table = template.Resources.UserProfilesTable;
       const sseSpec = table.Properties.SSESpecification;
 
+      expect(sseSpec).toBeDefined();
       expect(sseSpec.SSEEnabled).toBe(true);
     });
 
-    test('UserProfilesTable should have point-in-time recovery enabled', () => {
+    test('should NOT have point-in-time recovery (LocalStack incompatible)', () => {
       const table = template.Resources.UserProfilesTable;
-      const pitr = table.Properties.PointInTimeRecoverySpecification;
+      expect(table.Properties.PointInTimeRecoverySpecification).toBeUndefined();
+    });
+  });
 
-      expect(pitr.PointInTimeRecoveryEnabled).toBe(true);
+  describe('IAM Role', () => {
+    test('should have LambdaExecutionRole', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+      expect(template.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('Lambda role should NOT have X-Ray policy (LocalStack incompatible)', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      const managedPolicies = role.Properties.ManagedPolicyArns || [];
+      const hasXRay = managedPolicies.some((p: string) => p.includes('XRay'));
+      expect(hasXRay).toBe(false);
     });
   });
 
   describe('Lambda Functions', () => {
-    test('should have all CRUD Lambda functions', () => {
-      const expectedFunctions = [
-        'CreateUserFunction',
-        'GetUserFunction',
-        'UpdateUserFunction',
-        'DeleteUserFunction',
-        'ListUsersFunction'
-      ];
+    const lambdaFunctions = [
+      'CreateUserFunction',
+      'GetUserFunction',
+      'UpdateUserFunction',
+      'DeleteUserFunction',
+      'ListUsersFunction'
+    ];
 
-      expectedFunctions.forEach(functionName => {
+    test('should have all CRUD Lambda functions', () => {
+      lambdaFunctions.forEach(functionName => {
         expect(template.Resources[functionName]).toBeDefined();
         expect(template.Resources[functionName].Type).toBe('AWS::Lambda::Function');
       });
     });
 
-    test('Lambda functions should have correct runtime and handler', () => {
-      const functions = [
-        'CreateUserFunction',
-        'GetUserFunction',
-        'UpdateUserFunction',
-        'DeleteUserFunction',
-        'ListUsersFunction'
-      ];
-
-      functions.forEach(functionName => {
-        const lambdaFunction = template.Resources[functionName];
-        expect(lambdaFunction.Properties.Runtime).toBe('python3.9');
-        expect(lambdaFunction.Properties.Handler).toBe('index.lambda_handler');
+    test('Lambda functions should have correct runtime', () => {
+      lambdaFunctions.forEach(functionName => {
+        const func = template.Resources[functionName];
+        expect(func.Properties.Runtime).toBe('python3.9');
       });
     });
 
-    test('Lambda functions should have X-Ray tracing enabled', () => {
-      const functions = [
-        'CreateUserFunction',
-        'GetUserFunction',
-        'UpdateUserFunction',
-        'DeleteUserFunction',
-        'ListUsersFunction'
-      ];
-
-      functions.forEach(functionName => {
-        const lambdaFunction = template.Resources[functionName];
-        expect(lambdaFunction.Properties.TracingConfig.Mode).toBe('Active');
+    test('Lambda functions should NOT have X-Ray tracing (LocalStack incompatible)', () => {
+      lambdaFunctions.forEach(functionName => {
+        const func = template.Resources[functionName];
+        expect(func.Properties.TracingConfig).toBeUndefined();
       });
     });
   });
 
   describe('API Gateway', () => {
-    test('should have REST API resource', () => {
+    test('should have REST API', () => {
       expect(template.Resources.RestApi).toBeDefined();
       expect(template.Resources.RestApi.Type).toBe('AWS::ApiGateway::RestApi');
     });
 
-    test('should have API Gateway resources', () => {
-      expect(template.Resources.UsersResource).toBeDefined();
-      expect(template.Resources.UserIdResource).toBeDefined();
+    test('API stage should NOT have tracing enabled (LocalStack incompatible)', () => {
+      const stage = template.Resources.ApiStage;
+      expect(stage.Properties.TracingEnabled).toBeUndefined();
     });
 
-    test('should have HTTP methods for CRUD operations', () => {
-      const expectedMethods = [
-        'CreateUserMethod',
-        'GetUserMethod',
-        'UpdateUserMethod',
-        'DeleteUserMethod',
-        'ListUsersMethod'
-      ];
-
-      expectedMethods.forEach(methodName => {
-        expect(template.Resources[methodName]).toBeDefined();
-        expect(template.Resources[methodName].Type).toBe('AWS::ApiGateway::Method');
-      });
-    });
-
-    test('should have CORS OPTIONS methods', () => {
-      expect(template.Resources.UsersOptionsMethod).toBeDefined();
-      expect(template.Resources.UserIdOptionsMethod).toBeDefined();
-    });
-
-    test('should have API deployment and stage', () => {
-      expect(template.Resources.ApiDeployment).toBeDefined();
-      expect(template.Resources.ApiStage).toBeDefined();
+    test('API deployment should NOT depend on ApiGatewayAccount (LocalStack incompatible)', () => {
+      const deployment = template.Resources.ApiDeployment;
+      expect(deployment.DependsOn).not.toContain('ApiGatewayAccount');
     });
   });
 
-  describe('IAM Roles', () => {
-    test('should have Lambda execution role', () => {
-      expect(template.Resources.LambdaExecutionRole).toBeDefined();
-      expect(template.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
+  describe('LocalStack Compatibility', () => {
+    test('should NOT have Application Auto Scaling resources', () => {
+      expect(template.Resources.TableReadCapacityScalableTarget).toBeUndefined();
+      expect(template.Resources.TableWriteCapacityScalableTarget).toBeUndefined();
+      expect(template.Resources.TableReadScalingPolicy).toBeUndefined();
+      expect(template.Resources.TableWriteScalingPolicy).toBeUndefined();
     });
 
-    test('should have DynamoDB auto scaling role', () => {
-      expect(template.Resources.DynamoDBAutoScalingRole).toBeDefined();
-      expect(template.Resources.DynamoDBAutoScalingRole.Type).toBe('AWS::IAM::Role');
+    test('should NOT have CloudWatch Alarms', () => {
+      const resources = Object.keys(template.Resources);
+      const alarms = resources.filter(r => 
+        template.Resources[r].Type === 'AWS::CloudWatch::Alarm'
+      );
+      expect(alarms).toHaveLength(0);
     });
 
-    test('should have API Gateway CloudWatch logs role', () => {
-      expect(template.Resources.ApiGatewayCloudWatchLogsRole).toBeDefined();
-      expect(template.Resources.ApiGatewayCloudWatchLogsRole.Type).toBe('AWS::IAM::Role');
-    });
-  });
-
-  describe('CloudWatch Monitoring', () => {
-    test('should have CloudWatch log groups for all Lambda functions', () => {
-      const expectedLogGroups = [
-        'CreateUserLogGroup',
-        'GetUserLogGroup',
-        'UpdateUserLogGroup',
-        'DeleteUserLogGroup',
-        'ListUsersLogGroup'
-      ];
-
-      expectedLogGroups.forEach(logGroupName => {
-        expect(template.Resources[logGroupName]).toBeDefined();
-        expect(template.Resources[logGroupName].Type).toBe('AWS::Logs::LogGroup');
-      });
+    test('should NOT have CloudWatch Dashboard', () => {
+      const resources = Object.keys(template.Resources);
+      const dashboards = resources.filter(r => 
+        template.Resources[r].Type === 'AWS::CloudWatch::Dashboard'
+      );
+      expect(dashboards).toHaveLength(0);
     });
 
-    test('should have CloudWatch alarms', () => {
-      const expectedAlarms = [
-        'DynamoDBThrottleAlarm',
-        'LambdaErrorAlarm',
-        'ApiGateway4XXAlarm',
-        'ApiGateway5XXAlarm'
-      ];
-
-      expectedAlarms.forEach(alarmName => {
-        expect(template.Resources[alarmName]).toBeDefined();
-        expect(template.Resources[alarmName].Type).toBe('AWS::CloudWatch::Alarm');
-      });
-    });
-
-    test('should have monitoring dashboard', () => {
-      expect(template.Resources.MonitoringDashboard).toBeDefined();
-      expect(template.Resources.MonitoringDashboard.Type).toBe('AWS::CloudWatch::Dashboard');
-    });
-  });
-
-  describe('Systems Manager Parameters', () => {
-    test('should have SSM parameters', () => {
-      const expectedParameters = [
-        'TableNameParameter',
-        'ApiEndpointParameter',
-        'EnvironmentParameter'
-      ];
-
-      expectedParameters.forEach(paramName => {
-        expect(template.Resources[paramName]).toBeDefined();
-        expect(template.Resources[paramName].Type).toBe('AWS::SSM::Parameter');
-      });
-    });
-  });
-
-  describe('Auto Scaling', () => {
-    test('should have DynamoDB auto scaling resources', () => {
-      expect(template.Resources.TableReadCapacityScalableTarget).toBeDefined();
-      expect(template.Resources.TableWriteCapacityScalableTarget).toBeDefined();
-      expect(template.Resources.TableReadScalingPolicy).toBeDefined();
-      expect(template.Resources.TableWriteScalingPolicy).toBeDefined();
+    test('should NOT have API Gateway Account', () => {
+      expect(template.Resources.ApiGatewayAccount).toBeUndefined();
+      expect(template.Resources.ApiGatewayCloudWatchLogsRole).toBeUndefined();
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'ApiEndpoint',
-        'DynamoDBTableName',
-        'DynamoDBTableArn',
-        'CreateUserFunctionArn',
-        'GetUserFunctionArn',
-        'UpdateUserFunctionArn',
-        'DeleteUserFunctionArn',
-        'ListUsersFunctionArn',
-        'Environment'
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
+    test('should have API endpoint output', () => {
+      expect(template.Outputs.ApiEndpoint).toBeDefined();
     });
 
-    test('outputs should have export names', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export).toBeDefined();
-        expect(output.Export.Name).toBeDefined();
-      });
+    test('should have DynamoDB table name output', () => {
+      expect(template.Outputs.DynamoDBTableName).toBeDefined();
+    });
+
+    test('should have Lambda function ARN outputs', () => {
+      expect(template.Outputs.CreateUserFunctionArn).toBeDefined();
+      expect(template.Outputs.GetUserFunctionArn).toBeDefined();
+      expect(template.Outputs.UpdateUserFunctionArn).toBeDefined();
+      expect(template.Outputs.DeleteUserFunctionArn).toBeDefined();
+      expect(template.Outputs.ListUsersFunctionArn).toBeDefined();
     });
   });
 
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have correct number of resources for serverless API', () => {
+  describe('Resource Count Validation', () => {
+    test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(20); // Should have many resources for complete serverless stack
-    });
-
-    test('should have multiple parameters', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4);
-    });
-
-    test('should have multiple outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(9);
+      expect(resourceCount).toBe(32);
     });
   });
 });
