@@ -31,6 +31,7 @@
           "Parameters": [
             "KeyName",
             "InstanceType",
+            "AmiId",
             "SSHLocation"
           ]
         },
@@ -132,6 +133,11 @@
       "MinLength": "1",
       "MaxLength": "16",
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+    },
+    "AmiId": {
+      "Type": "String",
+      "Default": "ami-04681a1dbd79675a5",
+      "Description": "AMI ID for EC2 instances (use a valid AMI for LocalStack)"
     }
   },
   "Conditions": {
@@ -646,7 +652,9 @@
     "WebServerInstance": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "ImageId": "ami-0156001f0548e90b1",
+        "ImageId": {
+          "Ref": "AmiId"
+        },
         "InstanceType": {
           "Ref": "InstanceType"
         },
@@ -776,6 +784,7 @@
         "DBSubnetGroupName": {
           "Ref": "DatabaseSubnetGroup"
         },
+        "PubliclyAccessible": false,
         "MultiAZ": false,
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",

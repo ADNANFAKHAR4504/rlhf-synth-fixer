@@ -165,16 +165,16 @@ describe('TapStack CloudFormation Template', () => {
       // NAT Gateway and EIP are optional resources - skip if not present
       const natGateway = template.Resources.NatGateway1;
       const natEIP = template.Resources.NatGateway1EIP;
-      
+
       if (natGateway) {
         expect(natGateway.Type).toBe('AWS::EC2::NatGateway');
       }
-      
+
       if (natEIP) {
         expect(natEIP.Type).toBe('AWS::EC2::EIP');
         expect(natEIP.Properties.Domain).toBe('vpc');
       }
-      
+
       // Test passes if resources don't exist (they're optional)
       expect(true).toBe(true);
     });
@@ -182,10 +182,10 @@ describe('TapStack CloudFormation Template', () => {
     test('should have route tables and associations', () => {
       const publicRouteTable = template.Resources.PublicRouteTable;
       const privateRouteTable = template.Resources.PrivateRouteTable1;
-      
+
       expect(publicRouteTable).toBeDefined();
       expect(publicRouteTable.Type).toBe('AWS::EC2::RouteTable');
-      
+
       expect(privateRouteTable).toBeDefined();
       expect(privateRouteTable.Type).toBe('AWS::EC2::RouteTable');
 
@@ -202,16 +202,16 @@ describe('TapStack CloudFormation Template', () => {
       const webServerSG = template.Resources.WebServerSecurityGroup;
       expect(webServerSG).toBeDefined();
       expect(webServerSG.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingress = webServerSG.Properties.SecurityGroupIngress;
       expect(ingress).toHaveLength(2);
-      
+
       // Check HTTP rule
       const httpRule = ingress.find((rule: { FromPort: number; }) => rule.FromPort === 80);
       expect(httpRule).toBeDefined();
       expect(httpRule.ToPort).toBe(80);
       expect(httpRule.IpProtocol).toBe('tcp');
-      
+
       // Check HTTPS rule
       const httpsRule = ingress.find((rule: { FromPort: number; }) => rule.FromPort === 443);
       expect(httpsRule).toBeDefined();
@@ -223,7 +223,7 @@ describe('TapStack CloudFormation Template', () => {
       const dbSG = template.Resources.DatabaseSecurityGroup;
       expect(dbSG).toBeDefined();
       expect(dbSG.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingress = dbSG.Properties.SecurityGroupIngress;
       expect(ingress).toHaveLength(1);
       expect(ingress[0].FromPort).toBe(3306);
@@ -246,7 +246,7 @@ describe('TapStack CloudFormation Template', () => {
       const ec2Role = template.Resources.EC2Role;
       expect(ec2Role).toBeDefined();
       expect(ec2Role.Type).toBe('AWS::IAM::Role');
-      
+
       const managedPolicies = ec2Role.Properties.ManagedPolicyArns;
       expect(managedPolicies).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
       expect(managedPolicies).toContain('arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore');
@@ -263,7 +263,7 @@ describe('TapStack CloudFormation Template', () => {
       const policies = ec2Role.Properties.Policies;
       expect(policies).toHaveLength(1);
       expect(policies[0].PolicyName).toBe('SecretsManagerAccess');
-      
+
       const statements = policies[0].PolicyDocument.Statement;
       expect(statements[0].Action).toContain('secretsmanager:GetSecretValue');
     });
@@ -359,7 +359,7 @@ describe('TapStack CloudFormation Template', () => {
       const dbSecret = template.Resources.DatabaseSecret;
       expect(dbSecret).toBeDefined();
       expect(dbSecret.Type).toBe('AWS::SecretsManager::Secret');
-      
+
       const generateConfig = dbSecret.Properties.GenerateSecretString;
       expect(generateConfig.GenerateStringKey).toBe('password');
       expect(generateConfig.PasswordLength).toBe(32);
@@ -430,7 +430,7 @@ describe('TapStack CloudFormation Template', () => {
       coreOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
-      
+
       // Other outputs are optional
       expect(Object.keys(template.Outputs).length).toBeGreaterThan(0);
     });
@@ -438,14 +438,14 @@ describe('TapStack CloudFormation Template', () => {
     test('outputs should have correct export names', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        
+
         // Check that export exists
         expect(output.Export).toBeDefined();
         expect(output.Export.Name).toBeDefined();
-        
+
         // Check that export name follows the pattern ${AWS::StackName}-*
         expect(output.Export.Name['Fn::Sub']).toMatch(/^\${AWS::StackName}-.+/);
-        
+
         // Check that export name contains stack name reference
         expect(output.Export.Name['Fn::Sub']).toContain('${AWS::StackName}');
       });
@@ -525,7 +525,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(12); // Based on actual template
+      expect(parameterCount).toBe(13); // Based on actual template
     });
 
     test('should have correct output count', () => {
@@ -538,7 +538,7 @@ describe('TapStack CloudFormation Template', () => {
     test('RDS should be in private subnets', () => {
       const dbSubnetGroup = template.Resources.DatabaseSubnetGroup;
       const subnetIds = dbSubnetGroup.Properties.SubnetIds;
-      
+
       subnetIds.forEach((subnetRef: { Ref: any; }) => {
         expect(subnetRef.Ref).toMatch(/PrivateSubnet/);
       });
@@ -587,7 +587,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have subnets in different AZs', () => {
       const publicSubnet1 = template.Resources.PublicSubnet1;
       const publicSubnet2 = template.Resources.PublicSubnet2;
-      
+
       expect(publicSubnet1.Properties.AvailabilityZone['Fn::Select'][0]).toBe(0);
       expect(publicSubnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
     });
