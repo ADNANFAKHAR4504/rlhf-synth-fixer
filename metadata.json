@@ -1,25 +1,30 @@
 {
   "platform": "cfn",
-  "language": "json",
-  "complexity": "expert",
+  "language": "yaml",
+  "complexity": "hard",
   "turn_type": "single",
-  "po_id": "101912813",
-  "team": "synth",
-  "startedAt": "2025-11-27T22:46:00-05:00",
-  "subtask": "Failure Recovery and High Availability",
+  "po_id": "291480",
+  "team": "synth-2",
+  "startedAt": "2025-08-04T13:16:52.709Z",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Failure Recovery Automation"
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
+    "API Gateway",
+    "Lambda",
     "DynamoDB",
     "S3",
-    "Lambda",
-    "KMS",
     "CloudWatch",
-    "SNS",
     "IAM"
   ],
   "provider": "localstack",
-  "wave": "P1",
-  "training_quality": 7
+  "training_quality": 8,
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291480",
+    "pr": "Pr441"
+  }
 }
