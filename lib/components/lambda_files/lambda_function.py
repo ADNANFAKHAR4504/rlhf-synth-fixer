@@ -3,6 +3,7 @@ import os
 import json
 import time
 
+
 def check_rds_reachability(host, port=5432, timeout=5):
     """
     Checks if a TCP connection can be established to the given RDS endpoint and port.
@@ -14,10 +15,11 @@ def check_rds_reachability(host, port=5432, timeout=5):
     except (socket.timeout, socket.error):
         return False
 
+
 def lambda_handler(event, context):
     # Database connection details
     database_endpoint = os.environ.get("DB_HOST")
-    
+
     # Parse host and port from DB_HOST environment variable
     if ":" in database_endpoint:
         host, port_str = database_endpoint.split(":", 1)
@@ -25,21 +27,21 @@ def lambda_handler(event, context):
     else:
         host = database_endpoint
         port = 5432  # Default PostgreSQL port
-    
+
     # Get timeout from event or use default
     timeout = event.get('timeout', 10)
-    
+
     try:
         # Record start time for response time calculation
         start_time = time.time()
-        
+
         # Test reachability using socket connection
         is_reachable = check_rds_reachability(host, port, timeout)
-        
+
         # Calculate response time
         end_time = time.time()
         response_time_ms = round((end_time - start_time) * 1000, 2)
-        
+
         if is_reachable:
             return {
                 'statusCode': 200,
@@ -63,7 +65,7 @@ def lambda_handler(event, context):
                     'message': f'Could not connect to {host}:{port}'
                 })
             }
-            
+
     except ValueError as e:
         # Error parsing port number
         return {
@@ -76,7 +78,7 @@ def lambda_handler(event, context):
                 'message': 'Could not parse database endpoint'
             })
         }
-        
+
     except Exception as e:
         # Unexpected error
         return {
@@ -94,11 +96,11 @@ def lambda_handler(event, context):
 # if __name__ == "__main__":
 #     # Set environment variable for testing
 #     os.environ["DB_HOST"] = "mydb.abcdefgh1234.us-east-1.rds.amazonaws.com:5432"
-    
+
 #     # Test event
 #     test_event = {
 #         "timeout": 5
 #     }
-    
+
 #     result = lambda_handler(test_event, None)
 #     print(json.dumps(result, indent=2))
