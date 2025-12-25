@@ -720,10 +720,15 @@ class TapStack(pulumi.ComponentResource):
         "https://", api_gateway.id, f".execute-api.{self.region}.amazonaws.com/", f"{stage_name}"
         ))
         pulumi.export("s3_processor_lambda_arn", s3_processor_lambda.arn)
+        pulumi.export("s3_processor_lambda_name", s3_processor_lambda.name)
         pulumi.export("api_handler_lambda_arn", api_handler_lambda.arn)
+        pulumi.export("api_handler_lambda_name", api_handler_lambda.name)
         pulumi.export("secrets_manager_arn", app_secret.arn)
+        pulumi.export("secrets_manager_secret_name", app_secret.name)
         pulumi.export("sns_topic_arn", alarm_topic.arn)
         pulumi.export("lambda_role_arn", lambda_role.arn)
+        pulumi.export("lambda_role_name", lambda_role.name)
+        pulumi.export("cloudwatch_log_group_name", s3_processor_log_group.name)
 
         # Export endpoint URLs for testing
         pulumi.export("health_check_url", Output.concat(

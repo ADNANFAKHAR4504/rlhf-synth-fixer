@@ -65,8 +65,8 @@ class TestTapStackLiveIntegration:
         """Test S3 bucket exists and is configured correctly."""
         if not self.credentials_available:
             pytest.skip("AWS credentials not available. Skipping live AWS resource tests.")
-        
-        bucket_name = self.outputs['S3BucketName']
+
+        bucket_name = self.outputs['s3_bucket_name']
         
         # Test bucket exists
         try:
@@ -95,10 +95,10 @@ class TestTapStackLiveIntegration:
         """Test Lambda functions exist and are properly configured."""
         if not self.credentials_available:
             pytest.skip("AWS credentials not available. Skipping live AWS resource tests.")
-            
+
         lambda_functions = [
-            self.outputs['Lambda1FunctionName'],
-            self.outputs['Lambda2FunctionName']
+            self.outputs['api_handler_lambda_name'],
+            self.outputs['s3_processor_lambda_name']
         ]
         
         for function_name in lambda_functions:
@@ -120,7 +120,7 @@ class TestTapStackLiveIntegration:
 
     def test_api_gateway_endpoints(self):
         """Test API Gateway endpoints are accessible and respond correctly."""
-        api_endpoint = self.outputs['ApiGatewayEndpoint']
+        api_endpoint = self.outputs['api_gateway_stage_url']
         
         # Test health endpoint
         health_url = f"{api_endpoint}/health"
@@ -151,8 +151,8 @@ class TestTapStackLiveIntegration:
         """Test SNS topic exists and is configured for notifications."""
         if not self.credentials_available:
             pytest.skip("AWS credentials not available. Skipping live AWS resource tests.")
-            
-        sns_topic_arn = self.outputs['SNSTopicArn']
+
+        sns_topic_arn = self.outputs['sns_topic_arn']
         
         try:
             # Test topic exists
@@ -170,8 +170,8 @@ class TestTapStackLiveIntegration:
         """Test AWS Secrets Manager secret exists and has KMS encryption."""
         if not self.credentials_available:
             pytest.skip("AWS credentials not available. Skipping live AWS resource tests.")
-            
-        secret_name = self.outputs['SecretsManagerSecretName']
+
+        secret_name = self.outputs['secrets_manager_secret_name']
         
         try:
             secret_details = self.secrets_client.describe_secret(SecretId=secret_name)
@@ -190,8 +190,8 @@ class TestTapStackLiveIntegration:
         """Test CloudWatch log groups exist for Lambda functions."""
         if not self.credentials_available:
             pytest.skip("AWS credentials not available. Skipping live AWS resource tests.")
-            
-        log_group_name = self.outputs['CloudWatchLogGroupName']
+
+        log_group_name = self.outputs['cloudwatch_log_group_name']
         
         try:
             response = self.logs_client.describe_log_groups(logGroupNamePrefix=log_group_name)
@@ -212,8 +212,8 @@ class TestTapStackLiveIntegration:
         """Test IAM role exists and has appropriate permissions."""
         if not self.credentials_available:
             pytest.skip("AWS credentials not available. Skipping live AWS resource tests.")
-            
-        role_name = self.outputs['IAMRoleName']
+
+        role_name = self.outputs['lambda_role_name']
         
         try:
             # Test role exists
@@ -235,8 +235,8 @@ class TestTapStackLiveIntegration:
         """Test end-to-end workflow by uploading a test file to S3 and validating processing."""
         if not self.credentials_available:
             pytest.skip("AWS credentials not available. Skipping live AWS resource tests.")
-            
-        bucket_name = self.outputs['S3BucketName']
+
+        bucket_name = self.outputs['s3_bucket_name']
         test_key = 'integration-test/test-file.json'
         test_content = json.dumps({"test": "integration_test_data", "timestamp": "2024-01-01T00:00:00Z"})
         
@@ -266,47 +266,47 @@ class TestTapStackLiveIntegration:
         """Test that deployment outputs have correct structure and required keys."""
         # This test can run without AWS credentials
         required_outputs = [
-            'S3BucketName',
-            'ApiGatewayEndpoint', 
-            'Lambda1FunctionName',
-            'Lambda2FunctionName',
-            'SNSTopicArn',
-            'SecretsManagerSecretName',
-            'CloudWatchLogGroupName',
-            'IAMRoleName'
+            's3_bucket_name',
+            'api_gateway_stage_url',
+            'api_handler_lambda_name',
+            's3_processor_lambda_name',
+            'sns_topic_arn',
+            'secrets_manager_secret_name',
+            'cloudwatch_log_group_name',
+            'lambda_role_name'
         ]
-        
+
         # Validate all required outputs are present
         for output_key in required_outputs:
             assert output_key in self.outputs, f"Missing required output: {output_key}"
             assert self.outputs[output_key], f"Output {output_key} is empty or None"
-        
+
         # Validate output formats
-        assert self.outputs['S3BucketName'].startswith('tap-'), "S3 bucket should follow naming convention"
-        assert self.outputs['ApiGatewayEndpoint'].startswith('https://'), "API Gateway endpoint should be HTTPS"
-        assert 'lambda' in self.outputs['Lambda1FunctionName'].lower(), "Lambda function should contain 'lambda' in name"
-        assert 'lambda' in self.outputs['Lambda2FunctionName'].lower(), "Lambda function should contain 'lambda' in name" 
-        assert self.outputs['SNSTopicArn'].startswith('arn:aws:sns:'), "SNS topic should be valid ARN"
-        assert 'secret' in self.outputs['SecretsManagerSecretName'].lower(), "Secret should contain 'secret' in name"
-        assert '/aws/lambda/' in self.outputs['CloudWatchLogGroupName'], "Log group should follow Lambda convention"
-        assert 'role' in self.outputs['IAMRoleName'].lower(), "IAM role should contain 'role' in name"
+        assert self.outputs['s3_bucket_name'].startswith('tap-'), "S3 bucket should follow naming convention"
+        assert self.outputs['api_gateway_stage_url'].startswith('https://'), "API Gateway endpoint should be HTTPS"
+        assert 'lambda' in self.outputs['api_handler_lambda_name'].lower(), "Lambda function should contain 'lambda' in name"
+        assert 'lambda' in self.outputs['s3_processor_lambda_name'].lower(), "Lambda function should contain 'lambda' in name"
+        assert self.outputs['sns_topic_arn'].startswith('arn:aws:sns:'), "SNS topic should be valid ARN"
+        assert 'secret' in self.outputs['secrets_manager_secret_name'].lower(), "Secret should contain 'secret' in name"
+        assert '/aws/lambda/' in self.outputs['cloudwatch_log_group_name'], "Log group should follow Lambda convention"
+        assert 'role' in self.outputs['lambda_role_name'].lower(), "IAM role should contain 'role' in name"
 
     def test_regional_configuration(self):
         """Test that resources are configured for the correct AWS region."""
         # This test can run without AWS credentials
         expected_region = self.region
-        
+
         # Validate region-specific configurations in outputs
-        if 'ApiGatewayEndpoint' in self.outputs:
-            endpoint = self.outputs['ApiGatewayEndpoint']
+        if 'api_gateway_stage_url' in self.outputs:
+            endpoint = self.outputs['api_gateway_stage_url']
             if expected_region in endpoint:
                 assert expected_region in endpoint, f"API Gateway endpoint should be in region {expected_region}"
-        
-        if 'SNSTopicArn' in self.outputs:
-            sns_arn = self.outputs['SNSTopicArn']
+
+        if 'sns_topic_arn' in self.outputs:
+            sns_arn = self.outputs['sns_topic_arn']
             if expected_region in sns_arn:
                 assert expected_region in sns_arn, f"SNS topic ARN should be in region {expected_region}"
-        
+
         # Test that region configuration is accessible
         assert self.region, "AWS region should be configured"
         assert len(self.region) >= 9, "AWS region should be valid format (e.g., us-east-1)"
