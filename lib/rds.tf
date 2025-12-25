@@ -1,5 +1,6 @@
-# DB Subnet Group
+# DB Subnet Group - disabled for LocalStack Community (RDS has timeout issues)
 resource "aws_db_subnet_group" "main" {
+  count      = local.is_localstack ? 0 : 1
   name       = "${var.project_name}-${var.environment_suffix}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
 
@@ -40,17 +41,18 @@ resource "aws_secretsmanager_secret_version" "db_password" {
   })
 }
 
-# RDS Instance
+# RDS Instance - disabled for LocalStack Community (timeout issues with RDS emulation)
 resource "aws_db_instance" "main" {
+  count      = local.is_localstack ? 0 : 1
   identifier = "${var.project_name}-${var.environment_suffix}-db"
 
   allocated_storage     = 20
-  max_allocated_storage = local.is_localstack ? 0 : 100
+  max_allocated_storage = 100
   storage_type          = "gp2"
-  storage_encrypted     = local.is_localstack ? false : true
+  storage_encrypted     = true
 
   engine         = "mysql"
-  engine_version = local.is_localstack ? "8.0.32" : "8.0"
+  engine_version = "8.0"
   instance_class = var.db_instance_class
 
   db_name  = var.db_name
@@ -58,18 +60,18 @@ resource "aws_db_instance" "main" {
   password = random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
+  db_subnet_group_name   = aws_db_subnet_group.main[0].name
 
-  backup_retention_period = local.is_localstack ? 0 : 7
-  backup_window           = local.is_localstack ? null : "03:00-04:00"
-  maintenance_window      = local.is_localstack ? null : "sun:04:00-sun:05:00"
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot      = true
   delete_automated_backups = true
   deletion_protection      = false
   apply_immediately        = true
 
-  # Performance Insights - disabled for t3.micro and LocalStack
+  # Performance Insights - disabled for t3.micro
   performance_insights_enabled = false
 
   tags = {

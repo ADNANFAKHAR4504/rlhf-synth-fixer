@@ -1,5 +1,7 @@
 # Elastic Beanstalk Application
+# LocalStack Community doesn't support UpdateApplicationResourceLifecycle API
 resource "aws_elastic_beanstalk_application" "main" {
+  count       = local.is_localstack ? 0 : 1
   name        = "${var.project_name}-${var.environment_suffix}-app"
   description = "High-availability web application"
 
@@ -14,8 +16,7 @@ resource "aws_elastic_beanstalk_application" "main" {
     }
   }
 
-  # Tags disabled for LocalStack - ListTagsForResource API not available in Community Edition
-  tags = local.is_localstack ? null : {
+  tags = {
     Name        = "${var.project_name}-${var.environment_suffix}-app"
     Environment = var.environment
     Project     = var.project_name
@@ -27,7 +28,7 @@ resource "aws_elastic_beanstalk_application" "main" {
 resource "aws_elastic_beanstalk_environment" "main" {
   count               = local.is_localstack ? 0 : 1
   name                = "${var.project_name}-${var.environment_suffix}-env"
-  application         = aws_elastic_beanstalk_application.main.name
+  application         = aws_elastic_beanstalk_application.main[0].name
   solution_stack_name = var.eb_solution_stack
   tier                = "WebServer"
 
@@ -163,19 +164,19 @@ resource "aws_elastic_beanstalk_environment" "main" {
   setting {
     namespace = "aws:elasticbeanstalk:application:environment"
     name      = "DB_HOST"
-    value     = aws_db_instance.main.endpoint
+    value     = aws_db_instance.main[0].endpoint
   }
 
   setting {
     namespace = "aws:elasticbeanstalk:application:environment"
     name      = "DB_NAME"
-    value     = aws_db_instance.main.db_name
+    value     = aws_db_instance.main[0].db_name
   }
 
   setting {
     namespace = "aws:elasticbeanstalk:application:environment"
     name      = "DB_USERNAME"
-    value     = aws_db_instance.main.username
+    value     = aws_db_instance.main[0].username
   }
 
   setting {
@@ -184,8 +185,7 @@ resource "aws_elastic_beanstalk_environment" "main" {
     value     = random_password.db_password.result
   }
 
-  # Tags disabled for LocalStack - ListTagsForResource API not available in Community Edition
-  tags = local.is_localstack ? null : {
+  tags = {
     Name        = "${var.project_name}-${var.environment_suffix}-env"
     Environment = var.environment
     Project     = var.project_name

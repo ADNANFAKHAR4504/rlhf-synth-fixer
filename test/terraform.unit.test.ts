@@ -177,16 +177,22 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(content).toMatch(/engine\s*=\s*"mysql"/);
     });
 
-    test("enables encryption conditionally", () => {
+    test("RDS instance is conditional for LocalStack", () => {
       const content = readTerraformFile("rds.tf");
-      // Check that encryption is configured (conditionally for LocalStack)
-      expect(content).toMatch(/storage_encrypted\s*=\s*local\.is_localstack\s*\?\s*false\s*:\s*true/);
+      // RDS is completely disabled in LocalStack Community due to timeout issues
+      expect(content).toMatch(/resource\s+"aws_db_instance"\s+"main"\s*{\s*count\s*=\s*local\.is_localstack\s*\?\s*0\s*:\s*1/);
     });
 
-    test("configures backup retention conditionally", () => {
+    test("enables encryption when deployed", () => {
       const content = readTerraformFile("rds.tf");
-      // Check that backup retention is configured (conditionally for LocalStack)
-      expect(content).toMatch(/backup_retention_period\s*=\s*local\.is_localstack\s*\?\s*0\s*:\s*7/);
+      // Encryption is always enabled when RDS is deployed (non-LocalStack)
+      expect(content).toMatch(/storage_encrypted\s*=\s*true/);
+    });
+
+    test("configures backup retention when deployed", () => {
+      const content = readTerraformFile("rds.tf");
+      // Backup retention is always configured when RDS is deployed (non-LocalStack)
+      expect(content).toMatch(/backup_retention_period\s*=\s*7/);
     });
 
     test("uses Secrets Manager for password", () => {

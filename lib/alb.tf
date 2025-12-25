@@ -1,5 +1,7 @@
 # Application Load Balancer
+# LocalStack Community has limited ELBv2 support - ModifyLoadBalancerAttributes API fails
 resource "aws_lb" "main" {
+  count              = local.is_localstack ? 0 : 1
   name               = "${var.project_name}-${var.environment_suffix}-alb"
   internal           = false
   load_balancer_type = "application"
@@ -20,7 +22,9 @@ resource "aws_lb" "main" {
 }
 
 # Target Group
+# LocalStack Community has limited ELBv2 support
 resource "aws_lb_target_group" "main" {
+  count    = local.is_localstack ? 0 : 1
   name     = "${var.project_name}-${var.environment_suffix}-tg"
   port     = 80
   protocol = "HTTP"
@@ -46,13 +50,15 @@ resource "aws_lb_target_group" "main" {
 }
 
 # ALB Listener
+# LocalStack Community has limited ELBv2 support
 resource "aws_lb_listener" "main" {
-  load_balancer_arn = aws_lb.main.arn
+  count             = local.is_localstack ? 0 : 1
+  load_balancer_arn = aws_lb.main[0].arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
+    target_group_arn = aws_lb_target_group.main[0].arn
   }
 }

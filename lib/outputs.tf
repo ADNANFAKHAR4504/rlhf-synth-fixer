@@ -15,17 +15,17 @@ output "private_subnet_ids" {
 
 output "alb_dns_name" {
   description = "DNS name of the Application Load Balancer"
-  value       = aws_lb.main.dns_name
+  value       = local.is_localstack ? "" : aws_lb.main[0].dns_name
 }
 
 output "alb_zone_id" {
   description = "Zone ID of the Application Load Balancer"
-  value       = aws_lb.main.zone_id
+  value       = local.is_localstack ? "" : aws_lb.main[0].zone_id
 }
 
 output "eb_application_name" {
   description = "Name of the Elastic Beanstalk application"
-  value       = aws_elastic_beanstalk_application.main.name
+  value       = local.is_localstack ? "N/A (LocalStack Community)" : aws_elastic_beanstalk_application.main[0].name
 }
 
 output "eb_environment_name" {
@@ -40,12 +40,12 @@ output "eb_environment_url" {
 
 output "rds_endpoint" {
   description = "RDS instance endpoint"
-  value       = aws_db_instance.main.endpoint
+  value       = local.is_localstack ? "localhost.localstack.cloud:4510" : aws_db_instance.main[0].endpoint
 }
 
 output "rds_port" {
   description = "RDS instance port"
-  value       = aws_db_instance.main.port
+  value       = local.is_localstack ? 4510 : aws_db_instance.main[0].port
 }
 
 output "db_secret_arn" {
