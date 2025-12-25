@@ -1,6 +1,7 @@
 package app;
 
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
@@ -76,6 +77,27 @@ class TapStack extends Stack {
                 .environmentSuffix(environmentSuffix)
                 .build()
         );
+
+        // Create stack outputs (required by CI/CD pipeline)
+        CfnOutput.Builder.create(this, "StackName")
+                .value(this.getStackName())
+                .description("Name of the CloudFormation stack")
+                .build();
+
+        CfnOutput.Builder.create(this, "EnvironmentSuffix")
+                .value(this.environmentSuffix)
+                .description("Environment suffix for this deployment")
+                .build();
+
+        CfnOutput.Builder.create(this, "VpcId")
+                .value(environmentStack.getVpc().getVpcId())
+                .description("VPC ID from nested stack")
+                .build();
+
+        CfnOutput.Builder.create(this, "LoadBalancerDnsName")
+                .value(environmentStack.getLoadBalancer().getLoadBalancerDnsName())
+                .description("Load Balancer DNS name from nested stack")
+                .build();
     }
 
     /**
