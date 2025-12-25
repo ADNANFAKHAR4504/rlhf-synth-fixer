@@ -206,7 +206,7 @@ All infrastructure resources created successfully:
 
 ## Summary
 
-**Overall Assessment**: ⭐ **EXCELLENT** - Model response was highly successful with zero failures.
+**Overall Assessment**: **EXCELLENT** - Model response was highly successful with zero failures.
 
 ### Key Achievements
 
@@ -222,12 +222,12 @@ All infrastructure resources created successfully:
 
 | Category | Rating | Comments |
 |----------|--------|----------|
-| Functionality | ⭐⭐⭐⭐⭐ | All requirements met perfectly |
-| Security | ⭐⭐⭐⭐⭐ | Excellent security practices |
-| Reliability | ⭐⭐⭐⭐⭐ | Multi-AZ and multi-region resilience |
-| Code Quality | ⭐⭐⭐⭐⭐ | Clean, well-organized, documented |
-| Deployment | ⭐⭐⭐⭐⭐ | First-attempt success |
-| Overall | ⭐⭐⭐⭐⭐ | Exceptional implementation |
+| Functionality  | All requirements met perfectly |
+| Security  | Excellent security practices |
+| Reliability  | Multi-AZ and multi-region resilience |
+| Code Quality  | Clean, well-organized, documented |
+| Deployment  | First-attempt success |
+| Overall  | Exceptional implementation |
 
 ## Recommendations
 
