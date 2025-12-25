@@ -139,8 +139,6 @@ Resources:
   NatGateway1:
     Type: AWS::EC2::NatGateway
     DependsOn:
-      - NatGateway1EIP
-      - PublicSubnet1
       - InternetGatewayAttachment
     Properties:
       AllocationId: !GetAtt NatGateway1EIP.AllocationId
@@ -365,7 +363,7 @@ Resources:
         - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       MinSize: '2'
       MaxSize: '6'
       DesiredCapacity: '2'
@@ -403,8 +401,6 @@ Resources:
     UpdateReplacePolicy: Delete
     DependsOn:
       - DatabasePasswordSecret
-      - DatabaseSubnetGroup
-      - DatabaseSecurityGroup
     Properties:
       DBInstanceIdentifier: !Sub 'tap-database-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
