@@ -147,7 +147,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('EC2 instance exists and is running', async () => {
       if (isLocalStack && !deploymentOutputs.web_server_id) {
         // EC2 instance creation is disabled in LocalStack due to known timeouts
-        expect(deploymentOutputs.web_server_id).toBeNull();
+        expect(deploymentOutputs.web_server_id).toBeUndefined();
         return;
       }
 
@@ -168,7 +168,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('EC2 instance is in private subnet', async () => {
       if (isLocalStack && !deploymentOutputs.web_server_id) {
-        expect(deploymentOutputs.web_server_id).toBeNull();
+        expect(deploymentOutputs.web_server_id).toBeUndefined();
         return;
       }
 
@@ -185,7 +185,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('EC2 instance has no public IP', async () => {
       if (isLocalStack && !deploymentOutputs.web_server_id) {
         // Test passes for LocalStack - EC2 instance not created
-        expect(deploymentOutputs.web_server_id).toBeNull();
+        expect(deploymentOutputs.web_server_id).toBeUndefined();
         return;
       }
 
@@ -201,7 +201,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('EC2 instance has correct security groups attached', async () => {
       if (isLocalStack && !deploymentOutputs.web_server_id) {
-        expect(deploymentOutputs.web_server_id).toBeNull();
+        expect(deploymentOutputs.web_server_id).toBeUndefined();
         return;
       }
 
@@ -242,7 +242,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('EC2 instance has private IP in correct range', () => {
       if (isLocalStack && !deploymentOutputs.web_server_id) {
-        expect(deploymentOutputs.web_server_private_ip).toBeNull();
+        expect(deploymentOutputs.web_server_private_ip).toBeUndefined();
         return;
       }
 
