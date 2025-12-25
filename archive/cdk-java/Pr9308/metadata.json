@@ -20,8 +20,6 @@
     "AWS KMS",
     "AWS IAM",
     "AWS CloudTrail",
-    "Amazon GuardDuty",
-    "AWS Security Hub",
     "Amazon CloudWatch",
     "AWS Systems Manager",
     "VPC Flow Logs"
@@ -30,5 +28,12 @@
   "migrated_from": {
     "po_id": "trainr479cdkjava",
     "pr": "Pr2285"
-  }
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
