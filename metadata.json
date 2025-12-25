@@ -1,16 +1,29 @@
 {
   "platform": "tf",
   "language": "hcl",
-  "complexity": "hard",
+  "complexity": "medium",
   "turn_type": "single",
-  "po_id": "LS-trainr841",
+  "po_id": "ls-Pr1204",
   "team": "synth-2",
-  "startedAt": "2025-08-14T16:07:51+05:30",
+  "startedAt": "2025-12-25T05:34:00Z",
   "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "Security Configuration as Code"
+    "Security Configuration as Code",
+    "Cloud Environment Setup"
   ],
-  "aws_services": [],
-  "wave": "P0"
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "EventBridge",
+    "IAM",
+    "CloudTrail"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "Pr1204",
+    "pr": "original"
+  }
 }

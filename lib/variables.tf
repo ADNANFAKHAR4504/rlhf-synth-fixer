@@ -45,3 +45,9 @@ variable "create_cloudtrail" {
   type        = bool
   default     = false
 }
+
+variable "is_localstack" {
+  description = "Whether deploying to LocalStack (disables unsupported services)"
+  type        = bool
+  default     = false
+}

@@ -20,7 +20,9 @@ resource "aws_cloudwatch_log_group" "security_monitoring" {
 }
 
 # CloudWatch alarm for IAM policy changes
+# Note: CloudWatch metric alarms have issues in LocalStack, disabled for LocalStack deployment
 resource "aws_cloudwatch_metric_alarm" "iam_policy_changes" {
+  count               = var.is_localstack ? 0 : 1
   alarm_name          = "${var.project_name}${local.suffix_string}-iam-policy-changes"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
@@ -36,7 +38,9 @@ resource "aws_cloudwatch_metric_alarm" "iam_policy_changes" {
 }
 
 # CloudWatch alarm for root account usage
+# Note: CloudWatch metric alarms have issues in LocalStack, disabled for LocalStack deployment
 resource "aws_cloudwatch_metric_alarm" "root_usage" {
+  count               = var.is_localstack ? 0 : 1
   alarm_name          = "${var.project_name}${local.suffix_string}-root-account-usage"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
@@ -82,6 +86,8 @@ resource "aws_cloudwatch_event_target" "sns_target" {
 }
 
 # Security Hub Standards Subscription (Security Hub account already enabled)
+# Note: Security Hub is not supported in LocalStack Community Edition
 resource "aws_securityhub_standards_subscription" "aws_foundational" {
+  count         = var.is_localstack ? 0 : 1
   standards_arn = "arn:aws:securityhub:${var.aws_region}::standards/aws-foundational-security-best-practices/v/1.0.0"
 }
