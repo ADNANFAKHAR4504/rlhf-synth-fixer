@@ -1,0 +1,464 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Infrastructure Analysis and QA System for auditing CloudFormation stacks",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Unique suffix for resource names to ensure uniqueness",
+            "Default": "dev",
+            "AllowedPattern": "^[a-z0-9-]+$",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Description": "Email address for critical findings notifications",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "ConstraintDescription": "Must be a valid email address"
+        },
+        "AnalysisSchedule": {
+            "Type": "String",
+            "Description": "Schedule expression for automated stack analysis",
+            "Default": "rate(1 day)"
+        },
+        "ReportRetentionDays": {
+            "Type": "Number",
+            "Description": "Number of days to retain analysis reports in S3",
+            "Default": 90,
+            "MinValue": 1,
+            "MaxValue": 365
+        }
+    },
+    "Resources": {
+        "AnalysisReportsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "stack-analysis-reports-${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldReports",
+                            "Status": "Enabled",
+                            "ExpirationInDays": {
+                                "Ref": "ReportRetentionDays"
+                            },
+                            "NoncurrentVersionExpirationInDays": 7
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "stack-analysis-reports-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Infrastructure Analysis Reports"
+                    }
+                ]
+            }
+        },
+        "AnalysisReportsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "AnalysisReportsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "AnalysisReportsBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${AnalysisReportsBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "AnalysisNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "stack-analysis-notifications-${EnvironmentSuffix}"
+                },
+                "DisplayName": "CloudFormation Stack Analysis Notifications",
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "NotificationEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "stack-analysis-notifications-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "AnalysisLambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "stack-analysis-lambda-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "CloudFormationReadAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudformation:DescribeStacks",
+                                        "cloudformation:ListStacks",
+                                        "cloudformation:DescribeStackResources",
+                                        "cloudformation:DescribeStackResource",
+                                        "cloudformation:GetTemplate",
+                                        "cloudformation:ListStackResources"
+                                    ],
+                                    "Resource": "*",
+                                    "Sid": "AllowCloudFormationReadOperations"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:PutObjectAcl"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${AnalysisReportsBucket.Arn}/*"
+                                    },
+                                    "Sid": "AllowS3ReportUpload"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "AnalysisNotificationTopic"
+                                    },
+                                    "Sid": "AllowSNSPublish"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "cloudwatch:namespace": "StackAnalysis"
+                                        }
+                                    },
+                                    "Sid": "AllowCloudWatchMetrics"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "stack-analysis-lambda-role-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "StackAnalysisFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "stack-analysis-function-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "AnalysisLambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "REPORT_BUCKET": {
+                            "Ref": "AnalysisReportsBucket"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "AnalysisNotificationTopic"
+                        },
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nfrom typing import Dict, List, Any\n\ncfn_client = boto3.client('cloudformation')\ns3_client = boto3.client('s3')\nsns_client = boto3.client('sns')\ncloudwatch_client = boto3.client('cloudwatch')\n\nREPORT_BUCKET = os.environ['REPORT_BUCKET']\nSNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']\nENVIRONMENT_SUFFIX = os.environ['ENVIRONMENT_SUFFIX']\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Main handler for CloudFormation stack analysis.\n    Analyzes stacks, generates reports, and sends notifications.\n    \"\"\"\n    try:\n        print(\"Starting CloudFormation stack analysis...\")\n\n        # List all active stacks\n        stacks = list_active_stacks()\n        print(f\"Found {len(stacks)} active stacks to analyze\")\n\n        # Analyze each stack\n        all_findings = []\n        critical_count = 0\n\n        for stack in stacks:\n            stack_name = stack['StackName']\n            print(f\"Analyzing stack: {stack_name}\")\n\n            findings = analyze_stack(stack_name)\n            all_findings.extend(findings)\n\n            # Count critical findings\n            critical_count += sum(1 for f in findings if f['severity'] == 'CRITICAL')\n\n        # Generate and store report\n        report = generate_report(all_findings, len(stacks))\n        report_key = store_report(report)\n\n        # Publish metrics\n        publish_metrics(len(stacks), len(all_findings), critical_count)\n\n        # Send notification if critical findings exist\n        if critical_count > 0:\n            send_notification(critical_count, report_key)\n\n        print(f\"Analysis complete. Total findings: {len(all_findings)}, Critical: {critical_count}\")\n\n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'stacks_analyzed': len(stacks),\n                'total_findings': len(all_findings),\n                'critical_findings': critical_count,\n                'report_location': f\"s3://{REPORT_BUCKET}/{report_key}\"\n            })\n        }\n\n    except Exception as e:\n        print(f\"Error during analysis: {str(e)}\")\n        raise\n\ndef list_active_stacks() -> List[Dict[str, Any]]:\n    \"\"\"List all active CloudFormation stacks.\"\"\"\n    stacks = []\n    paginator = cfn_client.get_paginator('list_stacks')\n\n    for page in paginator.paginate(\n        StackStatusFilter=[\n            'CREATE_COMPLETE',\n            'UPDATE_COMPLETE',\n            'UPDATE_ROLLBACK_COMPLETE'\n        ]\n    ):\n        stacks.extend(page['StackSummaries'])\n\n    return stacks\n\ndef analyze_stack(stack_name: str) -> List[Dict[str, Any]]:\n    \"\"\"Analyze a single CloudFormation stack for issues.\"\"\"\n    findings = []\n\n    try:\n        # Describe stack details\n        stack_response = cfn_client.describe_stacks(StackName=stack_name)\n        stack = stack_response['Stacks'][0]\n\n        # Check for missing tags\n        tags = stack.get('Tags', [])\n        required_tags = ['Environment', 'Owner', 'CostCenter']\n        missing_tags = [tag for tag in required_tags if not any(t['Key'] == tag for t in tags)]\n\n        if missing_tags:\n            findings.append({\n                'stack_name': stack_name,\n                'severity': 'MEDIUM',\n                'category': 'Tagging',\n                'issue': f\"Missing required tags: {', '.join(missing_tags)}\",\n                'recommendation': 'Add required tags for proper resource management and cost tracking'\n            })\n\n        # Check stack resources\n        resources = list_stack_resources(stack_name)\n\n        # Check for IAM resources with wildcard permissions\n        for resource in resources:\n            resource_type = resource['ResourceType']\n\n            if resource_type == 'AWS::IAM::Role':\n                findings.extend(check_iam_role(stack_name, resource))\n            elif resource_type == 'AWS::S3::Bucket':\n                findings.extend(check_s3_bucket(stack_name, resource))\n            elif resource_type == 'AWS::RDS::DBInstance':\n                findings.extend(check_rds_instance(stack_name, resource))\n\n        # Check for stack drift\n        if len(resources) > 0:\n            findings.append({\n                'stack_name': stack_name,\n                'severity': 'INFO',\n                'category': 'Best Practice',\n                'issue': 'Stack drift detection recommended',\n                'recommendation': 'Enable drift detection to identify manual changes to resources'\n            })\n\n    except Exception as e:\n        print(f\"Error analyzing stack {stack_name}: {str(e)}\")\n        findings.append({\n            'stack_name': stack_name,\n            'severity': 'ERROR',\n            'category': 'Analysis',\n            'issue': f\"Failed to analyze stack: {str(e)}\",\n            'recommendation': 'Check stack status and permissions'\n        })\n\n    return findings\n\ndef list_stack_resources(stack_name: str) -> List[Dict[str, Any]]:\n    \"\"\"List all resources in a stack.\"\"\"\n    resources = []\n    paginator = cfn_client.get_paginator('list_stack_resources')\n\n    try:\n        for page in paginator.paginate(StackName=stack_name):\n            resources.extend(page['StackResourceSummaries'])\n    except Exception as e:\n        print(f\"Error listing resources for {stack_name}: {str(e)}\")\n\n    return resources\n\ndef check_iam_role(stack_name: str, resource: Dict[str, Any]) -> List[Dict[str, Any]]:\n    \"\"\"Check IAM role for overly permissive policies.\"\"\"\n    findings = []\n\n    # This is a simplified check - in production, you would fetch and parse the policy\n    findings.append({\n        'stack_name': stack_name,\n        'severity': 'INFO',\n        'category': 'Security',\n        'issue': f\"IAM Role {resource['LogicalResourceId']} should be reviewed for least-privilege\",\n        'recommendation': 'Verify IAM role policies follow least-privilege principle'\n    })\n\n    return findings\n\ndef check_s3_bucket(stack_name: str, resource: Dict[str, Any]) -> List[Dict[str, Any]]:\n    \"\"\"Check S3 bucket for security best practices.\"\"\"\n    findings = []\n\n    # Note: This is a simplified check. In production, you would call S3 APIs to check actual configuration\n    findings.append({\n        'stack_name': stack_name,\n        'severity': 'MEDIUM',\n        'category': 'Security',\n        'issue': f\"S3 Bucket {resource['LogicalResourceId']} should have encryption and versioning enabled\",\n        'recommendation': 'Enable server-side encryption and versioning for data protection'\n    })\n\n    return findings\n\ndef check_rds_instance(stack_name: str, resource: Dict[str, Any]) -> List[Dict[str, Any]]:\n    \"\"\"Check RDS instance for security and cost optimization.\"\"\"\n    findings = []\n\n    findings.append({\n        'stack_name': stack_name,\n        'severity': 'MEDIUM',\n        'category': 'Cost Optimization',\n        'issue': f\"RDS Instance {resource['LogicalResourceId']} - consider Aurora Serverless for cost savings\",\n        'recommendation': 'Evaluate Aurora Serverless v2 for better cost optimization with auto-scaling'\n    })\n\n    return findings\n\ndef generate_report(findings: List[Dict[str, Any]], stack_count: int) -> Dict[str, Any]:\n    \"\"\"Generate analysis report.\"\"\"\n    timestamp = datetime.utcnow().isoformat()\n\n    severity_counts = {\n        'CRITICAL': sum(1 for f in findings if f['severity'] == 'CRITICAL'),\n        'HIGH': sum(1 for f in findings if f['severity'] == 'HIGH'),\n        'MEDIUM': sum(1 for f in findings if f['severity'] == 'MEDIUM'),\n        'LOW': sum(1 for f in findings if f['severity'] == 'LOW'),\n        'INFO': sum(1 for f in findings if f['severity'] == 'INFO')\n    }\n\n    return {\n        'report_metadata': {\n            'timestamp': timestamp,\n            'stacks_analyzed': stack_count,\n            'total_findings': len(findings),\n            'severity_distribution': severity_counts\n        },\n        'findings': findings\n    }\n\ndef store_report(report: Dict[str, Any]) -> str:\n    \"\"\"Store analysis report in S3.\"\"\"\n    timestamp = datetime.utcnow().strftime('%Y/%m/%d/%H%M%S')\n    report_key = f\"reports/{timestamp}/analysis-report.json\"\n\n    s3_client.put_object(\n        Bucket=REPORT_BUCKET,\n        Key=report_key,\n        Body=json.dumps(report, indent=2),\n        ContentType='application/json',\n        ServerSideEncryption='AES256'\n    )\n\n    print(f\"Report stored at s3://{REPORT_BUCKET}/{report_key}\")\n    return report_key\n\ndef publish_metrics(stack_count: int, finding_count: int, critical_count: int):\n    \"\"\"Publish custom CloudWatch metrics.\"\"\"\n    timestamp = datetime.utcnow()\n\n    metrics = [\n        {\n            'MetricName': 'StacksAnalyzed',\n            'Value': stack_count,\n            'Unit': 'Count',\n            'Timestamp': timestamp\n        },\n        {\n            'MetricName': 'TotalFindings',\n            'Value': finding_count,\n            'Unit': 'Count',\n            'Timestamp': timestamp\n        },\n        {\n            'MetricName': 'CriticalFindings',\n            'Value': critical_count,\n            'Unit': 'Count',\n            'Timestamp': timestamp\n        }\n    ]\n\n    cloudwatch_client.put_metric_data(\n        Namespace='StackAnalysis',\n        MetricData=metrics\n    )\n\ndef send_notification(critical_count: int, report_key: str):\n    \"\"\"Send SNS notification for critical findings.\"\"\"\n    message = f\"\"\"\nCloudFormation Stack Analysis Alert\n\nCritical findings detected during automated stack analysis.\n\nSummary:\n- Critical Issues Found: {critical_count}\n- Report Location: s3://{REPORT_BUCKET}/{report_key}\n- Environment: {ENVIRONMENT_SUFFIX}\n\nPlease review the detailed report and take appropriate action.\n\"\"\"\n\n    sns_client.publish(\n        TopicArn=SNS_TOPIC_ARN,\n        Subject='CloudFormation Stack Analysis - Critical Findings',\n        Message=message\n    )\n\n    print(f\"Notification sent for {critical_count} critical findings\")\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "stack-analysis-function-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "AnalysisLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/stack-analysis-function-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "ScheduledAnalysisRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "stack-analysis-schedule-${EnvironmentSuffix}"
+                },
+                "Description": "Scheduled trigger for CloudFormation stack analysis",
+                "ScheduleExpression": {
+                    "Ref": "AnalysisSchedule"
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "StackAnalysisFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "StackAnalysisTarget"
+                    }
+                ]
+            }
+        },
+        "AnalysisInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "StackAnalysisFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "ScheduledAnalysisRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "AnalysisFunctionErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "stack-analysis-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when stack analysis function encounters errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "StackAnalysisFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AnalysisNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "CriticalFindingsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "stack-analysis-critical-findings-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when critical findings are detected",
+                "MetricName": "CriticalFindings",
+                "Namespace": "StackAnalysis",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AnalysisNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        }
+    },
+    "Outputs": {
+        "AnalysisReportsBucketName": {
+            "Description": "Name of the S3 bucket storing analysis reports",
+            "Value": {
+                "Ref": "AnalysisReportsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ReportsBucket"
+                }
+            }
+        },
+        "AnalysisReportsBucketArn": {
+            "Description": "ARN of the S3 bucket storing analysis reports",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AnalysisReportsBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ReportsBucketArn"
+                }
+            }
+        },
+        "StackAnalysisFunctionArn": {
+            "Description": "ARN of the stack analysis Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StackAnalysisFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AnalysisFunctionArn"
+                }
+            }
+        },
+        "AnalysisNotificationTopicArn": {
+            "Description": "ARN of the SNS topic for notifications",
+            "Value": {
+                "Ref": "AnalysisNotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NotificationTopicArn"
+                }
+            }
+        },
+        "ScheduledAnalysisRuleArn": {
+            "Description": "ARN of the EventBridge rule for scheduled analysis",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ScheduledAnalysisRule",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ScheduleRuleArn"
+                }
+            }
+        }
+    }
+}

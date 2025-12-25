@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291730_ls",
+  "team": "2",
+  "startedAt": "2025-12-18T17:11:25.705Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "wave": "P0",
+  "aws_services": [
+    "cloudwatch",
+    "dynamodb",
+    "iam",
+    "lambda",
+    "s3",
+    "sns",
+    "sqs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
