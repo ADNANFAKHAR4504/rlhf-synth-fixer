@@ -6,10 +6,10 @@
 > **Architecture Flow:**
 >
 > * API Gateway receives incoming HTTP requests and triggers Lambda function execution
-> * Lambda processes the requests and reads/writes data to S3 bucket
-> * CloudWatch captures logs and metrics from both API Gateway and Lambda
-> * IAM roles grant Lambda permissions to access S3 with least privilege
+> * Lambda connects to S3 bucket for data storage and retrieval
 > * Lambda sends logs to CloudWatch for centralized monitoring
+> * CloudWatch receives data from both API Gateway and Lambda for metrics collection
+> * IAM roles grant Lambda permissions to access S3 with least privilege
 >
 > **Performance & Scalability Requirements:**
 >
