@@ -22,33 +22,26 @@ import {
   DescribeStacksCommand,
   DescribeStackResourcesCommand,
 } from '@aws-sdk/client-cloudformation';
-import fs from 'fs';
-import path from 'path';
 
 // LocalStack configuration
 const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
 const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
 
-// Configuration - Load from cfn-outputs after stack deployment
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
-
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
-// Extract outputs for testing
-const VPC_ID = outputs[`${stackName}-VPC-ID`] || outputs['VPCId'];
-const PUBLIC_SUBNET1_ID = outputs[`${stackName}-PublicSubnet1-ID`] || outputs['PublicSubnet1Id'];
-const PUBLIC_SUBNET2_ID = outputs[`${stackName}-PublicSubnet2-ID`] || outputs['PublicSubnet2Id'];
-const PRIVATE_SUBNET1_ID = outputs[`${stackName}-PrivateSubnet1-ID`] || outputs['PrivateSubnet1Id'];
-const PRIVATE_SUBNET2_ID = outputs[`${stackName}-PrivateSubnet2-ID`] || outputs['PrivateSubnet2Id'];
-const EC2_INSTANCE_ID = outputs[`${stackName}-WebServer-ID`] || outputs['EC2InstanceId'];
-const SECURITY_GROUP_ID = outputs[`${stackName}-SecurityGroup-ID`] || outputs['SecurityGroupId'];
-const NAT_GATEWAY_ID = outputs[`${stackName}-NATGateway-ID`] || outputs['NATGatewayId'];
-const WEB_SERVER_PUBLIC_IP = outputs['WebServerPublicIP'];
-const WEB_SERVER_URL = outputs['WebServerURL'];
+// Stack outputs will be fetched dynamically from CloudFormation
+let VPC_ID: string;
+let PUBLIC_SUBNET1_ID: string;
+let PUBLIC_SUBNET2_ID: string;
+let PRIVATE_SUBNET1_ID: string;
+let PRIVATE_SUBNET2_ID: string;
+let EC2_INSTANCE_ID: string;
+let SECURITY_GROUP_ID: string;
+let NAT_GATEWAY_ID: string;
+let WEB_SERVER_PUBLIC_IP: string;
+let WEB_SERVER_URL: string;
 
 // AWS SDK v3 clients with LocalStack support
 const clientConfig = isLocalStack ? {
@@ -68,6 +61,30 @@ async function getStackInfo() {
   const command = new DescribeStacksCommand({ StackName: stackName });
   const response = await cloudFormationClient.send(command);
   return response.Stacks![0];
+}
+
+async function loadStackOutputs() {
+  const stack = await getStackInfo();
+  const outputs: { [key: string]: string } = {};
+
+  // Convert CloudFormation outputs to key-value map
+  stack.Outputs?.forEach((output: any) => {
+    outputs[output.OutputKey] = output.OutputValue;
+  });
+
+  // Assign to module-level variables
+  VPC_ID = outputs['VPCId'];
+  PUBLIC_SUBNET1_ID = outputs['PublicSubnet1Id'];
+  PUBLIC_SUBNET2_ID = outputs['PublicSubnet2Id'];
+  PRIVATE_SUBNET1_ID = outputs['PrivateSubnet1Id'];
+  PRIVATE_SUBNET2_ID = outputs['PrivateSubnet2Id'];
+  EC2_INSTANCE_ID = outputs['EC2InstanceId'];
+  SECURITY_GROUP_ID = outputs['SecurityGroupId'];
+  NAT_GATEWAY_ID = outputs['NATGatewayId'];
+  WEB_SERVER_PUBLIC_IP = outputs['WebServerPublicIP'];
+  WEB_SERVER_URL = outputs['WebServerURL'];
+
+  console.log('Loaded stack outputs:', outputs);
 }
 
 async function getStackParameters() {
@@ -91,6 +108,10 @@ describe('TapStack Integration Tests', () => {
   // Setup validation
   beforeAll(async () => {
     console.log('Validating stack deployment...');
+
+    // Load stack outputs from CloudFormation
+    await loadStackOutputs();
+
     const stack = await getStackInfo();
     stackParameters = await getStackParameters();
     console.log(`Stack ${stackName} is in ${stack.StackStatus} state`);
