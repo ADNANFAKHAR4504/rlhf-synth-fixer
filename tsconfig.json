@@ -23,11 +23,8 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "outDir": "dist",
-    "allowJs": true,
-    "checkJs": false
+    "outDir": "dist"
   },
-  "include": ["lib/**/*.ts", "lib/**/*.tsx", "lib/**/*.js", "lib/**/*.mjs", "bin/**/*.ts", "bin/**/*.mjs"],
   "exclude": [
     "node_modules",
     "cdk.out",
@@ -40,7 +37,6 @@
     "tests",
     "cli",
     ".claude",
-    "scripts",
     "**/*.d.ts"
   ]
 }

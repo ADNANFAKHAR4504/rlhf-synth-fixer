@@ -1,3 +1,9 @@
+// LocalStack configuration for integration tests
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+                     process.env.LOCALSTACK === 'true';
+const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+
 describe('TapStack Integration Tests', () => {
   describe('Infrastructure Validation', () => {
     test('should validate serverless infrastructure requirements', async () => {
