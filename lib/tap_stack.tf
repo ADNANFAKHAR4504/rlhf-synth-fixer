@@ -31,6 +31,12 @@ variable "project_name" {
   default     = "secure-s3-infrastructure"
 }
 
+variable "enable_cloudwatch_alarms" {
+  description = "Enable CloudWatch metric alarms (set to false for LocalStack compatibility)"
+  type        = bool
+  default     = true
+}
+
 locals {
   environment_suffix       = var.environment_suffix != "" ? var.environment_suffix : "synthtrainr902"
   bucket_name              = "${var.bucket_name}-${local.environment_suffix}"
@@ -687,7 +693,9 @@ resource "aws_iam_role_policy" "cloudtrail_logs_policy" {
 ########################
 
 # CloudWatch Alarms for security monitoring
+# Note: Alarms are conditionally created due to LocalStack compatibility issues
 resource "aws_cloudwatch_metric_alarm" "unauthorized_s3_access" {
+  count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.project_name_with_suffix}-unauthorized-s3-access"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -740,7 +748,9 @@ resource "aws_sns_topic" "security_alerts" {
 }
 
 # CloudWatch alarm for bucket policy violations
+# Note: Alarms are conditionally created due to LocalStack compatibility issues
 resource "aws_cloudwatch_metric_alarm" "bucket_policy_violations" {
+  count               = var.enable_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.project_name_with_suffix}-bucket-policy-violations"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"

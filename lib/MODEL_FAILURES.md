@@ -111,6 +111,16 @@
 - Implemented 24 integration tests validating actual AWS resources including replica buckets
 - Achieved full test coverage for infrastructure validation
 
+### 15. CloudWatch Metric Alarms LocalStack Compatibility
+**Issue**: CloudWatch metric alarms hang indefinitely when creating in LocalStack Community Edition, causing deployment timeouts after 30+ minutes.
+
+**Fix Applied**:
+- Added `enable_cloudwatch_alarms` variable to make alarms conditional
+- Set `count = var.enable_cloudwatch_alarms ? 1 : 0` on both alarm resources
+- Default value is `true` for AWS deployments
+- Set to `false` in terraform.tfvars for LocalStack compatibility
+- Alarms work correctly in real AWS environments
+
 ## Summary
 
 All critical infrastructure issues have been resolved. The Terraform configuration now:
