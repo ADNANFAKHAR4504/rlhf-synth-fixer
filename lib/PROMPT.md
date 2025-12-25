@@ -1,43 +1,21 @@
-# Security Configuration as Code Infrastructure Requirements
+# Security Configuration as Code Infrastructure
 
-I need to implement a comprehensive security configuration infrastructure using AWS CloudFormation that establishes foundational security services for our cloud environment. The infrastructure should provide threat detection, compliance monitoring, and security posture management.
+I need CloudFormation infrastructure that integrates AWS security services for threat detection, compliance monitoring, and security posture management.
 
-## Core Security Services Required
+## Service Integration Architecture
 
-Deploy the following AWS security services with proper integration:
+Amazon GuardDuty detects threats and publishes findings to AWS Security Hub as the centralized aggregation point. AWS Config continuously records resource configurations and evaluates compliance rules, sending compliance findings to Security Hub. CloudTrail logs all API activity across regions to an encrypted S3 bucket with KMS key protection. Amazon Macie scans the CloudTrail S3 bucket and other S3 buckets for sensitive data, publishing classification findings to Security Hub.
 
-1. **Amazon GuardDuty** - Enable threat detection with Extended Threat Detection (XTD) for container workloads and multi-stage attack detection
-2. **AWS Security Hub** - Implement the new unified security solution with CSPM capabilities for centralized security findings management  
-3. **AWS Config** - Set up configuration recording and compliance rules for resource compliance monitoring
-4. **AWS CloudTrail** - Enable API logging and activity monitoring across all regions
-5. **Amazon Macie** - Configure sensitive data discovery and classification
+Security Hub aggregates all findings from GuardDuty, Config, Macie, and CloudTrail Insights, applying the new unified CSPM capabilities with OCSF data format. When Security Hub detects critical findings, CloudWatch Events rules trigger SNS topic notifications to alert security teams.
 
-## Infrastructure Components
+IAM roles grant GuardDuty access to analyze VPC Flow Logs and DNS logs, Config access to record resource configurations, CloudTrail write permissions to the S3 bucket with KMS decrypt/encrypt permissions, Macie access to scan S3 buckets, and Security Hub permissions to receive findings from all integrated services.
 
-The CloudFormation template should include:
+Config rules validate that S3 buckets have encryption enabled, CloudTrail is active in all regions, and GuardDuty is enabled. When Config detects non-compliant resources, it publishes findings to Security Hub and optionally triggers automatic remediation through Systems Manager Automation documents.
 
-- IAM roles and policies for each security service with least privilege access
-- Cross-service integration to enable Security Hub to aggregate findings from GuardDuty, Config, and Macie
-- CloudWatch alarms and SNS notifications for critical security events
-- S3 buckets for CloudTrail logs and Config snapshots with proper encryption and access controls
-- KMS keys for encryption of security service data
-- Resource tagging strategy for compliance and cost tracking
+The S3 bucket for CloudTrail logs enforces bucket policies rejecting unencrypted uploads and blocks public access. The KMS key policy grants CloudTrail and Config encrypt permissions while restricting decrypt permissions to authorized IAM roles.
 
-## Configuration Requirements
+Resources use environment-based naming with a configurable suffix parameter for multi-environment deployment to us-west-2.
 
-- Deploy to us-west-2 region
-- Use environment-based naming with configurable suffix parameter
-- Enable all security services with reasonable default configurations that minimize deployment time
-- Configure Security Hub to use the new Resources view and OCSF data format
-- Set up GuardDuty with EKS protection if applicable
-- Create Config rules for common security compliance checks
-- Ensure all resources have deletion policies appropriate for security data retention
+GuardDuty enables Extended Threat Detection including EKS protection and multi-stage attack detection. Security Hub activates the new Resources view for unified security posture visibility. Macie runs scheduled classification jobs scanning S3 buckets and sends alerts when discovering sensitive data patterns.
 
-## Integration and Automation
-
-- Configure automatic remediation workflows where possible
-- Set up proper cross-service permissions for integrated security findings
-- Enable Security Hub CSPM for posture management
-- Configure event-driven responses to critical findings
-
-Please generate the complete CloudFormation YAML template that implements this security infrastructure following AWS best practices for security service deployment.
+CloudWatch alarms monitor Security Hub finding counts and trigger SNS notifications when critical or high severity findings exceed thresholds. EventBridge rules detect specific finding types and invoke automated response workflows.
