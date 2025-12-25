@@ -237,28 +237,43 @@ The model generated a functionally correct WAF configuration but failed to make 
 
 These failures would have blocked deployment in 100% of test environments and most production scenarios where ALBs are created separately or in different stacks.
 
+
 ---
 
 ## LocalStack Compatibility
 
-This infrastructure has been successfully deployed and tested on LocalStack Community Edition. All AWS WAFv2 features used in this template are fully supported by LocalStack, including:
+### Service Compatibility Status
 
-### Supported Services
-- **AWS WAFv2**: Web ACL, IP sets, rate-based rules, managed rule groups, and geo-blocking
-- **Amazon S3**: Bucket creation, encryption, and logging configuration
-- **AWS CloudWatch**: Metrics and monitoring for WAF activity
-- **AWS IAM**: Service permissions for WAF logging
+This template uses **AWS WAFv2**, which is **NOT supported in LocalStack Community Edition**. According to the LocalStack service compatibility matrix, WAF/WAFv2 services are not available in any LocalStack tier.
 
-### LocalStack Specific Considerations
-- All resources deploy successfully without requiring any code modifications
-- WAF rules function as expected with rate limiting, SQL injection protection, and geo-blocking
-- S3 logging integration works correctly with proper bucket policies
-- CloudWatch metrics are captured for WAF events
-- No unsupported services or features were used in this implementation
+#### Unsupported Services Used:
+- **AWS::WAFv2::WebACL** - WAFv2 service not supported
+- **AWS::WAFv2::IPSet** - WAFv2 service not supported  
+- **AWS::WAFv2::LoggingConfiguration** - WAFv2 service not supported
+- **AWS::WAFv2::WebACLAssociation** - WAFv2 service not supported
 
-### Deployment Notes
-- The template is fully compatible with both AWS production accounts and LocalStack test environments
-- No special configuration or workarounds are needed for LocalStack deployment
-- All validation, unit tests, and integration tests pass successfully on LocalStack
+#### Supported Services:
+- **Amazon S3**: Bucket creation, encryption, and logging configuration (SUPPORTED)
+- **AWS CloudWatch**: Metrics and monitoring (SUPPORTED)
+- **AWS IAM**: Service permissions and policies (SUPPORTED)
 
-This demonstrates that LocalStack provides excellent AWS WAFv2 compatibility for development and testing workflows.
+### LocalStack Migration Considerations
+
+**Deployment Status**: This template **cannot be deployed to LocalStack** as written due to WAFv2 incompatibility.
+
+**Possible Adaptations** (if LocalStack deployment was required):
+1. Remove all WAFv2 resources (Web ACL, IP sets, rules, associations)
+2. Keep only S3 logging bucket and IAM permissions
+3. Document that WAF protection is AWS-only feature
+4. Consider alternative security approaches supported by LocalStack (Security Groups, NACLs)
+
+**Current Implementation**: This template is designed for **AWS production deployment only**. The prompt specifically requested AWS WAF security features which are not available in LocalStack testing environments.
+
+### Testing Approach
+
+- **AWS Production**: Full WAFv2 functionality with rate limiting, geo-blocking, and SQL injection protection
+- **LocalStack Testing**: Not applicable - WAFv2 services unavailable
+- **Unit Tests**: Validate CloudFormation template structure without actual deployment
+- **Integration Tests**: Run against real AWS account, not LocalStack
+
+This template prioritizes production security requirements over LocalStack compatibility.
