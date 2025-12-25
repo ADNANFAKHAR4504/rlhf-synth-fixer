@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-3174",
+  "team": "synth-2",
+  "startedAt": "2025-12-25T00:00:00Z",
+  "subtask": "Cloud Environment Setup",
+  "provider": "localstack",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM",
+    "Systems Manager",
+    "X-Ray",
+    "Application Auto Scaling"
+  ],
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}
