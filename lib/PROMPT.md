@@ -23,8 +23,8 @@ Create an automated infrastructure validation system using **CloudFormation with
 
 2. **DynamoDB Table for Results Storage**
    - Create table to persist validation results
-   - Partition key: TemplateId (String)
-   - Sort key: Timestamp (String)
+   - Partition key: TemplateId as String
+   - Sort key: Timestamp as String
    - DeletionProtectionEnabled must be false for testing purposes
    - Enable point-in-time recovery for data safety
 
@@ -49,9 +49,9 @@ Create an automated infrastructure validation system using **CloudFormation with
 
 6. **S3 Bucket for Template Storage**
    - Bucket for storing templates to analyze
-   - Enable versioning (BucketVersioningConfiguration)
-   - Enable encryption at rest (AES256 or aws:kms)
-   - Enable EventBridge notifications (EventBridgeEnabled: true)
+   - Enable versioning with BucketVersioningConfiguration
+   - Enable encryption at rest using AES256 or aws:kms
+   - Enable EventBridge notifications by setting EventBridgeEnabled to true
    - Block all public access
 
 7. **Stack Outputs**
@@ -69,12 +69,12 @@ Create an automated infrastructure validation system using **CloudFormation with
 - Use **AWS IAM** for security controls
 - Use **Amazon CloudWatch** for logging
 - Use **Amazon S3** for template storage
-- Resource names must include **environmentSuffix** for uniqueness
+- Resource names must include environmentSuffix for uniqueness
 - Follow naming convention: !Sub 'resource-type-${EnvironmentSuffix}'
-- Define Parameters section with EnvironmentSuffix parameter (Type: String, Default: "dev")
+- Define Parameters section with EnvironmentSuffix parameter with Type String and Default value "dev"
 - Deploy to **us-east-1** region
 
-### Deployment Requirements (CRITICAL)
+### Deployment Requirements - CRITICAL
 
 - All resources must be cleanly destroyable
 - NO RemovalPolicy: Retain on any resource
@@ -95,7 +95,7 @@ Create an automated infrastructure validation system using **CloudFormation with
 - Include actual Python or Node.js code inline using ZipFile property
 - Implement real validation logic that:
   - Parses CloudFormation JSON/YAML from S3
-  - Checks for security anti-patterns (wildcard IAM actions, public S3 buckets, etc.)
+  - Checks for security anti-patterns like wildcard IAM actions and public S3 buckets
   - Writes structured findings to DynamoDB
 - Use environment variables for configuration
 - Implement proper error handling and logging
@@ -104,7 +104,7 @@ Create an automated infrastructure validation system using **CloudFormation with
 ## Success Criteria
 
 - Functionality: Templates uploaded to S3 automatically trigger validation and results are stored in DynamoDB
-- Performance: Validation completes within Lambda timeout limits (recommend 5 minutes max)
+- Performance: Validation completes within Lambda timeout limits - recommend 5 minutes max
 - Reliability: EventBridge rule correctly triggers Lambda on every S3 upload
 - Security: IAM roles follow least privilege, S3 bucket is encrypted and versioned, no wildcard permissions
 - Resource Naming: All named resources include environmentSuffix using !Sub syntax
@@ -113,7 +113,7 @@ Create an automated infrastructure validation system using **CloudFormation with
 
 ## What to deliver
 
-- Complete CloudFormation JSON template (lib/template.json)
+- Complete CloudFormation JSON template in lib/template.json
 - Lambda function with inline code implementing validation logic
 - DynamoDB table for results storage
 - EventBridge rule for S3 event automation
@@ -122,4 +122,4 @@ Create an automated infrastructure validation system using **CloudFormation with
 - S3 bucket with versioning, encryption, and EventBridge notifications enabled
 - Stack Outputs for Lambda ARN, DynamoDB table name, and S3 bucket name
 - Comprehensive documentation in MODEL_RESPONSE.md explaining architecture, services used, security considerations, and deployment instructions
-- IDEAL_RESPONSE.md (copy of MODEL_RESPONSE.md for single-turn task)
+- IDEAL_RESPONSE.md as copy of MODEL_RESPONSE.md for single-turn task
