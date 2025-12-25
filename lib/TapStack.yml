@@ -362,3 +362,9 @@ Outputs:
     Value: !Ref CloudSetupPublicSubnet
     Export:
       Name: !Sub '${AWS::StackName}-SubnetId'
+
+  InternetGatewayId:
+    Description: 'Internet Gateway ID for this deployment'
+    Value: !Ref CloudSetupInternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGatewayId'
