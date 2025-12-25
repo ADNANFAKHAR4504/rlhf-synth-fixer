@@ -435,9 +435,7 @@
                             ]
                         },
                         "Id": "ComplianceValidatorTarget",
-                        "Input": {
-                            "Fn::Sub": "{\n  \"resource_type\": \"All\",\n  \"resource_id\": \"scheduled-check\",\n  \"source\": \"eventbridge\"\n}\n"
-                        }
+                        "Input": "{\n  \"resource_type\": \"All\",\n  \"resource_id\": \"scheduled-check\",\n  \"source\": \"eventbridge\"\n}\n"
                     }
                 ]
             }

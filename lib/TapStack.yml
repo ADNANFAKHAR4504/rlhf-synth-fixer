@@ -511,7 +511,7 @@ Resources:
       Targets:
         - Arn: !GetAtt CustomComplianceValidatorFunction.Arn
           Id: ComplianceValidatorTarget
-          Input: !Sub |
+          Input: |
             {
               "resource_type": "All",
               "resource_id": "scheduled-check",
