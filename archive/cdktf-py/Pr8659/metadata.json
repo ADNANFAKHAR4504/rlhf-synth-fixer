@@ -1,0 +1,32 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291245",
+  "team": "synth-2",
+  "startedAt": "2025-08-10T07:13:57.977Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "s3",
+    "dynamodb"
+  ],
+  "migrated_from": {
+    "po_id": "291245",
+    "pr": "Pr816"
+  },
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

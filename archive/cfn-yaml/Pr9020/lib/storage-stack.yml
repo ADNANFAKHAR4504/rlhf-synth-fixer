@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Storage stack with S3 and DynamoDB global tables'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Unique suffix for environment resources'
+
+  Environment:
+    Type: String
+    Description: 'Environment name'
+
+  Application:
+    Type: String
+    Description: 'Application name'
+
+  CostCenter:
+    Type: String
+    Description: 'Cost center'
+
+Resources:
+  # S3 Bucket for Artifacts
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub 'payment-artifacts-${EnvironmentSuffix}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-artifacts-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # S3 Bucket Policy
+  ArtifactsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub '${ArtifactsBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: AES256
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt ArtifactsBucket.Arn
+              - !Sub '${ArtifactsBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  # DynamoDB Table for Session Management (simplified from Global Table)
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    Properties:
+      TableName: !Sub 'payment-sessions-${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: N
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIdIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-sessions-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Parameter Store Entries
+  S3BucketParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${Environment}/storage/s3-bucket'
+      Description: 'S3 artifacts bucket name'
+      Type: String
+      Value: !Ref ArtifactsBucket
+      Tags:
+        Environment: !Ref Environment
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+
+  DynamoDBTableParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${Environment}/storage/dynamodb-table'
+      Description: 'DynamoDB sessions table name'
+      Type: String
+      Value: !Ref SessionsTable
+      Tags:
+        Environment: !Ref Environment
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+
+Outputs:
+  S3BucketName:
+    Description: 'S3 bucket name'
+    Value: !Ref ArtifactsBucket
+
+  S3BucketArn:
+    Description: 'S3 bucket ARN'
+    Value: !GetAtt ArtifactsBucket.Arn
+
+  DynamoDBTableName:
+    Description: 'DynamoDB table name'
+    Value: !Ref SessionsTable
+
+  DynamoDBTableArn:
+    Description: 'DynamoDB table ARN'
+    Value: !GetAtt SessionsTable.Arn
