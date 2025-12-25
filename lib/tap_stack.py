@@ -632,14 +632,14 @@ class TapStack(pulumi.ComponentResource):
         # =====================================
 
         # CloudWatch Log Groups for Lambda functions
-        _ = aws.cloudwatch.LogGroup(
+        s3_processor_log_group = aws.cloudwatch.LogGroup(
         "s3-processor-logs",
         name=s3_processor_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
         retention_in_days=14,
         tags=common_tags
         )
 
-        _ = aws.cloudwatch.LogGroup(
+        api_handler_log_group = aws.cloudwatch.LogGroup(
         "api-handler-logs",
         name=api_handler_lambda.name.apply(lambda n: f"/aws/lambda/{n}"),
         retention_in_days=14,
