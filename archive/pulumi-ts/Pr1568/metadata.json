@@ -3,17 +3,14 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "trainr121",
+  "po_id": "LS-trainr121",
   "team": "synth-2",
   "startedAt": "2025-08-18T18:33:54+05:30",
-  "subtask": "Serverless Architecture Implementation",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Security Configuration",
-    "Database Management",
-    "Performance Optimization"
+    "Serverless Infrastructure (Functions as Code)"
   ],
-  "training_quality": 8,
   "aws_services": [
     "API Gateway",
     "Lambda",
@@ -21,11 +18,5 @@
     "IAM",
     "CloudWatch"
   ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "mayanksethi-turing",
-  "dockerS3Location": "",
-  "wave": "P1"
+  "wave": "P0"
 }
