@@ -617,4 +617,3 @@ class TapStack(pulumi.ComponentResource):
         pulumi.export('environment', self.environment_suffix)
         pulumi.export('regions', self.regions)
         pulumi.export('deployment_timestamp', pulumi.get_stack())
-
