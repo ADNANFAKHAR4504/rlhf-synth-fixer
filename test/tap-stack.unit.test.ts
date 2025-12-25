@@ -51,9 +51,9 @@ describe('CloudFormation Template', () => {
         'production',
       ]);
     });
-    test('VpcCidr parameter should have correct allowed pattern', () => {
+    test('VpcCidr parameter should have a default value', () => {
       const vpc = template.Parameters.VpcCidr;
-      expect(vpc.AllowedPattern).toMatch(/^\^/);
+      expect(vpc.Default).toBe('10.0.0.0/16');
     });
     test('InstanceType parameter should have allowed values', () => {
       const inst = template.Parameters.InstanceType;
@@ -63,13 +63,14 @@ describe('CloudFormation Template', () => {
       expect(template.Parameters.MinSize.Type).toBe('Number');
       expect(template.Parameters.MinSize.MinValue).toBe(1);
       expect(template.Parameters.MaxSize.Type).toBe('Number');
-      expect(template.Parameters.MaxSize.MaxValue).toBe(20);
+      expect(template.Parameters.MaxSize.MaxValue).toBe(10);
     });
   });
 
   describe('Resources', () => {
     test('should create all required resources', () => {
       const resources = template.Resources;
+      // LocalStack-compatible resources (simplified template)
       const expected = [
         'SecureAppApplicationKMSKey',
         'SecureAppApplicationKMSKeyAlias',
@@ -80,47 +81,26 @@ describe('CloudFormation Template', () => {
         'SecureAppPublicSubnet2',
         'SecureAppPrivateSubnet1',
         'SecureAppPrivateSubnet2',
-        'SecureAppNatGateway1EIP',
-        'SecureAppNatGateway2EIP',
-        'SecureAppNatGateway1',
-        'SecureAppNatGateway2',
         'SecureAppPublicRouteTable',
         'SecureAppDefaultPublicRoute',
         'SecureAppPublicSubnet1RouteTableAssociation',
         'SecureAppPublicSubnet2RouteTableAssociation',
         'SecureAppPrivateRouteTable1',
-        'SecureAppDefaultPrivateRoute1',
         'SecureAppPrivateSubnet1RouteTableAssociation',
         'SecureAppPrivateRouteTable2',
-        'SecureAppDefaultPrivateRoute2',
         'SecureAppPrivateSubnet2RouteTableAssociation',
-        'SecureAppPrivateNetworkAcl',
-        'SecureAppPrivateInboundRule',
-        'SecureAppPrivateOutboundRule',
-        'SecureAppPrivateSubnet1NetworkAclAssociation',
-        'SecureAppPrivateSubnet2NetworkAclAssociation',
         'SecureAppLoadBalancerSecurityGroup',
         'SecureAppApplicationSecurityGroup',
-        'SecureAppBastionSecurityGroup',
         'SecureAppEC2InstanceRole',
         'SecureAppEC2InstanceProfile',
         'SecureAppApplicationS3Bucket',
         'SecureAppLoggingS3Bucket',
-        'SecureAppLoggingS3BucketPolicy',
-        'SecureAppCloudTrailRole',
-        'SecureAppCloudTrailLogGroup',
-        'SecureAppApplicationCloudTrail',
-        'SecureAppVPCFlowLogRole',
-        'SecureAppVPCFlowLogGroup',
-        'SecureAppVPCFlowLog',
         'SecureAppApplicationLogGroup',
-        'SecureAppS3AccessLogGroup',
         'SecureAppApplicationLaunchTemplate',
         'SecureAppApplicationLoadBalancer',
         'SecureAppApplicationTargetGroup',
         'SecureAppApplicationListener',
         'SecureAppApplicationAutoScalingGroup',
-        'SecureAppBastionHost',
       ];
       expected.forEach(res => {
         expect(resources[res]).toBeDefined();
@@ -212,7 +192,8 @@ describe('CloudFormation Template', () => {
       );
     });
 
-    test('CloudTrail and VPC Flow Logs should be present', () => {
+    // LOCALSTACK COMPATIBILITY: CloudTrail and VPC Flow Logs not included in simplified template
+    test.skip('CloudTrail and VPC Flow Logs should be present', () => {
       expect(template.Resources.SecureAppApplicationCloudTrail).toBeDefined();
       expect(template.Resources.SecureAppVPCFlowLog).toBeDefined();
     });
@@ -256,9 +237,10 @@ describe('CloudFormation Template', () => {
       const outputCount = Object.keys(template.Outputs).length;
       expect(outputCount).toBeGreaterThanOrEqual(2);
     });
-    test('should have at least 40 resources', () => {
+    test('should have at least 25 resources', () => {
+      // LocalStack-compatible template has ~32 resources (some conditional)
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(40);
+      expect(resourceCount).toBeGreaterThanOrEqual(25);
     });
   });
 

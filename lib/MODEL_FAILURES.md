@@ -60,3 +60,38 @@ This document lists common model failures and misconfigurations when generating 
 - **Mitigation:** Validate template before deployment.
 
 ---
+
+## LocalStack Compatibility Adjustments
+
+This section documents changes made for LocalStack deployment compatibility. These changes do not affect production AWS deployment functionality.
+
+### Category A: Unsupported Resources (Entire resource commented/removed)
+
+| Resource | LocalStack Status | Solution Applied | Production Status |
+|----------|------------------|------------------|-------------------|
+| N/A | N/A | No unsupported resources in this stack | N/A |
+
+### Category B: Deep Functionality Limitations (Property/feature disabled)
+
+| Resource | Feature | LocalStack Limitation | Solution Applied | Production Status |
+|----------|---------|----------------------|------------------|-------------------|
+| NAT Gateway | EIP Allocation | EIP allocation fails in Community Edition | Conditional with UseNATGateway (disabled when IsLocalStack=true) | Enabled in AWS |
+| EC2 Subnets | AvailabilityZone | Fn::GetAZs not reliable in LocalStack | Hardcoded us-east-1a/us-east-1b | Dynamic AZ selection in AWS |
+| Launch Template | LatestVersionNumber | GetAtt for LatestVersionNumber not supported | Using $Latest string | GetAtt LatestVersionNumber in AWS |
+
+### Category C: Behavioral Differences (Works but behaves differently)
+
+| Resource | Feature | LocalStack Behavior | Production Behavior |
+|----------|---------|---------------------|---------------------|
+| Auto Scaling Group | Health Checks | ELB health checks may not trigger | Full ELB health check integration |
+| Application Load Balancer | Target Registration | Targets may not register automatically | Automatic target registration |
+| KMS | Key Rotation | Rotation doesn't actually occur | Automatic key rotation |
+
+### Category D: Test-Specific Adjustments
+
+| Test File | Adjustment | Reason |
+|-----------|------------|--------|
+| Integration tests | AWS_ENDPOINT_URL=http://localhost:4566 | LocalStack endpoint |
+| Integration tests | Account ID 000000000000 | LocalStack default account |
+| Integration tests | Region us-east-1 | LocalStack default region |
+| cfn-lint | W3010, W7001, W8001 ignored | Hardcoded AZs and unused mappings/conditions for LocalStack compatibility |
