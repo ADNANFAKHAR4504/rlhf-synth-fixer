@@ -1,0 +1,180 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Database stack with Aurora PostgreSQL Serverless v2'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Unique suffix for environment resources'
+
+  Environment:
+    Type: String
+    Description: 'Environment name'
+
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+    Description: 'Private subnet IDs'
+
+  DatabaseSecurityGroupId:
+    Type: String
+    Description: 'Database security group ID'
+
+  Application:
+    Type: String
+    Description: 'Application name'
+
+  CostCenter:
+    Type: String
+    Description: 'Cost center'
+
+Resources:
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'db-subnet-group-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: 'Subnet group for Aurora cluster'
+      SubnetIds: !Ref PrivateSubnetIds
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-subnet-group-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Aurora Cluster Parameter Group
+  DBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Family: aurora-postgresql14
+      Description: !Sub 'Cluster parameter group for ${EnvironmentSuffix}'
+      Parameters:
+        shared_preload_libraries: 'pg_stat_statements'
+        log_statement: 'all'
+        log_min_duration_statement: '1000'
+      Tags:
+        - Key: Name
+          Value: !Sub 'cluster-params-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Aurora Cluster
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBClusterIdentifier: !Sub 'payment-db-cluster-${EnvironmentSuffix}'
+      Engine: aurora-postgresql
+      EngineVersion: '14.6'
+      EngineMode: provisioned
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0.5
+        MaxCapacity: 16
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroupId
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
+      MasterUsername: !Sub '{{resolve:ssm:/${Environment}/database/master-username}}'
+      MasterUserPassword: !Sub '{{resolve:ssm-secure:/${Environment}/database/master-password}}'
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'mon:04:00-mon:05:00'
+      EnableCloudwatchLogsExports:
+        - postgresql
+      StorageEncrypted: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-db-cluster-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Aurora Instance 1
+  AuroraInstance1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'payment-db-instance-1-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref AuroraCluster
+      DBInstanceClass: db.serverless
+      Engine: aurora-postgresql
+      PubliclyAccessible: false
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-db-instance-1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Aurora Instance 2 (for HA)
+  AuroraInstance2:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'payment-db-instance-2-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref AuroraCluster
+      DBInstanceClass: db.serverless
+      Engine: aurora-postgresql
+      PubliclyAccessible: false
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-db-instance-2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref Application
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Parameter Store Entries
+  DBEndpointParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${Environment}/database/endpoint'
+      Description: 'Aurora cluster endpoint'
+      Type: String
+      Value: !GetAtt AuroraCluster.Endpoint.Address
+      Tags:
+        Environment: !Ref Environment
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+
+  DBPortParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${Environment}/database/port'
+      Description: 'Aurora cluster port'
+      Type: String
+      Value: !GetAtt AuroraCluster.Endpoint.Port
+      Tags:
+        Environment: !Ref Environment
+        Application: !Ref Application
+        CostCenter: !Ref CostCenter
+
+Outputs:
+  ClusterEndpoint:
+    Description: 'Aurora cluster endpoint'
+    Value: !GetAtt AuroraCluster.Endpoint.Address
+
+  ClusterPort:
+    Description: 'Aurora cluster port'
+    Value: !GetAtt AuroraCluster.Endpoint.Port
+
+  ClusterArn:
+    Description: 'Aurora cluster ARN'
+    Value: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}'

@@ -1,0 +1,119 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Route53 Failover Configuration for Multi-Region DR'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for resource naming
+
+  DomainName:
+    Type: String
+    Description: Domain name for the application
+    Default: payment-api.example.com
+
+  PrimaryALBDNS:
+    Type: String
+    Description: Primary region ALB DNS name
+
+  DRALBName:
+    Type: String
+    Description: DR region ALB DNS name
+
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID
+
+  PrimaryALBHostedZoneId:
+    Type: String
+    Description: ALB Hosted Zone ID for primary region (ap-southeast-1)
+    Default: Z1LMS91P8CMLE5  # ALB hosted zone for ap-southeast-1
+
+  DRALBHostedZoneId:
+    Type: String
+    Description: ALB Hosted Zone ID for DR region (ap-southeast-2)
+    Default: Z1GM3OXH4ZPM65  # ALB hosted zone for ap-southeast-2
+
+  UseHTTPS:
+    Type: String
+    Description: Whether to use HTTPS for health checks (requires SSL certificate on ALB)
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  UseHTTPSProtocol: !Equals [!Ref UseHTTPS, 'true']
+
+Resources:
+  PrimaryHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: !If [UseHTTPSProtocol, HTTPS, HTTP]
+        ResourcePath: /health
+        FullyQualifiedDomainName: !Ref PrimaryALBDNS
+        Port: !If [UseHTTPSProtocol, 443, 80]
+        RequestInterval: 30
+        FailureThreshold: 3
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub 'payment-primary-health-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DRHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: !If [UseHTTPSProtocol, HTTPS, HTTP]
+        ResourcePath: /health
+        FullyQualifiedDomainName: !Ref DRALBName
+        Port: !If [UseHTTPSProtocol, 443, 80]
+        RequestInterval: 30
+        FailureThreshold: 3
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub 'payment-dr-health-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrimaryRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      SetIdentifier: primary
+      Failover: PRIMARY
+      HealthCheckId: !Ref PrimaryHealthCheck
+      AliasTarget:
+        HostedZoneId: !Ref PrimaryALBHostedZoneId
+        DNSName: !Ref PrimaryALBDNS
+        EvaluateTargetHealth: true
+
+  DRRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      SetIdentifier: dr
+      Failover: SECONDARY
+      HealthCheckId: !Ref DRHealthCheck
+      AliasTarget:
+        HostedZoneId: !Ref DRALBHostedZoneId
+        DNSName: !Ref DRALBName
+        EvaluateTargetHealth: true
+
+Outputs:
+  PrimaryHealthCheckId:
+    Description: Primary Region Health Check ID
+    Value: !Ref PrimaryHealthCheck
+
+  DRHealthCheckId:
+    Description: DR Region Health Check ID
+    Value: !Ref DRHealthCheck
+
+  DomainEndpoint:
+    Description: Failover Domain Endpoint
+    Value: !Ref DomainName
