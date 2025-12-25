@@ -1,926 +1,428 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Secure web application infrastructure with ALB and Auto Scaling - Production Ready",
+    "Description": "Secure S3 bucket with comprehensive security configurations",
     "Parameters": {
-        "Environment": {
+        "EnvironmentSuffix": {
             "Type": "String",
-            "Default": "prod",
-            "Description": "Environment name for resource tagging"
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming and isolation",
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
         },
-        "InstanceType": {
+        "VpcId": {
             "Type": "String",
-            "Default": "t3.micro",
+            "Default": "vpc-localstack",
+            "Description": "VPC ID that will have access to the S3 bucket (use vpc-localstack for LocalStack)"
+        },
+        "BucketNamePrefix": {
+            "Type": "String",
+            "Default": "secure-bucket",
+            "Description": "Prefix for the S3 bucket name"
+        },
+        "EnableObjectLock": {
+            "Type": "String",
+            "Default": "false",
             "AllowedValues": [
-                "t3.micro",
-                "t3.small",
-                "t3.medium",
-                "t3.large",
-                "m5.large",
-                "m5.xlarge"
+                "true",
+                "false"
             ],
-            "Description": "EC2 instance type for web servers",
-            "ConstraintDescription": "Must be a valid EC2 instance type"
+            "Description": "Enable S3 Object Lock (may have limited support in LocalStack)"
         },
-        "KeyPairName": {
+        "EnableEventBridge": {
             "Type": "String",
-            "Default": "",
-            "Description": "Optional: EC2 Key Pair for emergency access (leave empty for production)",
-            "ConstraintDescription": "Must be the name of an existing EC2 KeyPair or empty"
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable EventBridge notifications (may have limited support in LocalStack)"
         },
-        "MinSize": {
-            "Type": "Number",
-            "Default": 2,
-            "MinValue": 2,
-            "MaxValue": 10,
-            "Description": "Minimum number of EC2 instances in Auto Scaling Group"
-        },
-        "MaxSize": {
-            "Type": "Number",
-            "Default": 6,
-            "MinValue": 2,
-            "MaxValue": 20,
-            "Description": "Maximum number of EC2 instances in Auto Scaling Group"
-        },
-        "DesiredCapacity": {
-            "Type": "Number",
-            "Default": 2,
-            "MinValue": 2,
-            "MaxValue": 10,
-            "Description": "Desired number of EC2 instances in Auto Scaling Group"
+        "EnableVPCRestriction": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable VPC restrictions in bucket policy (may not work in LocalStack)"
         }
     },
     "Conditions": {
-        "HasKeyPair": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "KeyPairName"
-                        },
-                        ""
-                    ]
-                }
-            ]
-        },
-        "IsProduction": {
+        "UseObjectLock": {
             "Fn::Equals": [
                 {
-                    "Ref": "Environment"
+                    "Ref": "EnableObjectLock"
                 },
-                "prod"
+                "true"
+            ]
+        },
+        "UseEventBridge": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableEventBridge"
+                },
+                "true"
+            ]
+        },
+        "UseVPCRestriction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableVPCRestriction"
+                },
+                "true"
             ]
         }
     },
     "Resources": {
-        "VPC": {
-            "Type": "AWS::EC2::VPC",
+        "S3EncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
             "Properties": {
-                "CidrBlock": "10.0.0.0/16",
-                "EnableDnsHostnames": true,
-                "EnableDnsSupport": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-vpc"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "InternetGateway": {
-            "Type": "AWS::EC2::InternetGateway",
-            "Properties": {
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-igw"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "InternetGatewayAttachment": {
-            "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Properties": {
-                "InternetGatewayId": {
-                    "Ref": "InternetGateway"
+                "Description": {
+                    "Fn::Sub": "KMS key for S3 bucket encryption - ${EnvironmentSuffix}"
                 },
-                "VpcId": {
-                    "Ref": "VPC"
-                }
-            }
-        },
-        "PublicSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "CidrBlock": "10.0.1.0/24",
-                "MapPublicIpOnLaunch": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-public-subnet-1"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicSubnet2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "CidrBlock": "10.0.2.0/24",
-                "MapPublicIpOnLaunch": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-public-subnet-2"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicRouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-public-routes"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "DefaultPublicRoute": {
-            "Type": "AWS::EC2::Route",
-            "DependsOn": "InternetGatewayAttachment",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "GatewayId": {
-                    "Ref": "InternetGateway"
-                }
-            }
-        },
-        "PublicSubnet1RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet1"
-                }
-            }
-        },
-        "PublicSubnet2RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
-                }
-            }
-        },
-        "ALBSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Security group for Application Load Balancer - allows HTTP and HTTPS",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow HTTP traffic from internet"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow HTTPS traffic from internet"
-                    }
-                ],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "10.0.0.0/16",
-                        "Description": "Allow HTTP traffic to web servers"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-alb-sg"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "WebServerSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Security group for web server instances",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "SourceSecurityGroupId": {
-                            "Ref": "ALBSecurityGroup"
-                        },
-                        "Description": "Allow HTTP traffic from ALB only"
-                    }
-                ],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow HTTP outbound for package updates"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow HTTPS outbound for package updates"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 53,
-                        "ToPort": 53,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow DNS queries"
-                    },
-                    {
-                        "IpProtocol": "udp",
-                        "FromPort": 53,
-                        "ToPort": 53,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow DNS queries"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-webserver-sg"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "WebServerSSHRule": {
-            "Type": "AWS::EC2::SecurityGroupIngress",
-            "Condition": "HasKeyPair",
-            "Properties": {
-                "GroupId": {
-                    "Ref": "WebServerSecurityGroup"
-                },
-                "IpProtocol": "tcp",
-                "FromPort": 22,
-                "ToPort": 22,
-                "CidrIp": "10.0.0.0/16",
-                "Description": "Allow SSH from VPC for emergency access"
-            }
-        },
-        "WebServerRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
                     "Version": "2012-10-17",
                     "Statement": [
                         {
+                            "Sid": "Enable IAM User Permissions",
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": "ec2.amazonaws.com"
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
                             },
-                            "Action": "sts:AssumeRole"
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow S3 Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "S3EncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/s3-encryption-key-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "S3EncryptionKey"
+                }
+            }
+        },
+        "AccessLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${BucketNamePrefix}-${EnvironmentSuffix}-access-logs-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            },
+                            "BucketKeyEnabled": true
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
-                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "WebServerCloudWatchPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteLogsAfter90Days",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        }
+                    ]
+                }
+            }
+        },
+        "SecureS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${BucketNamePrefix}-${EnvironmentSuffix}-main-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "S3EncryptionKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "ObjectLockEnabled": {
+                    "Fn::If": [
+                        "UseObjectLock",
+                        true,
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "ObjectLockConfiguration": {
+                    "Fn::If": [
+                        "UseObjectLock",
+                        {
+                            "ObjectLockEnabled": "Enabled",
+                            "Rule": {
+                                "DefaultRetention": {
+                                    "Mode": "COMPLIANCE",
+                                    "Days": 7
+                                }
+                            }
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "AccessLogsBucket"
+                    },
+                    "LogFilePrefix": "access-logs/"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "NotificationConfiguration": {
+                    "Fn::If": [
+                        "UseEventBridge",
+                        {
+                            "EventBridgeConfiguration": {
+                                "EventBridgeEnabled": true
+                            }
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "SecureS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": {
+                        "Fn::If": [
+                            "UseVPCRestriction",
+                            [
                                 {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogGroup",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents",
-                                        "logs:DescribeLogStreams"
+                                    "Sid": "DenyAccessFromOutsideVPC",
+                                    "Effect": "Deny",
+                                    "Principal": "*",
+                                    "Action": "s3:*",
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SecureS3Bucket",
+                                                "Arn"
+                                            ]
+                                        }
                                     ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    "Condition": {
+                                        "StringNotEquals": {
+                                            "aws:SourceVpc": {
+                                                "Ref": "VpcId"
+                                            }
+                                        }
                                     }
                                 },
                                 {
+                                    "Sid": "AllowVPCAccess",
                                     "Effect": "Allow",
+                                    "Principal": "*",
                                     "Action": [
-                                        "cloudwatch:PutMetricData",
-                                        "ec2:DescribeVolumes",
-                                        "ec2:DescribeTags"
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:ListBucket"
                                     ],
-                                    "Resource": "*"
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SecureS3Bucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ],
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "aws:SourceVpc": {
+                                                "Ref": "VpcId"
+                                            }
+                                        }
+                                    }
                                 }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-webserver-role"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "WebServerInstanceProfile": {
-            "Type": "AWS::IAM::InstanceProfile",
-            "Properties": {
-                "Roles": [
-                    {
-                        "Ref": "WebServerRole"
-                    }
-                ]
-            }
-        },
-        "WebServerLaunchTemplate": {
-            "Type": "AWS::EC2::LaunchTemplate",
-            "Properties": {
-                "LaunchTemplateName": {
-                    "Fn::Sub": "${AWS::StackName}-launch-template"
-                },
-                "LaunchTemplateData": {
-                    "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
-                    "InstanceType": {
-                        "Ref": "InstanceType"
-                    },
-                    "KeyName": {
-                        "Fn::If": [
-                            "HasKeyPair",
-                            {
-                                "Ref": "KeyPairName"
-                            },
-                            {
-                                "Ref": "AWS::NoValue"
-                            }
-                        ]
-                    },
-                    "IamInstanceProfile": {
-                        "Arn": {
-                            "Fn::GetAtt": [
-                                "WebServerInstanceProfile",
-                                "Arn"
-                            ]
-                        }
-                    },
-                    "SecurityGroupIds": [
-                        {
-                            "Ref": "WebServerSecurityGroup"
-                        }
-                    ],
-                    "BlockDeviceMappings": [
-                        {
-                            "DeviceName": "/dev/xvda",
-                            "Ebs": {
-                                "VolumeType": "gp3",
-                                "VolumeSize": 20,
-                                "DeleteOnTermination": true,
-                                "Encrypted": {
-                                    "Fn::If": [
-                                        "IsProduction",
-                                        true,
-                                        false
+                            ],
+                            [
+                                {
+                                    "Sid": "AllowBasicAccess",
+                                    "Effect": "Allow",
+                                    "Principal": "*",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:ListBucket",
+                                        "s3:GetBucketLocation",
+                                        "s3:GetBucketVersioning",
+                                        "s3:GetBucketPolicy",
+                                        "s3:GetBucketEncryption",
+                                        "s3:GetBucketLogging",
+                                        "s3:GetBucketNotification",
+                                        "s3:GetObjectLockConfiguration",
+                                        "s3:GetPublicAccessBlock"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SecureS3Bucket",
+                                                "Arn"
+                                            ]
+                                        }
                                     ]
                                 }
-                            }
-                        }
-                    ],
-                    "UserData": {
-                        "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\n\n# Create a simple web page with instance information\ncat > /var/www/html/index.html << 'EOF'\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Secure Web Application - ${Environment}</title>\n    <style>\n        body { \n            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; \n            margin: 0; \n            padding: 40px; \n            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n            color: white;\n            min-height: 100vh;\n        }\n        .container { \n            background: rgba(255, 255, 255, 0.1); \n            padding: 30px; \n            border-radius: 15px; \n            backdrop-filter: blur(10px);\n            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);\n            border: 1px solid rgba(255, 255, 255, 0.18);\n            max-width: 800px;\n            margin: 0 auto;\n        }\n        .header { \n            text-align: center;\n            margin-bottom: 30px;\n            border-bottom: 2px solid rgba(255, 255, 255, 0.3); \n            padding-bottom: 20px; \n        }\n        .info-grid { \n            display: grid;\n            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));\n            gap: 20px;\n            margin: 30px 0;\n        }\n        .info-card {\n            background: rgba(255, 255, 255, 0.1);\n            padding: 20px;\n            border-radius: 10px;\n            border: 1px solid rgba(255, 255, 255, 0.2);\n        }\n        .status { \n            color: #00ff88; \n            font-weight: bold; \n            font-size: 1.2em;\n        }\n        .highlight { \n            color: #ffd700; \n            font-weight: bold; \n        }\n        .footer {\n            margin-top: 30px;\n            text-align: center;\n            font-style: italic;\n            opacity: 0.8;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"header\">\n            <h1>🚀 Secure Web Application Infrastructure</h1>\n            <p class=\"highlight\">High Availability • Auto Scaling • Production Ready</p>\n        </div>\n        \n        <div class=\"info-grid\">\n            <div class=\"info-card\">\n                <h3>🌍 Environment Details</h3>\n                <p><strong>Environment:</strong> <span class=\"highlight\">${Environment}</span></p>\n                <p><strong>Stack:</strong> ${AWS::StackName}</p>\n                <p><strong>Region:</strong> ${AWS::Region}</p>\n            </div>\n            \n            <div class=\"info-card\">\n                <h3>💻 Instance Information</h3>\n                <p><strong>Instance ID:</strong> <span id=\"instance-id\">Loading...</span></p>\n                <p><strong>Availability Zone:</strong> <span id=\"az\">Loading...</span></p>\n                <p><strong>Instance Type:</strong> ${InstanceType}</p>\n            </div>\n            \n            <div class=\"info-card\">\n                <h3>⚡ Status & Performance</h3>\n                <p><strong>Status:</strong> <span class=\"status\">✅ Healthy & Running</span></p>\n                <p><strong>Load Balancer:</strong> <span class=\"status\">✅ Active</span></p>\n                <p><strong>Auto Scaling:</strong> <span class=\"status\">✅ Enabled</span></p>\n            </div>\n            \n            <div class=\"info-card\">\n                <h3>🏗️ Architecture</h3>\n                <p><strong>Platform:</strong> AWS CloudFormation</p>\n                <p><strong>Compute:</strong> EC2 Auto Scaling</p>\n                <p><strong>Load Balancer:</strong> Application Load Balancer</p>\n            </div>\n        </div>\n        \n        <div class=\"footer\">\n            <p>🔐 This infrastructure follows AWS Well-Architected Framework principles</p>\n            <p>Built with Security, Reliability, Performance, and Cost Optimization in mind</p>\n        </div>\n    </div>\n    \n    <script>\n        // Fetch instance metadata\n        fetch('http://169.254.169.254/latest/meta-data/instance-id')\n            .then(response => response.text())\n            .then(data => document.getElementById('instance-id').textContent = data)\n            .catch(() => document.getElementById('instance-id').textContent = 'N/A');\n        \n        fetch('http://169.254.169.254/latest/meta-data/placement/availability-zone')\n            .then(response => response.text())\n            .then(data => document.getElementById('az').textContent = data)\n            .catch(() => document.getElementById('az').textContent = 'N/A');\n    </script>\n</body>\n</html>\nEOF\n\n# Create health check endpoint\necho \"OK\" > /var/www/html/health\n\n# Start and enable httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Signal CloudFormation that the instance is ready\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}\n"
-                        }
-                    },
-                    "TagSpecifications": [
-                        {
-                            "ResourceType": "instance",
-                            "Tags": [
-                                {
-                                    "Key": "Name",
-                                    "Value": {
-                                        "Fn::Sub": "${AWS::StackName}-webserver"
-                                    }
-                                },
-                                {
-                                    "Key": "Environment",
-                                    "Value": {
-                                        "Ref": "Environment"
-                                    }
-                                }
                             ]
-                        },
-                        {
-                            "ResourceType": "volume",
-                            "Tags": [
-                                {
-                                    "Key": "Name",
-                                    "Value": {
-                                        "Fn::Sub": "${AWS::StackName}-webserver-volume"
-                                    }
-                                },
-                                {
-                                    "Key": "Environment",
-                                    "Value": {
-                                        "Ref": "Environment"
-                                    }
-                                }
-                            ]
-                        }
-                    ]
-                }
-            }
-        },
-        "ApplicationLoadBalancer": {
-            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-alb"
-                },
-                "Scheme": "internet-facing",
-                "Type": "application",
-                "SecurityGroups": [
-                    {
-                        "Ref": "ALBSecurityGroup"
-                    }
-                ],
-                "Subnets": [
-                    {
-                        "Ref": "PublicSubnet1"
-                    },
-                    {
-                        "Ref": "PublicSubnet2"
-                    }
-                ],
-                "LoadBalancerAttributes": [
-                    {
-                        "Key": "idle_timeout.timeout_seconds",
-                        "Value": "60"
-                    },
-                    {
-                        "Key": "routing.http2.enabled",
-                        "Value": "true"
-                    },
-                    {
-                        "Key": "access_logs.s3.enabled",
-                        "Value": "false"
-                    },
-                    {
-                        "Key": "deletion_protection.enabled",
-                        "Value": {
-                            "Fn::If": [
-                                "IsProduction",
-                                "true",
-                                "false"
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-alb"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "ALBTargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-tg"
-                },
-                "Port": 80,
-                "Protocol": "HTTP",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "TargetType": "instance",
-                "HealthCheckEnabled": true,
-                "HealthCheckIntervalSeconds": 30,
-                "HealthCheckPath": "/health",
-                "HealthCheckProtocol": "HTTP",
-                "HealthCheckTimeoutSeconds": 5,
-                "HealthyThresholdCount": 2,
-                "UnhealthyThresholdCount": 3,
-                "TargetGroupAttributes": [
-                    {
-                        "Key": "deregistration_delay.timeout_seconds",
-                        "Value": "300"
-                    },
-                    {
-                        "Key": "stickiness.enabled",
-                        "Value": "false"
-                    },
-                    {
-                        "Key": "load_balancing.cross_zone.enabled",
-                        "Value": "true"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-tg"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "ALBListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "ALBTargetGroup"
-                        }
-                    }
-                ],
-                "LoadBalancerArn": {
-                    "Ref": "ApplicationLoadBalancer"
-                },
-                "Port": 80,
-                "Protocol": "HTTP"
-            }
-        },
-        "AutoScalingGroup": {
-            "Type": "AWS::AutoScaling::AutoScalingGroup",
-            "Properties": {
-                "AutoScalingGroupName": {
-                    "Fn::Sub": "${AWS::StackName}-asg"
-                },
-                "VPCZoneIdentifier": [
-                    {
-                        "Ref": "PublicSubnet1"
-                    },
-                    {
-                        "Ref": "PublicSubnet2"
-                    }
-                ],
-                "LaunchTemplate": {
-                    "LaunchTemplateId": {
-                        "Ref": "WebServerLaunchTemplate"
-                    },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "WebServerLaunchTemplate",
-                            "LatestVersionNumber"
                         ]
                     }
-                },
-                "MinSize": {
-                    "Ref": "MinSize"
-                },
-                "MaxSize": {
-                    "Ref": "MaxSize"
-                },
-                "DesiredCapacity": {
-                    "Ref": "DesiredCapacity"
-                },
-                "TargetGroupARNs": [
-                    {
-                        "Ref": "ALBTargetGroup"
-                    }
-                ],
-                "HealthCheckType": "ELB",
-                "HealthCheckGracePeriod": 300,
-                "Cooldown": 300,
-                "TerminationPolicies": [
-                    "OldestInstance"
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-asg-instance"
-                        },
-                        "PropagateAtLaunch": true
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        },
-                        "PropagateAtLaunch": true
-                    }
-                ]
-            },
-            "CreationPolicy": {
-                "ResourceSignal": {
-                    "Count": {
-                        "Ref": "DesiredCapacity"
-                    },
-                    "Timeout": "PT15M"
-                }
-            },
-            "UpdatePolicy": {
-                "AutoScalingRollingUpdate": {
-                    "MinInstancesInService": 1,
-                    "MaxBatchSize": 1,
-                    "PauseTime": "PT15M",
-                    "WaitOnResourceSignals": true
                 }
             }
         },
-        "ScaleUpPolicy": {
-            "Type": "AWS::AutoScaling::ScalingPolicy",
+        "S3AccessLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
             "Properties": {
-                "AdjustmentType": "ChangeInCapacity",
-                "AutoScalingGroupName": {
-                    "Ref": "AutoScalingGroup"
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/s3/${EnvironmentSuffix}/access-logs/${SecureS3Bucket}"
                 },
-                "Cooldown": 300,
-                "ScalingAdjustment": 1,
-                "PolicyType": "SimpleScaling"
-            }
-        },
-        "ScaleDownPolicy": {
-            "Type": "AWS::AutoScaling::ScalingPolicy",
-            "Properties": {
-                "AdjustmentType": "ChangeInCapacity",
-                "AutoScalingGroupName": {
-                    "Ref": "AutoScalingGroup"
-                },
-                "Cooldown": 300,
-                "ScalingAdjustment": -1,
-                "PolicyType": "SimpleScaling"
-            }
-        },
-        "CPUAlarmHigh": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmName": {
-                    "Fn::Sub": "${AWS::StackName}-cpu-high"
-                },
-                "AlarmDescription": "Alarm when CPU exceeds 70%",
-                "MetricName": "CPUUtilization",
-                "Namespace": "AWS/EC2",
-                "Statistic": "Average",
-                "Period": 300,
-                "EvaluationPeriods": 2,
-                "Threshold": 70,
-                "ComparisonOperator": "GreaterThanThreshold",
-                "Dimensions": [
-                    {
-                        "Name": "AutoScalingGroupName",
-                        "Value": {
-                            "Ref": "AutoScalingGroup"
-                        }
-                    }
-                ],
-                "AlarmActions": [
-                    {
-                        "Ref": "ScaleUpPolicy"
-                    }
-                ]
-            }
-        },
-        "CPUAlarmLow": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmName": {
-                    "Fn::Sub": "${AWS::StackName}-cpu-low"
-                },
-                "AlarmDescription": "Alarm when CPU is below 25%",
-                "MetricName": "CPUUtilization",
-                "Namespace": "AWS/EC2",
-                "Statistic": "Average",
-                "Period": 300,
-                "EvaluationPeriods": 2,
-                "Threshold": 25,
-                "ComparisonOperator": "LessThanThreshold",
-                "Dimensions": [
-                    {
-                        "Name": "AutoScalingGroupName",
-                        "Value": {
-                            "Ref": "AutoScalingGroup"
-                        }
-                    }
-                ],
-                "AlarmActions": [
-                    {
-                        "Ref": "ScaleDownPolicy"
-                    }
-                ]
+                "RetentionInDays": 30
             }
         }
     },
     "Outputs": {
-        "VPCId": {
-            "Description": "ID of the VPC",
+        "SecureS3BucketName": {
+            "Description": "Name of the secure S3 bucket",
             "Value": {
-                "Ref": "VPC"
+                "Ref": "SecureS3Bucket"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                    "Fn::Sub": "${AWS::StackName}-SecureS3BucketName"
                 }
             }
         },
-        "PublicSubnets": {
-            "Description": "List of public subnet IDs",
-            "Value": {
-                "Fn::Join": [
-                    ",",
-                    [
-                        {
-                            "Ref": "PublicSubnet1"
-                        },
-                        {
-                            "Ref": "PublicSubnet2"
-                        }
-                    ]
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-Public-Subnets"
-                }
-            }
-        },
-        "LoadBalancerURL": {
-            "Description": "URL of the Application Load Balancer",
-            "Value": {
-                "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-LoadBalancer-URL"
-                }
-            }
-        },
-        "LoadBalancerDNS": {
-            "Description": "DNS name of the Application Load Balancer",
+        "SecureS3BucketArn": {
+            "Description": "ARN of the secure S3 bucket",
             "Value": {
                 "Fn::GetAtt": [
-                    "ApplicationLoadBalancer",
-                    "DNSName"
+                    "SecureS3Bucket",
+                    "Arn"
                 ]
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-LoadBalancer-DNS"
+                    "Fn::Sub": "${AWS::StackName}-SecureS3BucketArn"
                 }
             }
         },
-        "AutoScalingGroupName": {
-            "Description": "Name of the Auto Scaling Group",
+        "AccessLogsBucketName": {
+            "Description": "Name of the access logs bucket",
             "Value": {
-                "Ref": "AutoScalingGroup"
+                "Ref": "AccessLogsBucket"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ASG-Name"
+                    "Fn::Sub": "${AWS::StackName}-AccessLogsBucketName"
                 }
             }
         },
-        "WebServerSecurityGroupId": {
-            "Description": "Security Group ID for web servers",
+        "KMSKeyId": {
+            "Description": "KMS Key ID used for encryption",
             "Value": {
-                "Ref": "WebServerSecurityGroup"
+                "Ref": "S3EncryptionKey"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-WebServer-SG-ID"
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyId"
                 }
             }
         },
-        "ALBSecurityGroupId": {
-            "Description": "Security Group ID for Application Load Balancer",
+        "KMSKeyAlias": {
+            "Description": "KMS Key Alias",
             "Value": {
-                "Ref": "ALBSecurityGroup"
+                "Ref": "S3EncryptionKeyAlias"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ALB-SG-ID"
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyAlias"
+                }
+            }
+        },
+        "VpcId": {
+            "Description": "VPC ID configured for bucket access",
+            "Value": {
+                "Ref": "VpcId"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VpcId"
                 }
             }
         }

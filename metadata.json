@@ -3,20 +3,22 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "LS-291441",
+  "po_id": "LS-trainr937",
   "team": "synth-2",
-  "startedAt": "2025-08-10T10:45:27.791Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup"
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration as Code"
   ],
   "aws_services": [
+    "S3",
+    "KMS",
+    "CloudWatch Logs",
     "VPC",
-    "EC2",
-    "AutoScaling",
-    "ElasticLoadBalancing",
-    "CloudWatch",
+    "EventBridge",
     "IAM"
   ],
   "wave": "P0"
