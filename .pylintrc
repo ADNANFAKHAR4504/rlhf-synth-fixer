@@ -16,7 +16,6 @@ disable=
     W0613, # unused-argument
     W0612, # unused-variable
     W0611, # unused-import
-    W0640, # cell-var-from-loop (common in Pulumi resource loops)
     C0415, # import-outside-toplevel
     C0411, # wrong-import-order
     E0611, # no-name-in-module (for moto mock imports)
@@ -25,7 +24,6 @@ disable=
     R0917, # too-many-positional-arguments
     W0621, # redefined-outer-name (for pytest fixtures)
     W0718, # broad-exception-caught
-    F0001, # fatal import errors (tests module)
 
 [FORMAT]
 # Maximum number of characters on a single line

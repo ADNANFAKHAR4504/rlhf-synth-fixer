@@ -76,10 +76,10 @@ class TapStack(pulumi.ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
 
-            def provider_opts(deps=None):
+            def provider_opts(deps=None, current_region=region):
                 return ResourceOptions(
                     parent=self,
-                    provider=self.providers[region],
+                    provider=self.providers[current_region],
                     depends_on=deps or []
                 )
 
