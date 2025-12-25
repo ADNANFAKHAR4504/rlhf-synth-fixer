@@ -6,8 +6,9 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 // LocalStack detection
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 interface SecurityStackProps {
   environmentSuffix: string;
@@ -20,158 +21,155 @@ export class SecurityStack extends Construct {
 
     // Create Network Firewall Rule Group with managed rules
     // Note: Network Firewall is not supported in LocalStack Community - conditional deployment
-    const firewallRuleGroup = !isLocalStack ? new networkfirewall.CfnRuleGroup(
-      this,
-      'ThreatProtectionRuleGroup',
-      {
-        capacity: 100,
-        ruleGroupName: `threat-protection-${props.environmentSuffix}`,
-        type: 'STATEFUL',
-        description: 'Managed rule group for threat protection',
-        ruleGroup: {
-          statefulRuleOptions: {
-            ruleOrder: 'DEFAULT_ACTION_ORDER',
-          },
-          rulesSource: {
-            statefulRules: [
-              {
-                action: 'DROP',
-                header: {
-                  destination: 'ANY',
-                  destinationPort: 'ANY',
-                  direction: 'ANY',
-                  protocol: 'TCP',
-                  source: 'ANY',
-                  sourcePort: 'ANY',
+    const firewallRuleGroup = !isLocalStack
+      ? new networkfirewall.CfnRuleGroup(this, 'ThreatProtectionRuleGroup', {
+          capacity: 100,
+          ruleGroupName: `threat-protection-${props.environmentSuffix}`,
+          type: 'STATEFUL',
+          description: 'Managed rule group for threat protection',
+          ruleGroup: {
+            statefulRuleOptions: {
+              ruleOrder: 'DEFAULT_ACTION_ORDER',
+            },
+            rulesSource: {
+              statefulRules: [
+                {
+                  action: 'DROP',
+                  header: {
+                    destination: 'ANY',
+                    destinationPort: 'ANY',
+                    direction: 'ANY',
+                    protocol: 'TCP',
+                    source: 'ANY',
+                    sourcePort: 'ANY',
+                  },
+                  ruleOptions: [
+                    {
+                      keyword: 'msg',
+                      settings: ['"Block malicious traffic"'],
+                    },
+                    {
+                      keyword: 'sid',
+                      settings: ['1001'],
+                    },
+                  ],
                 },
-                ruleOptions: [
-                  {
-                    keyword: 'msg',
-                    settings: ['"Block malicious traffic"'],
-                  },
-                  {
-                    keyword: 'sid',
-                    settings: ['1001'],
-                  },
-                ],
-              },
-            ],
+              ],
+            },
           },
-        },
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
-    ) : undefined;
+          tags: [
+            {
+              key: 'Environment',
+              value: 'Production',
+            },
+          ],
+        })
+      : undefined;
 
     // Create Network Firewall Policy
-    const firewallPolicy = !isLocalStack ? new networkfirewall.CfnFirewallPolicy(
-      this,
-      'NetworkFirewallPolicy',
-      {
-        firewallPolicyName: `security-policy-${props.environmentSuffix}`,
-        firewallPolicy: {
-          statefulRuleGroupReferences: firewallRuleGroup ? [
-            {
-              resourceArn: firewallRuleGroup.attrRuleGroupArn,
-            },
-          ] : [],
-          statelessDefaultActions: ['aws:forward_to_sfe'],
-          statelessFragmentDefaultActions: ['aws:forward_to_sfe'],
-        },
-        description: 'Network firewall policy for threat protection',
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
+    const firewallPolicy = !isLocalStack
+      ? new networkfirewall.CfnFirewallPolicy(this, 'NetworkFirewallPolicy', {
+          firewallPolicyName: `security-policy-${props.environmentSuffix}`,
+          firewallPolicy: {
+            statefulRuleGroupReferences: firewallRuleGroup
+              ? [
+                  {
+                    resourceArn: firewallRuleGroup.attrRuleGroupArn,
+                  },
+                ]
+              : [],
+            statelessDefaultActions: ['aws:forward_to_sfe'],
+            statelessFragmentDefaultActions: ['aws:forward_to_sfe'],
           },
-        ],
-      }
-    ) : undefined;
+          description: 'Network firewall policy for threat protection',
+          tags: [
+            {
+              key: 'Environment',
+              value: 'Production',
+            },
+          ],
+        })
+      : undefined;
 
     // Create Network Firewall
-    const networkFirewall = !isLocalStack && firewallPolicy ? new networkfirewall.CfnFirewall(
-      this,
-      'NetworkFirewall',
-      {
-        firewallName: `security-firewall-${props.environmentSuffix}`,
-        firewallPolicyArn: firewallPolicy.attrFirewallPolicyArn,
-        vpcId: props.vpc.vpcId,
-        subnetMappings: props.vpc.publicSubnets.map(subnet => ({
-          subnetId: subnet.subnetId,
-        })),
-        description: 'Network firewall for VPC protection',
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
-    ) : undefined;
+    const networkFirewall =
+      !isLocalStack && firewallPolicy
+        ? new networkfirewall.CfnFirewall(this, 'NetworkFirewall', {
+            firewallName: `security-firewall-${props.environmentSuffix}`,
+            firewallPolicyArn: firewallPolicy.attrFirewallPolicyArn,
+            vpcId: props.vpc.vpcId,
+            subnetMappings: props.vpc.publicSubnets.map(subnet => ({
+              subnetId: subnet.subnetId,
+            })),
+            description: 'Network firewall for VPC protection',
+            tags: [
+              {
+                key: 'Environment',
+                value: 'Production',
+              },
+            ],
+          })
+        : undefined;
 
     // Create IAM role for VPC Lattice with least privilege
     // Note: VPC Lattice is not supported in LocalStack Community - conditional deployment
-    const latticeServiceRole = !isLocalStack ? new iam.Role(this, 'VpcLatticeServiceRole', {
-      roleName: `vpc-lattice-role-${props.environmentSuffix}`,
-      assumedBy: new iam.ServicePrincipal('vpc-lattice.amazonaws.com'),
-      description: 'IAM role for VPC Lattice service network',
-    }) : undefined;
+    const latticeServiceRole = !isLocalStack
+      ? new iam.Role(this, 'VpcLatticeServiceRole', {
+          roleName: `vpc-lattice-role-${props.environmentSuffix}`,
+          assumedBy: new iam.ServicePrincipal('vpc-lattice.amazonaws.com'),
+          description: 'IAM role for VPC Lattice service network',
+        })
+      : undefined;
 
     // Add minimal policy for VPC Lattice
     if (latticeServiceRole) {
       latticeServiceRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'vpc-lattice:ListServices',
-          'vpc-lattice:GetService',
-          'vpc-lattice:CreateServiceNetworkVpcAssociation',
-          'vpc-lattice:GetServiceNetworkVpcAssociation',
-        ],
-        resources: ['*'],
-      })
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'vpc-lattice:ListServices',
+            'vpc-lattice:GetService',
+            'vpc-lattice:CreateServiceNetworkVpcAssociation',
+            'vpc-lattice:GetServiceNetworkVpcAssociation',
+          ],
+          resources: ['*'],
+        })
       );
     }
 
     // Create VPC Lattice Service Network
-    const serviceNetwork = !isLocalStack ? new vpclattice.CfnServiceNetwork(
-      this,
-      'SecureServiceNetwork',
-      {
-        name: `secure-service-network-${props.environmentSuffix}`,
-        authType: 'AWS_IAM',
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-          {
-            key: 'Component',
-            value: 'ServiceMesh',
-          },
-        ],
-      }
-    ) : undefined;
+    const serviceNetwork = !isLocalStack
+      ? new vpclattice.CfnServiceNetwork(this, 'SecureServiceNetwork', {
+          name: `secure-service-network-${props.environmentSuffix}`,
+          authType: 'AWS_IAM',
+          tags: [
+            {
+              key: 'Environment',
+              value: 'Production',
+            },
+            {
+              key: 'Component',
+              value: 'ServiceMesh',
+            },
+          ],
+        })
+      : undefined;
 
     // Associate VPC with Service Network
     if (serviceNetwork) {
       new vpclattice.CfnServiceNetworkVpcAssociation(
-      this,
-      'ServiceNetworkVpcAssociation',
-      {
-        serviceNetworkIdentifier: serviceNetwork.attrId,
-        vpcIdentifier: props.vpc.vpcId,
-        tags: [
-          {
-            key: 'Environment',
-            value: 'Production',
-          },
-        ],
-      }
+        this,
+        'ServiceNetworkVpcAssociation',
+        {
+          serviceNetworkIdentifier: serviceNetwork.attrId,
+          vpcIdentifier: props.vpc.vpcId,
+          tags: [
+            {
+              key: 'Environment',
+              value: 'Production',
+            },
+          ],
+        }
       );
     }
 
