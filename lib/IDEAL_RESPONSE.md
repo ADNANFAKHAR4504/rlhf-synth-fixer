@@ -308,9 +308,9 @@ aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX}
 ## Architecture Overview
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌─────────────┐      ┌────────────┐
-│   Client    │─────▶│ API Gateway  │─────▶│   Lambda    │─────▶│  S3 Bucket │
-└─────────────┘      └──────────────┘      └─────────────┘      └────────────┘
++-------------+      +--------------+      +-------------+      +------------+
+|   Client    | ---> | API Gateway  | ---> |   Lambda    | ---> |  S3 Bucket |
++-------------+      +--------------+      +-------------+      +------------+
                            HTTP                   Invoke              Store
                          Endpoint                Function             Data
 ```
