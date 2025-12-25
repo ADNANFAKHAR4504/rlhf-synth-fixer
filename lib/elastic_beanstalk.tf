@@ -14,7 +14,8 @@ resource "aws_elastic_beanstalk_application" "main" {
     }
   }
 
-  tags = {
+  # Tags disabled for LocalStack - ListTagsForResource API not available in Community Edition
+  tags = local.is_localstack ? null : {
     Name        = "${var.project_name}-${var.environment_suffix}-app"
     Environment = var.environment
     Project     = var.project_name
@@ -181,7 +182,8 @@ resource "aws_elastic_beanstalk_environment" "main" {
     value     = random_password.db_password.result
   }
 
-  tags = {
+  # Tags disabled for LocalStack - ListTagsForResource API not available in Community Edition
+  tags = local.is_localstack ? null : {
     Name        = "${var.project_name}-${var.environment_suffix}-env"
     Environment = var.environment
     Project     = var.project_name
