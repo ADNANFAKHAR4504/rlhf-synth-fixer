@@ -61,7 +61,7 @@ Create a **CloudFormation with JSON** template that provisions a complete multi-
 
 - ALL resources must be fully destroyable with NO Retain policies and NO DeletionProtection
 - No AWS Config or property validation issues
-- Resource names must dynamically include environmentSuffix
+- All infrastructure names must dynamically include environmentSuffix
 - Parameters must be clearly documented with default values
 - Template must deploy successfully without manual setup
 
