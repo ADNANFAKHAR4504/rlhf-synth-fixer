@@ -11,7 +11,7 @@ I need to build a complete serverless infrastructure for a web application using
 5. **CloudWatch**: Set up CloudWatch Logs for Lambda monitoring and alarms for error rates exceeding 1%
 6. **VPC Configuration**: Deploy Lambda in private subnets within a custom VPC
 7. **Environment Parameters**: Use environment-specific configuration for easy management
-8. **Resource Tagging**: Tag all resources with Environment and Project tags
+8. **Tagging Strategy**: Tag all resources with Environment and Project tags
 
 ## Service Connectivity
 
