@@ -49,7 +49,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have AmiId parameter', () => {
       expect(template.Parameters.AmiId).toBeDefined();
-      expect(template.Parameters.AmiId.Type).toBe('AWS::EC2::Image::Id');
+      expect(template.Parameters.AmiId.Type).toBe('String');
       expect(template.Parameters.AmiId.Default).toBeDefined();
     });
 
@@ -614,7 +614,7 @@ describe('TapStack CloudFormation Template', () => {
   describe('LocalStack Compatibility Verification', () => {
     test('should NOT use SSM Parameter Store for AMI lookup', () => {
       const amiParam = template.Parameters.AmiId;
-      expect(amiParam.Type).toBe('AWS::EC2::Image::Id');
+      expect(amiParam.Type).toBe('String');
       expect(amiParam.Type).not.toContain('AWS::SSM::Parameter');
     });
 
