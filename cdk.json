@@ -1,5 +1,5 @@
 {
-  "app": "node bin/tap.mjs",
+  "app": "npx ts-node bin/tap.ts",
   "watch": {
     "include": [
       "**"
