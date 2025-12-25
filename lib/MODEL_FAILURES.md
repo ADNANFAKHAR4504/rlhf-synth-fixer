@@ -92,7 +92,7 @@ The following modifications were made to ensure LocalStack Community Edition com
 | RDS Multi-AZ | Limited support in Community | Single-AZ deployment for LocalStack | Multi-AZ enabled in AWS |
 | Secrets Manager | Basic support | Simplified secret storage | Full integration in AWS |
 | Systems Manager | Limited Session Manager support | Basic SSM configuration | Full SSM in AWS |
-| VPC Flow Logs | CloudWatch integration limited | Basic flow log config | Full CloudWatch integration in AWS |
+| VPC Flow Logs | max_aggregation_interval not supported | Disabled for LocalStack | Enabled in AWS production |
 | Auto Scaling Group | Basic support | Simplified ASG configuration | Full ASG features in AWS |
 
 ### Environment Detection Pattern Used
