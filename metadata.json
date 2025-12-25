@@ -6,7 +6,7 @@
   "po_id": "LS-trainr881",
   "team": "synth-2",
   "startedAt": "2025-08-17T20:57:48+05:30",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
     "General Infrastructure Tooling QA",
