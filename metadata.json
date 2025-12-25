@@ -1,0 +1,27 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr477cdkjava",
+  "team": "synth-2",
+  "startedAt": "2025-08-26T19:39:08+05:30",
+  "subtask": "General Infrastructure Provisioning",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "IAM",
+    "CloudWatch",
+    "Systems Manager"
+  ],
+  "wave": "P0"
+}

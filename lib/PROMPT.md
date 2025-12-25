@@ -1,0 +1,35 @@
+# CDK Java Cloud Environment Setup
+
+Need to build a production-grade cloud infrastructure using CDK with Java. This is for a web application that needs high availability and auto-scaling capabilities.
+
+## What to Build
+
+Set up a complete cloud environment with:
+
+- VPC spanning 2 availability zones with public and private subnets
+- Application Load Balancer in public subnets to handle incoming traffic
+- Auto Scaling Group with EC2 instances running Apache web server
+- Instances should be in private subnets for security
+- NAT Gateways for outbound connectivity from private subnets
+- Security groups configured properly: ALB accepts HTTP and HTTPS, EC2 only accepts traffic from ALB
+
+## Requirements
+
+The infrastructure should:
+- Scale automatically based on CPU usage, targeting 70% utilization
+- Have minimum 2 instances running, maximum 10
+- Use Amazon Linux 2023 for EC2 instances
+- Include IAM roles for Systems Manager and CloudWatch access
+- Tag all resources with environment suffix for multi-environment support
+- Export outputs for VPC ID, ALB DNS name, and ASG name
+
+## Configuration
+
+- VPC CIDR: 10.0.0.0/16
+- Public subnet: /24 CIDR
+- Private subnet: /24 CIDR with egress
+- Instance type: t3.small
+- Health check grace period: 300 seconds
+- Scaling cooldown: 300 seconds
+
+Use CDK nested stack pattern for better organization. Make sure the web server shows the instance ID when accessed through the load balancer.
