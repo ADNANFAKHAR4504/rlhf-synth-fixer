@@ -1,0 +1,7 @@
+name: TapStack
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Pulumi infrastructure for TAP
+main: bin/tap.ts
