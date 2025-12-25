@@ -3,19 +3,17 @@
   "language": "ts",
   "complexity": "medium",
   "turn_type": "single",
-  "po_id": "trainr135",
+  "po_id": "LS-trainr135",
   "team": "synth-2",
-  "wave": "P1",
   "startedAt": "2025-08-15T14:21:21+05:30",
   "subtask": "Web Application Deployment",
+  "provider": "localstack",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Web Application Deployment",
-    "Database Management",
-    "Security Configuration",
-    "Performance Optimization"
+    "IaC Optimization",
+    "Security Configuration as Code",
+    "Web Application Deployment"
   ],
-  "training_quality": 8,
   "aws_services": [
     "S3",
     "RDS",
@@ -26,10 +24,5 @@
     "Systems Manager Parameter Store",
     "EventBridge"
   ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "mayanksethi-turing",
-  "dockerS3Location": ""
+  "wave": "P0"
 }
