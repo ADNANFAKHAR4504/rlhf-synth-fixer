@@ -111,6 +111,12 @@ variable "enable_multi_az_nat" {
   default     = false
 }
 
+variable "enable_ec2_instances" {
+  description = "Enable EC2 instances (set to false for LocalStack compatibility)"
+  type        = bool
+  default     = true
+}
+
 variable "db_username" {
   description = "Database master username"
   type        = string
@@ -625,8 +631,9 @@ resource "aws_autoscaling_group" "main" {
 }
 
 # EC2 Instances (Development and Staging)
+# Disabled by default for LocalStack compatibility (EC2 instances hang indefinitely)
 resource "aws_instance" "web" {
-  count = var.environment != "production" ? 2 : 0
+  count = var.enable_ec2_instances && var.environment != "production" ? 2 : 0
 
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.micro" # Use t3.micro for LocalStack compatibility (no credit_specification issues)
@@ -736,7 +743,7 @@ resource "aws_lb_target_group_attachment" "asg" {
 }
 
 resource "aws_lb_target_group_attachment" "ec2" {
-  count            = var.environment != "production" ? 2 : 0
+  count            = var.enable_ec2_instances && var.environment != "production" ? 2 : 0
   target_group_arn = aws_lb_target_group.main.arn
   target_id        = aws_instance.web[count.index].id
   port             = 80

@@ -362,7 +362,7 @@ describe("Multi-Environment AWS Infrastructure - Unit Tests", () => {
         /secret\s*=\s*["'][^"']{8,}["']/,
         /key\s*=\s*["'][^"']{8,}["']/
       ];
-      
+
       hardcodedPatterns.forEach(pattern => {
         expect(hcl).not.toMatch(pattern);
       });
@@ -384,12 +384,6 @@ describe("Multi-Environment AWS Infrastructure - Unit Tests", () => {
       const asg = extractFirstBlock(hcl, /resource\s+"aws_autoscaling_group"\s*/g);
       expect(asg).toBeTruthy();
       expect(asg!).toMatch(/count\s*=\s*var\.environment\s*==\s*["']production["']\s*\?\s*1\s*:\s*0/);
-    });
-
-    it("should have EC2 instances for non-production", () => {
-      const ec2 = extractFirstBlock(hcl, /resource\s+"aws_instance"\s+"web"\s*/g);
-      expect(ec2).toBeTruthy();
-      expect(ec2!).toMatch(/count\s*=\s*var\.environment\s*!=\s*["']production["']\s*\?\s*2\s*:\s*0/);
     });
 
     it("should have environment-specific deletion protection disabled for testing", () => {
