@@ -19,7 +19,7 @@
     "S3",
     "VPC"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291717",
     "pr": "Pr1166"
