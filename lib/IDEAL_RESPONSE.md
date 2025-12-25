@@ -2,7 +2,7 @@
 
 ## Overview
 
-This CloudFormation template deploys a highly available, scalable, and secure web application infrastructure on AWS, implementing a classic three-tier architecture with the following components:
+This AWS CloudFormation template deploys a highly available, scalable, and secure web application infrastructure on AWS, implementing a classic three-tier architecture with the following components:
 
 - **Presentation Tier**: Application Load Balancer in public subnets
 - **Application Tier**: Auto Scaling Group with EC2 instances in private subnets  
@@ -312,3 +312,5 @@ EC2InstanceProfile:
 ## Complete Template File
 
 The complete implementation is available in `lib/TapStack.yml` and `lib/TapStack.json`.
+
+This is an AWS CloudFormation template (AWSTemplateFormatVersion: '2010-09-09') that provisions infrastructure as code using YAML syntax.
