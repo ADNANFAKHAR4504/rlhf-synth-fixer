@@ -41,8 +41,13 @@ class TestTapStackIntegration(unittest.TestCase):
 
         try:
             response = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
-            self.assertIn('Rules', response)
-            self.assertTrue(len(response['Rules']) > 0)
+            self.assertIn('ServerSideEncryptionConfiguration', response)
+            self.assertIn('Rules', response['ServerSideEncryptionConfiguration'])
+            self.assertTrue(len(response['ServerSideEncryptionConfiguration']['Rules']) > 0)
+
+            # Verify AES256 encryption is configured
+            rules = response['ServerSideEncryptionConfiguration']['Rules']
+            self.assertEqual(rules[0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'], 'AES256')
         except ClientError as e:
             self.fail(f"Failed to get bucket encryption for {bucket_name}: {e}")
 
