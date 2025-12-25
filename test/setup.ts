@@ -75,27 +75,35 @@ jest.mock('axios', () => ({
 
         // Mock different responses based on the request
         if (!headers['X-API-Key']) {
-          const error = new Error('Forbidden');
-          (error as any).response = { status: 403, data: 'Forbidden' };
+          const error = new Error('Forbidden') as Error & {
+            response: { status: number; data: string };
+          };
+          error.response = { status: 403, data: 'Forbidden' };
           return Promise.reject(error);
         }
 
         if (!headers['Authorization']) {
-          const error = new Error('Unauthorized');
-          (error as any).response = { status: 401, data: 'Unauthorized' };
+          const error = new Error('Unauthorized') as Error & {
+            response: { status: number; data: string };
+          };
+          error.response = { status: 401, data: 'Unauthorized' };
           return Promise.reject(error);
         }
 
         if (_url.includes('/nonexistent')) {
-          const error = new Error('Not Found');
-          (error as any).response = { status: 404, data: 'Not Found' };
+          const error = new Error('Not Found') as Error & {
+            response: { status: number; data: string };
+          };
+          error.response = { status: 404, data: 'Not Found' };
           return Promise.reject(error);
         }
 
         // Rate limiting simulation (deterministic for testing)
         if (_url.includes('/rate-limit-test')) {
-          const error = new Error('Too Many Requests');
-          (error as any).response = { status: 429, data: 'Too Many Requests' };
+          const error = new Error('Too Many Requests') as Error & {
+            response: { status: number; data: string };
+          };
+          error.response = { status: 429, data: 'Too Many Requests' };
           return Promise.reject(error);
         }
 
@@ -117,21 +125,27 @@ jest.mock('axios', () => ({
           const headers = (config?.headers as Record<string, string>) || {};
 
           if (!headers['X-API-Key']) {
-            const error = new Error('Forbidden');
-            (error as any).response = { status: 403, data: 'Forbidden' };
+            const error = new Error('Forbidden') as Error & {
+              response: { status: number; data: string };
+            };
+            error.response = { status: 403, data: 'Forbidden' };
             return Promise.reject(error);
           }
 
           if (!headers['Authorization']) {
-            const error = new Error('Unauthorized');
-            (error as any).response = { status: 401, data: 'Unauthorized' };
+            const error = new Error('Unauthorized') as Error & {
+              response: { status: number; data: string };
+            };
+            error.response = { status: 401, data: 'Unauthorized' };
             return Promise.reject(error);
           }
 
           // Check for malformed JSON
           if (data === 'invalid-json') {
-            const error = new Error('Bad Request');
-            (error as any).response = { status: 400, data: 'Bad Request' };
+            const error = new Error('Bad Request') as Error & {
+              response: { status: number; data: string };
+            };
+            error.response = { status: 400, data: 'Bad Request' };
             return Promise.reject(error);
           }
 
