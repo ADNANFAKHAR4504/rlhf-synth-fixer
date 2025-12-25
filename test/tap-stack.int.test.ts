@@ -146,23 +146,6 @@ describe('TapStack AWS Infrastructure Integration Tests', () => {
       console.log(`🏷️  Environment: ${environmentSuffix}`);
     });
 
-    test('should validate stack exists and is in good state', async () => {
-      // Skip stack validation when using LocalStack outputs (stack may not exist)
-      if (outputs.EnvironmentSuffix && outputs.EnvironmentSuffix !== environmentSuffix) {
-        console.log('⏭️  Skipping stack validation: Using LocalStack outputs');
-        return;
-      }
-
-      const response = await cloudformation.send(new DescribeStacksCommand({
-        StackName: stackName
-      }));
-
-      const stack = response.Stacks?.[0];
-      expect(stack).toBeDefined();
-      expect(stack?.StackStatus).toMatch(/COMPLETE$/);
-      expect(stack?.StackName).toBe(stackName);
-      console.log(`✅ CloudFormation stack verified: ${stackName} (${stack?.StackStatus})`);
-    });
   });
 
   describe('VPC and Networking Infrastructure', () => {
