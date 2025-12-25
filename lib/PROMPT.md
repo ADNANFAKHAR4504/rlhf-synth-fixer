@@ -81,7 +81,7 @@ Create a **CloudFormation with JSON** template that provisions a complete multi-
 - **Performance**: Infrastructure deployed in <10 minutes, DynamoDB responds in milliseconds
 - **Reliability**: Multi-AZ setup, auto-scaling configured, health checks active
 - **Security**: Private subnets for compute, encryption at rest for DynamoDB, IAM roles properly scoped
-- **Resource Naming**: All resources include environmentSuffix parameter dynamically
+- **Naming Convention**: All resources include environmentSuffix parameter dynamically
 - **Destroyability**: `aws cloudformation delete-stack` cleanly removes all resources
 
 ## What to deliver
