@@ -32,7 +32,7 @@ Design a CloudFormation template in YAML to set up a web application environment
    - Load balancer accessible only over HTTP on port 80
 
 6. **IAM and Monitoring**
-   - IAM roles for EC2 instances to interact with S3 and log to CloudWatch
+   - IAM roles for EC2 instances with least-privilege permissions: s3:GetObject and s3:PutObject actions on specific bucket ARNs only, and logs:CreateLogStream plus logs:PutLogEvents actions on specific CloudWatch log group ARNs only
    - CloudWatch configuration for logging all API gateway requests
 
 7. **Outputs**
