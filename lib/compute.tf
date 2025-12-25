@@ -77,8 +77,9 @@ resource "aws_autoscaling_policy" "scale_down" {
 }
 
 # Application Load Balancer
+# Note: Name includes configuration suffix to force recreation when settings change
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
+  name               = "${local.name_prefix}-alb${var.enable_alb_access_logs ? "" : "-nologs"}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -97,6 +98,10 @@ resource "aws_lb" "main" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Target Group
