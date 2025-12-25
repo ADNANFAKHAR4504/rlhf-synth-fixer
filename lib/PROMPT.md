@@ -55,7 +55,7 @@ Create an infrastructure compliance validation system using CloudFormation with 
 - All data must be encrypted at rest using AWS KMS
 - All resources must be destroyable with no Retain deletion policies
 - IAM roles must follow least-privilege principle with specific action permissions
-- IAM policies must specify exact resource ARNs, not wildcard Resource:*
+- IAM policies must specify exact resource ARNs instead of using wildcards
 - No hardcoded credentials or sensitive data
 - System must be cost-effective using serverless components
 - Include proper error handling and logging for all Lambda functions
