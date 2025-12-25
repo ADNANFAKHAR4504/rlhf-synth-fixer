@@ -57,7 +57,7 @@ variable "common_tags" {
 }
 
 variable "is_localstack" {
-  description = "Flag to indicate if deploying to LocalStack (auto-detected from AWS_ENDPOINT_URL)"
+  description = "Flag to indicate if deploying to LocalStack (set to true for LocalStack provider)"
   type        = bool
-  default     = false
+  default     = true
 }
