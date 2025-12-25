@@ -13,13 +13,13 @@ I need to create a serverless infrastructure on AWS using Pulumi with TypeScript
 
 - **Region**: us-east-1
 - **Platform**: Pulumi with TypeScript
-- **Lambda Runtime**: Node.js 20.x (latest supported version)
+- **Lambda Runtime**: Node.js 20.x latest supported version
 - **DynamoDB**: Use on-demand billing mode with warm throughput for performance optimization
-- **API Gateway**: Use HTTP API (v2) for better performance and cost efficiency
+- **API Gateway**: Use HTTP API v2 for better performance and cost efficiency
 
 ## Security Requirements
 
-- Lambda execution role with minimal DynamoDB permissions (GetItem, PutItem, UpdateItem, DeleteItem)
+- Lambda execution role with minimal DynamoDB permissions: GetItem, PutItem, UpdateItem, and DeleteItem
 - API Gateway integration role to invoke Lambda function
 - All IAM policies should follow least privilege principle
 - No wildcard permissions allowed
