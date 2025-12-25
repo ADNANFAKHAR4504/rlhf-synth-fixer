@@ -535,12 +535,20 @@ public final class Main {
         }
 
         // Create the main TAP stack
+        String stackRegion = System.getenv("CDK_DEFAULT_REGION");
+        if (stackRegion == null) {
+            stackRegion = System.getenv("AWS_REGION");
+        }
+        if (stackRegion == null) {
+            stackRegion = "us-east-2";
+        }
+
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
                 .stackProps(StackProps.builder()
                         .env(Environment.builder()
                                 .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                                .region("us-east-2")
+                                .region(stackRegion)
                                 .build())
                         .build())
                 .build());
