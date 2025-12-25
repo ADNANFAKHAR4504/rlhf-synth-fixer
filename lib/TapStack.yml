@@ -42,6 +42,7 @@ Parameters:
 Conditions:
   DeployCodePipeline: !Equals [!Ref IsLocalStack, 'false']
   DeployNATGateway: !Equals [!Ref IsLocalStack, 'false']
+  IsLocalStackCondition: !Equals [!Ref IsLocalStack, 'true']
 
 Resources:
   # VPC Configuration (using default VPC)
@@ -543,7 +544,7 @@ Resources:
       AutoScalingGroupName: !Sub 'blue-${Environment}-migration-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: !If [IsLocalStackCondition, '$Latest', !GetAtt LaunchTemplate.LatestVersionNumber]
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
@@ -565,7 +566,7 @@ Resources:
       AutoScalingGroupName: !Sub 'green-${Environment}-migration-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: !If [IsLocalStackCondition, '$Latest', !GetAtt LaunchTemplate.LatestVersionNumber]
       MinSize: 0
       MaxSize: 6
       DesiredCapacity: 0
