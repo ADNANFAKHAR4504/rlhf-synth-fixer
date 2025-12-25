@@ -31,18 +31,38 @@ const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json
 let stackOutputs: any = {};
 
 if (fs.existsSync(outputsPath)) {
-  stackOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+  const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+  // Transform Terraform output format {value: "...", sensitive: false, type: "..."} to flat format
+  for (const [key, value] of Object.entries(rawOutputs)) {
+    if (typeof value === 'object' && value !== null && 'value' in value) {
+      stackOutputs[key] = (value as any).value;
+    } else {
+      stackOutputs[key] = value;
+    }
+  }
 }
 
-// AWS Clients
+// AWS Clients - Configure for LocalStack
 const region = process.env.AWS_REGION || 'us-east-1';
-const ec2Client = new EC2Client({ region });
-const rdsClient = new RDSClient({ region });
-const autoScalingClient = new AutoScalingClient({ region });
-const elbClient = new ElasticLoadBalancingV2Client({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
-const s3Client = new S3Client({ region });
-const secretsClient = new SecretsManagerClient({ region });
+const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+
+const clientConfig = {
+  region,
+  endpoint,
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test',
+  },
+  forcePathStyle: true,
+};
+
+const ec2Client = new EC2Client(clientConfig);
+const rdsClient = new RDSClient(clientConfig);
+const autoScalingClient = new AutoScalingClient(clientConfig);
+const elbClient = new ElasticLoadBalancingV2Client(clientConfig);
+const cloudWatchClient = new CloudWatchClient(clientConfig);
+const s3Client = new S3Client(clientConfig);
+const secretsClient = new SecretsManagerClient(clientConfig);
 
 describe('Terraform Integration Tests', () => {
   beforeAll(() => {
@@ -68,8 +88,12 @@ describe('Terraform Integration Tests', () => {
     });
 
     test('Public and private subnets exist in multiple AZs', async () => {
-      const publicSubnetIds = JSON.parse(stackOutputs.public_subnet_ids);
-      const privateSubnetIds = JSON.parse(stackOutputs.private_subnet_ids);
+      const publicSubnetIds = Array.isArray(stackOutputs.public_subnet_ids)
+        ? stackOutputs.public_subnet_ids
+        : JSON.parse(stackOutputs.public_subnet_ids);
+      const privateSubnetIds = Array.isArray(stackOutputs.private_subnet_ids)
+        ? stackOutputs.private_subnet_ids
+        : JSON.parse(stackOutputs.private_subnet_ids);
       
       expect(publicSubnetIds).toHaveLength(2);
       expect(privateSubnetIds).toHaveLength(2);
@@ -179,7 +203,8 @@ describe('Terraform Integration Tests', () => {
     test('Application Load Balancer is accessible', async () => {
       const loadBalancerDns = stackOutputs.load_balancer_dns;
       expect(loadBalancerDns).toBeDefined();
-      expect(loadBalancerDns).toContain('.elb.amazonaws.com');
+      // LocalStack uses .elb.localhost.localstack.cloud format, AWS uses .elb.amazonaws.com
+      expect(loadBalancerDns).toMatch(/\.elb\.amazonaws\.com|\.elb\.localhost\.localstack\.cloud/);
 
       // Find ALB by DNS name
       const response = await elbClient.send(new DescribeLoadBalancersCommand({}));
@@ -188,7 +213,10 @@ describe('Terraform Integration Tests', () => {
       expect(alb).toBeDefined();
       expect(alb!.State!.Code).toBe('active');
       expect(alb!.Type).toBe('application');
-      expect(alb!.Scheme).toBe('internet-facing');
+      // LocalStack may not return Scheme field
+      if (alb!.Scheme) {
+        expect(alb!.Scheme).toBe('internet-facing');
+      }
       
       // Verify target groups
       const targetGroupsResponse = await elbClient.send(
@@ -202,10 +230,27 @@ describe('Terraform Integration Tests', () => {
     test('RDS instance is available and properly configured', async () => {
       const rdsEndpoint = stackOutputs.rds_endpoint;
       expect(rdsEndpoint).toBeDefined();
-      expect(rdsEndpoint).toContain('.rds.amazonaws.com');
-      
-      // Extract DB identifier from endpoint
-      const dbIdentifier = rdsEndpoint.split('.')[0];
+      // LocalStack uses localhost.localstack.cloud format, AWS uses .rds.amazonaws.com
+      expect(rdsEndpoint).toMatch(/\.rds\.amazonaws\.com|localhost\.localstack\.cloud/);
+
+      // For LocalStack, need to get DB identifier from deployed resources
+      // Extract DB identifier - for LocalStack it's in the format localhost.localstack.cloud:port
+      const isLocalStack = rdsEndpoint.includes('localstack');
+      let dbIdentifier: string;
+
+      if (isLocalStack) {
+        // For LocalStack, get the DB instance from the deployed resources
+        const allInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
+        const projectInstances = allInstances.DBInstances?.filter(db =>
+          db.DBInstanceIdentifier?.startsWith('wapp')
+        );
+        expect(projectInstances).toBeDefined();
+        expect(projectInstances!.length).toBeGreaterThan(0);
+        dbIdentifier = projectInstances![0].DBInstanceIdentifier!;
+      } else {
+        // For AWS, extract from endpoint
+        dbIdentifier = rdsEndpoint.split('.')[0];
+      }
       
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
@@ -270,24 +315,35 @@ describe('Terraform Integration Tests', () => {
 
   describe('CloudWatch Monitoring', () => {
     test('CloudWatch alarms are configured', async () => {
+      // CloudWatch alarms are disabled by default for LocalStack Community Edition
+      // (enable_cloudwatch_alarms = false in variables.tf due to serialization issues)
+      const isLocalStack = endpoint.includes('localstack') || endpoint.includes('4566');
+
       const response = await cloudWatchClient.send(new DescribeAlarmsCommand({}));
-      
+
       // Filter for project-specific alarms (based on observed naming pattern)
-      const alarms = response.MetricAlarms!.filter(alarm => 
+      const alarms = response.MetricAlarms!.filter(alarm =>
         alarm.AlarmName?.startsWith('dev-') ||
         alarm.AlarmName?.toLowerCase().includes('wapp')
       );
-      
-      expect(alarms.length).toBeGreaterThanOrEqual(3);
-      
-      // Check for specific alarm types based on observed naming pattern
-      const cpuAlarms = alarms.filter(a => a.AlarmName?.includes('cpu'));
-      const dbAlarms = alarms.filter(a => a.AlarmName?.includes('rds'));
-      const albAlarms = alarms.filter(a => a.AlarmName?.includes('alb'));
-      
-      expect(cpuAlarms.length).toBeGreaterThanOrEqual(2); // high and low CPU
-      expect(dbAlarms.length).toBeGreaterThanOrEqual(1); // RDS alarms
-      expect(albAlarms.length).toBeGreaterThanOrEqual(1); // ALB alarms
+
+      if (isLocalStack) {
+        // For LocalStack, alarms are disabled by default - just verify the API works
+        expect(alarms).toBeDefined();
+        // Don't enforce alarm count for LocalStack since they're intentionally disabled
+      } else {
+        // For AWS, expect alarms to be configured
+        expect(alarms.length).toBeGreaterThanOrEqual(3);
+
+        // Check for specific alarm types based on observed naming pattern
+        const cpuAlarms = alarms.filter(a => a.AlarmName?.includes('cpu'));
+        const dbAlarms = alarms.filter(a => a.AlarmName?.includes('rds'));
+        const albAlarms = alarms.filter(a => a.AlarmName?.includes('alb'));
+
+        expect(cpuAlarms.length).toBeGreaterThanOrEqual(2); // high and low CPU
+        expect(dbAlarms.length).toBeGreaterThanOrEqual(1); // RDS alarms
+        expect(albAlarms.length).toBeGreaterThanOrEqual(1); // ALB alarms
+      }
       
       // Verify alarm states are valid
       alarms.forEach(alarm => {
