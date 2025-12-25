@@ -28,7 +28,7 @@ The infrastructure implements all 8 requirements:
  * different deployment environments (development, staging, production, etc.).
  */
 import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from '../lib/tap-stack.mjs';
+import { TapStack } from '../lib/TapStack.mjs';
 
 // Initialize Pulumi configuration for the current stack.
 const config = new pulumi.Config();
@@ -66,11 +66,11 @@ export const helloFunctionName = stack.helloFunctionName;
 export const worldFunctionName = stack.worldFunctionName;
 ```
 
-## File: lib/tap-stack.mjs
+## File: lib/TapStack.mjs
 
 ```javascript
 /**
- * tap-stack.mjs
+ * TapStack.mjs
  *
  * Serverless Application Infrastructure - Task trainr233
  * Implements a complete serverless application with RESTful APIs using AWS Lambda,
