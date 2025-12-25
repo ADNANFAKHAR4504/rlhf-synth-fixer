@@ -405,7 +405,7 @@ Resources:
                     </div>
                     
                     <div class="footer">
-                        <p>🔐 This infrastructure follows AWS Well-Architected Framework principles</p>
+                        <p> This infrastructure follows AWS Well-Architected Framework principles</p>
                         <p>Built with Security, Reliability, Performance, and Cost Optimization in mind</p>
                     </div>
                 </div>
