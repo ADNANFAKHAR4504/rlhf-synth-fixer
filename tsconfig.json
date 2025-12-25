@@ -36,6 +36,7 @@
     "test",
     "tests",
     "cli",
+    ".claude",
     "**/*.d.ts"
   ]
 }

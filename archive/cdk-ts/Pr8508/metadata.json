@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr122",
+  "team": "synth-2",
+  "startedAt": "2025-08-12T15:28:28-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ELB",
+    "AutoScaling",
+    "RDS",
+    "SSM"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr122",
+    "pr": "Pr1077"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
