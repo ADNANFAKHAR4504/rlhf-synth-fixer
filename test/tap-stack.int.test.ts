@@ -3,17 +3,42 @@ import fs from 'fs';
 import https from 'https';
 import { v4 as uuidv4 } from 'uuid';
 
+// LocalStack detection
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+  process.env.LOCALSTACK === 'true';
+
+// LocalStack endpoint configuration
+const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+
 // Configure AWS SDK
 AWS.config.update({
   region: process.env.AWS_REGION || 'us-east-1',
+  ...(isLocalStack && {
+    accessKeyId: 'test',
+    secretAccessKey: 'test',
+    s3ForcePathStyle: true,
+  }),
 });
 
-// Initialize AWS services
-const s3 = new AWS.S3();
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-const lambda = new AWS.Lambda();
-const cloudwatch = new AWS.CloudWatch();
-const sns = new AWS.SNS();
+// Initialize AWS services with LocalStack endpoint
+const s3Config = isLocalStack
+  ? { endpoint, s3ForcePathStyle: true }
+  : { s3ForcePathStyle: false };
+const s3 = new AWS.S3(s3Config);
+
+const dynamodbConfig = isLocalStack ? { endpoint } : {};
+const dynamodb = new AWS.DynamoDB.DocumentClient(dynamodbConfig);
+
+const lambdaConfig = isLocalStack ? { endpoint } : {};
+const lambda = new AWS.Lambda(lambdaConfig);
+
+const cloudwatchConfig = isLocalStack ? { endpoint } : {};
+const cloudwatch = new AWS.CloudWatch(cloudwatchConfig);
+
+const snsConfig = isLocalStack ? { endpoint } : {};
+const sns = new AWS.SNS(snsConfig);
 
 // CDK Stack outputs interface
 interface StackOutputs {
@@ -261,7 +286,7 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const dynamodbClient = new AWS.DynamoDB();
+        const dynamodbClient = new AWS.DynamoDB(dynamodbConfig);
         const params = {
           TableName: outputs.DynamoDBTableName,
         };
@@ -286,7 +311,7 @@ describe('CDK Serverless Application Integration Tests', () => {
       }
 
       try {
-        const dynamodbClient = new AWS.DynamoDB();
+        const dynamodbClient = new AWS.DynamoDB(dynamodbConfig);
         const params = {
           TableName: outputs.DynamoDBTableName,
         };
