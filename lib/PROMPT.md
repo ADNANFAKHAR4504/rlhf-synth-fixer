@@ -66,31 +66,25 @@ The application follows a three-tier architecture with clear service connectivit
    - Use conditions for cost optimization in non-prod
    - Apply conditions consistently
 
-8. **Deletion and Update Policies**
-   - Add DeletionPolicy: Snapshot for RDS instances
-   - Add DeletionPolicy: Retain for S3 buckets
-   - Include UpdateReplacePolicy where appropriate
-   - Protect critical data resources
-
-9. **Pseudo Parameters**
+8. **Pseudo Parameters**
    - Replace hardcoded region values with dynamic region references
    - Replace hardcoded account IDs with account ID references
    - Use stack name and stack ID references where applicable
    - Eliminate region-specific hardcoding
 
-10. **IMDSv2 Configuration**
-    - Ensure all EC2 instances use IMDSv2
-    - Set MetadataOptions with HttpTokens: required
-    - Apply to launch configurations and templates
-    - Meet security compliance requirements
+9. **IMDSv2 Configuration**
+   - Ensure all EC2 instances use IMDSv2
+   - Set MetadataOptions with HttpTokens: required
+   - Apply to launch configurations and templates
+   - Meet security compliance requirements
 
-11. **CloudFormation Designer Metadata**
+10. **CloudFormation Designer Metadata**
     - Add Metadata sections with Designer information
     - Include layout coordinates for visual representation
     - Support CloudFormation Designer compatibility
     - Maintain template readability
 
-12. **Validation**
+11. **Validation**
     - Template must pass cfn-lint with zero errors
     - Validate against CloudFormation schema
     - Test multi-environment deployments
