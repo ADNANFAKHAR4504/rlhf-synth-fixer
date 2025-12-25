@@ -16,5 +16,5 @@
 
 # LocalStack-compatible approach: use a fixed AMI ID
 locals {
-  amazon_linux_ami_id = "ami-12345678"  # LocalStack accepts any AMI ID format
+  amazon_linux_ami_id = "ami-12345678" # LocalStack accepts any AMI ID format
 }

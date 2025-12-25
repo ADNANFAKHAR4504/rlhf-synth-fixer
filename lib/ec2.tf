@@ -56,7 +56,7 @@ resource "aws_launch_template" "main" {
     ebs {
       volume_size = 20
       volume_type = "gp3"
-      encrypted   = false  # Simplified for LocalStack
+      encrypted   = false # Simplified for LocalStack
     }
   }
 
@@ -78,9 +78,9 @@ resource "aws_autoscaling_group" "main" {
   health_check_type         = "EC2"
   health_check_grace_period = 300
 
-  min_size         = 0  # Simplified for LocalStack testing
+  min_size         = 0 # Simplified for LocalStack testing
   max_size         = 2
-  desired_capacity = 0  # Start with 0 instances for faster deployment
+  desired_capacity = 0 # Start with 0 instances for faster deployment
 
   launch_template {
     id      = aws_launch_template.main.id

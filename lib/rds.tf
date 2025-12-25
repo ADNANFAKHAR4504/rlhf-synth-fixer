@@ -16,9 +16,9 @@ resource "aws_db_subnet_group" "main" {
 
 # Secrets Manager secret for RDS credentials
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name                     = "rds-credentials-${var.environment_suffix}"
-  description              = "RDS database credentials"
-  recovery_window_in_days  = 7  # Allow 7 days for recovery instead of immediate deletion
+  name                           = "rds-credentials-${var.environment_suffix}"
+  description                    = "RDS database credentials"
+  recovery_window_in_days        = 7 # Allow 7 days for recovery instead of immediate deletion
   force_overwrite_replica_secret = true
 
   tags = var.common_tags
@@ -66,7 +66,7 @@ resource "aws_db_instance" "main" {
   allocated_storage     = 20
   max_allocated_storage = 100
   storage_type          = "gp3"
-  storage_encrypted     = false  # Simplified for LocalStack
+  storage_encrypted     = false # Simplified for LocalStack
 
   db_name  = "maindb"
   username = "postgres"
@@ -79,7 +79,7 @@ resource "aws_db_instance" "main" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  multi_az = false  # LocalStack Community doesn't support multi-AZ
+  multi_az = false # LocalStack Community doesn't support multi-AZ
 
   parameter_group_name = aws_db_parameter_group.main.name
 
