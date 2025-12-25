@@ -182,8 +182,9 @@ describe('TapStack Integration Tests', () => {
     test('should have valid RDS endpoint', () => {
       expect(RDS_ENDPOINT).toBeDefined();
       // Accept both AWS and LocalStack formats
+      // LocalStack may return just "localhost.localstack.cloud" without a prefix
       const endpointPattern = isLocalStack
-        ? /^.*\.(rds\.amazonaws\.com|localhost\.localstack\.cloud)$/
+        ? /^(.*\.)?(rds\.amazonaws\.com|localhost\.localstack\.cloud)$/
         : /^.*\.rds\.amazonaws\.com$/;
       expect(RDS_ENDPOINT).toMatch(endpointPattern);
     });
