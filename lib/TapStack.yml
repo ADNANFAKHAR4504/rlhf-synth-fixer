@@ -544,10 +544,7 @@ Resources:
       AutoScalingGroupName: !Sub 'blue-${Environment}-migration-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !If
-          - IsLocalStackCondition
-          - '1'
-          - !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
@@ -569,10 +566,7 @@ Resources:
       AutoScalingGroupName: !Sub 'green-${Environment}-migration-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !If
-          - IsLocalStackCondition
-          - '1'
-          - !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       MinSize: 0
       MaxSize: 6
       DesiredCapacity: 0
