@@ -234,26 +234,26 @@ describe('TapStack Unit Tests', () => {
     test('should have subnet A with proper configuration', () => {
       const subnetA = templateJson.Resources.SubnetA;
       expect(subnetA.Type).toBe('AWS::EC2::Subnet');
-      expect(subnetA.Properties.VpcId.Ref).toBe('ExistingVPCId');
+      expect(subnetA.Properties.VpcId.Ref).toBe('AppVPC');
       expect(subnetA.Properties.CidrBlock).toBe('10.0.30.0/24');
       expect(subnetA.Properties.AvailabilityZone['Fn::Select'][0]).toBe(0);
-      expect(subnetA.Properties.AvailabilityZone['Fn::Select'][1].Ref).toBe('AvailabilityZones');
+      expect(subnetA.Properties.AvailabilityZone['Fn::Select'][1]['Fn::GetAZs']).toBe('');
     });
 
     test('should have subnet B with proper configuration', () => {
       const subnetB = templateJson.Resources.SubnetB;
       expect(subnetB.Type).toBe('AWS::EC2::Subnet');
-      expect(subnetB.Properties.VpcId.Ref).toBe('ExistingVPCId');
+      expect(subnetB.Properties.VpcId.Ref).toBe('AppVPC');
       expect(subnetB.Properties.CidrBlock).toBe('10.0.40.0/24');
       expect(subnetB.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
-      expect(subnetB.Properties.AvailabilityZone['Fn::Select'][1].Ref).toBe('AvailabilityZones');
+      expect(subnetB.Properties.AvailabilityZone['Fn::Select'][1]['Fn::GetAZs']).toBe('');
     });
 
     test('should have security group with SSH access', () => {
       const securityGroup = templateJson.Resources.EC2SecurityGroup;
       expect(securityGroup.Type).toBe('AWS::EC2::SecurityGroup');
       // GroupName removed for CAPABILITY_IAM compatibility
-      expect(securityGroup.Properties.VpcId.Ref).toBe('ExistingVPCId');
+      expect(securityGroup.Properties.VpcId.Ref).toBe('AppVPC');
       
       const ingress = securityGroup.Properties.SecurityGroupIngress;
       expect(ingress).toHaveLength(1);
@@ -268,7 +268,7 @@ describe('TapStack Unit Tests', () => {
     test('should have EC2 instance with detailed monitoring', () => {
       const ec2Instance = templateJson.Resources.SampleEC2Instance;
       expect(ec2Instance.Type).toBe('AWS::EC2::Instance');
-      expect(ec2Instance.Properties.ImageId).toBe('ami-0c02fb55956c7d316');
+      expect(ec2Instance.Properties.ImageId).toBe('ami-760aaa0f');
       expect(ec2Instance.Properties.InstanceType).toBe('t3.micro');
       expect(ec2Instance.Properties.Monitoring).toBe(true);
     });
