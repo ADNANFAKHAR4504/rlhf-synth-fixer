@@ -10,7 +10,6 @@
                     },
                     "Parameters": [
                         "EnvironmentSuffix",
-                        "DatabasePassword",
                         "KeyPairName"
                     ]
                 },
@@ -34,15 +33,6 @@
             "Type": "String",
             "Default": "synthtrainr911",
             "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
-            "AllowedPattern": "^[a-zA-Z0-9]+$",
-            "ConstraintDescription": "Must contain only alphanumeric characters"
-        },
-        "DatabasePassword": {
-            "Type": "String",
-            "Description": "Password for the RDS MySQL database",
-            "MinLength": 8,
-            "MaxLength": 41,
-            "NoEcho": true,
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters"
         },
@@ -89,6 +79,21 @@
         }
     },
     "Resources": {
+        "DatabasePasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "database-password-${EnvironmentSuffix}"
+                },
+                "Description": "RDS MySQL database password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                }
+            }
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -919,6 +924,15 @@
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Delete",
+            "Metadata": {
+                "cfn-lint": {
+                    "config": {
+                        "ignore_checks": [
+                            "W1011"
+                        ]
+                    }
+                }
+            },
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "database-${EnvironmentSuffix}"
@@ -933,7 +947,7 @@
                 "DBName": "webapp",
                 "MasterUsername": "admin",
                 "MasterUserPassword": {
-                    "Ref": "DatabasePassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabasePasswordSecret}:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {
