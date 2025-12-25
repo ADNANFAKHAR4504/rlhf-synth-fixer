@@ -2,18 +2,15 @@
   "platform": "cfn",
   "language": "yaml",
   "complexity": "hard",
-  "turn_type": "iac",
+  "turn_type": "single",
   "po_id": "trainr919",
   "team": "synth-2",
   "startedAt": "2025-08-21T12:00:00Z",
-  "subtask": "Security and Compliance Implementation",
-  "region": "us-west-2",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security Configuration",
+    "Security Configuration as Code",
     "General Infrastructure Tooling QA",
-    "Access Control",
-    "Monitoring Setup",
-    "Resource Scaling"
+    "Infrastructure Analysis/Monitoring"
   ],
   "aws_services": [
     "AWS KMS",
