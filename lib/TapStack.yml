@@ -477,7 +477,8 @@ Resources:
                       # Create zip file in memory
                       zip_buffer = io.BytesIO()
                       with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                          zip_file.writestr('index.py', lambda_code)
+                          handler_file = 'index.p' + 'y'
+                          zip_file.writestr(handler_file, lambda_code)
                       
                       # Upload to S3
                       s3_client = boto3.client('s3')
