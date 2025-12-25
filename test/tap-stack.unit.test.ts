@@ -47,14 +47,18 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create private subnets', () => {
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        MapPublicIpOnLaunch: false,
+    test('should not create private subnets (LocalStack: no NAT Gateway)', () => {
+      // LocalStack: Only public subnets are created (no NAT Gateway support)
+      template.resourceCountIs('AWS::EC2::Subnet', 2); // Only public subnets
+      const subnets = template.findResources('AWS::EC2::Subnet');
+      Object.values(subnets).forEach((subnet: any) => {
+        expect(subnet.Properties.MapPublicIpOnLaunch).toBe(true);
       });
     });
 
-    test('should create NAT Gateway', () => {
-      template.hasResource('AWS::EC2::NatGateway', {});
+    test('should not create NAT Gateway (LocalStack compatibility)', () => {
+      // LocalStack: NAT Gateway not fully supported in Community Edition
+      template.resourceCountIs('AWS::EC2::NatGateway', 0);
     });
 
     test('should create Internet Gateway', () => {
@@ -95,8 +99,9 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create S3 bucket policy', () => {
-      template.hasResource('AWS::S3::BucketPolicy', {});
+    test('should not require S3 bucket policy (encryption via bucket properties)', () => {
+      // S3 encryption is configured via bucket properties, not bucket policy
+      template.resourceCountIs('AWS::S3::BucketPolicy', 0);
     });
   });
 
@@ -197,62 +202,21 @@ describe('TapStack', () => {
   });
 
   describe('CloudTrail Resources', () => {
-    test('should create CloudTrail trail', () => {
-      template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        IsMultiRegionTrail: true,
-        IncludeGlobalServiceEvents: true,
-      });
+    test('should not create CloudTrail trail (LocalStack: Pro feature)', () => {
+      // LocalStack: CloudTrail is a Pro feature, removed for Community Edition compatibility
+      template.resourceCountIs('AWS::CloudTrail::Trail', 0);
     });
 
-    test('should create CloudTrail log group', () => {
+    test('should create ECS log group', () => {
+      // ECS log group still exists for ECS service logging
       template.hasResource('AWS::Logs::LogGroup', {});
     });
   });
 
   describe('CloudWatch Resources', () => {
-    test('should create RDS CPU utilization alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: 'CPUUtilization',
-        Namespace: 'AWS/RDS',
-        Threshold: 80,
-        EvaluationPeriods: 2,
-      });
-    });
-
-    test('should create RDS database connections alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: 'DatabaseConnections',
-        Namespace: 'AWS/RDS',
-        Threshold: 80,
-        EvaluationPeriods: 2,
-      });
-    });
-
-    test('should create RDS free storage space alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: 'FreeStorageSpace',
-        Namespace: 'AWS/RDS',
-        Threshold: 1000000000,
-        EvaluationPeriods: 2,
-      });
-    });
-
-    test('should create ECS CPU utilization alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: 'CPUUtilization',
-        Namespace: 'AWS/ECS',
-        Threshold: 80,
-        EvaluationPeriods: 2,
-      });
-    });
-
-    test('should create ECS memory utilization alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: 'MemoryUtilization',
-        Namespace: 'AWS/ECS',
-        Threshold: 80,
-        EvaluationPeriods: 2,
-      });
+    test('should not create CloudWatch alarms (LocalStack: Pro feature)', () => {
+      // LocalStack: CloudWatch alarms are Pro features, removed for Community Edition compatibility
+      template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
     });
   });
 
@@ -299,11 +263,11 @@ describe('TapStack', () => {
       );
 
       expect(Object.keys(vpcResources).length).toBe(1);
-      expect(Object.keys(s3Resources).length).toBe(2); // S3 bucket + CloudTrail bucket
+      expect(Object.keys(s3Resources).length).toBe(1); // Only secure bucket (no CloudTrail bucket for LocalStack)
       expect(Object.keys(rdsResources).length).toBe(1);
       expect(Object.keys(ecsResources).length).toBe(1);
       expect(Object.keys(kmsResources).length).toBe(1);
-      expect(Object.keys(cloudTrailResources).length).toBe(1);
+      expect(Object.keys(cloudTrailResources).length).toBe(0); // CloudTrail removed for LocalStack
     });
   });
 
@@ -364,13 +328,13 @@ describe('TapStack', () => {
 
   describe('Integration Tests', () => {
     test('should create a complete infrastructure stack', () => {
-      // Verify that all major components are present
+      // Verify that all major components are present (LocalStack-compatible)
       expect(template.findResources('AWS::EC2::VPC')).toBeDefined();
       expect(template.findResources('AWS::S3::Bucket')).toBeDefined();
       expect(template.findResources('AWS::RDS::DBInstance')).toBeDefined();
       expect(template.findResources('AWS::ECS::Cluster')).toBeDefined();
       expect(template.findResources('AWS::KMS::Key')).toBeDefined();
-      expect(template.findResources('AWS::CloudTrail::Trail')).toBeDefined();
+      // CloudTrail removed for LocalStack Community Edition compatibility
     });
 
     test('should have proper resource dependencies', () => {
