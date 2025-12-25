@@ -1,7 +1,7 @@
 # Launch Template
 resource "aws_launch_template" "web" {
   name_prefix   = "${local.name_prefix}-"
-  image_id      = local.amazon_linux_ami_id  # LocalStack: Use mock AMI ID
+  image_id      = local.amazon_linux_ami_id # LocalStack: Use mock AMI ID
   instance_type = var.instance_type
 
   vpc_security_group_ids = [aws_security_group.web.id]
