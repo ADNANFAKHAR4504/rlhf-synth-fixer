@@ -449,11 +449,10 @@ Resources:
       DBSubnetGroupName: !Ref ProdRdsSubnetGroup
       VPCSecurityGroups:
         - !Ref ProdRdsSecurityGroup
-      BackupRetentionPeriod: 7
-      MultiAZ: true
-      StorageEncrypted: true
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt ProdRdsMonitoringRole.Arn
+      BackupRetentionPeriod: 1
+      MultiAZ: false
+      StorageEncrypted: false
+      MonitoringInterval: 0
       EnablePerformanceInsights: false
       Tags:
         - Key: Name

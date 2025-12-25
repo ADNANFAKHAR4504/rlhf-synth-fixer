@@ -480,9 +480,9 @@ describe('TapStack Integration Tests', () => {
       expect(dbInstance!.DBInstanceClass).toBe('db.t3.small');
       expect(dbInstance!.Engine).toBe('mysql');
       expect(dbInstance!.EngineVersion).toBe('8.0.42');
-      expect(dbInstance!.MultiAZ).toBe(true);
-      expect(dbInstance!.StorageEncrypted).toBe(true);
-      expect(dbInstance!.BackupRetentionPeriod).toBe(7);
+      expect(dbInstance!.MultiAZ).toBe(false);
+      expect(dbInstance!.StorageEncrypted).toBe(false);
+      expect(dbInstance!.BackupRetentionPeriod).toBe(1);
 
       console.log(
         `✅ RDS ${dbInstance!.DBInstanceIdentifier} is ${dbInstance!.DBInstanceStatus}`

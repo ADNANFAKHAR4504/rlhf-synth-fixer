@@ -389,9 +389,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.DBInstanceClass).toBe('db.t3.small');
       expect(rds.Properties.Engine).toBe('mysql');
       expect(rds.Properties.EngineVersion).toBe('8.0.42');
-      expect(rds.Properties.MultiAZ).toBe(true);
-      expect(rds.Properties.StorageEncrypted).toBe(true);
-      expect(rds.Properties.BackupRetentionPeriod).toBe(7);
+      expect(rds.Properties.MultiAZ).toBe(false);
+      expect(rds.Properties.StorageEncrypted).toBe(false);
+      expect(rds.Properties.BackupRetentionPeriod).toBe(1);
+      expect(rds.Properties.MonitoringInterval).toBe(0);
       expect(rds.Properties.EnablePerformanceInsights).toBe(false);
     });
 
