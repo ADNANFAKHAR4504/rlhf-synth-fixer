@@ -1,0 +1,20 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr939",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T10:49:12+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "AWS::IAM::Role",
+    "AWS::IAM::ManagedPolicy",
+    "AWS::DynamoDB::Table"
+  ],
+  "wave": "P0"
+}
