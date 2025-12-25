@@ -315,12 +315,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-EC2PublicIP'
 
-  EC2SecurityGroupId:
-    Description: 'Security Group ID for the EC2 instance'
-    Value: !GetAtt EC2SecurityGroup.GroupId
-    Export:
-      Name: !Sub '${AWS::StackName}-SecurityGroupId'
-
   DynamoDBTableName:
     Description: 'Name of the created DynamoDB table'
     Value: !Ref CloudSetupDynamoDBTable

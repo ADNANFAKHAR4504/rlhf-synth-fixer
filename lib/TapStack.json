@@ -533,17 +533,6 @@
         }
       }
     },
-    "EC2SecurityGroupId": {
-      "Description": "Security Group ID for the EC2 instance",
-      "Value": {
-        "Ref": "EC2SecurityGroup"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-SecurityGroupId"
-        }
-      }
-    },
     "DynamoDBTableName": {
       "Description": "Name of the created DynamoDB table",
       "Value": {

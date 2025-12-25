@@ -142,7 +142,6 @@ describe('CloudFormation Stack Integration Tests', () => {
         'S3BucketArn',
         'EC2InstanceId',
         'EC2InstancePublicIP',
-        'EC2SecurityGroupId',
         'DynamoDBTableName',
         'DynamoDBTableArn',
         'IAMRoleArn',

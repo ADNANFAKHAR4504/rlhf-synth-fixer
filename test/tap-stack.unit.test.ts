@@ -254,7 +254,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(template.Outputs.S3BucketArn).toBeDefined();
       expect(template.Outputs.EC2InstanceId).toBeDefined();
       expect(template.Outputs.EC2InstancePublicIP).toBeDefined();
-      expect(template.Outputs.EC2SecurityGroupId).toBeDefined();
       expect(template.Outputs.DynamoDBTableName).toBeDefined();
       expect(template.Outputs.DynamoDBTableArn).toBeDefined();
       expect(template.Outputs.IAMRoleArn).toBeDefined();
