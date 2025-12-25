@@ -231,11 +231,14 @@ class NetworkInfrastructure(pulumi.ComponentResource):
     def _create_vpc_endpoints(self, name: str, tags: dict):
         """Create VPC endpoints for AWS services"""
 
+        # Get AWS region from config or use default
+        config = pulumi.Config("aws")
+        region = config.get("region") or "us-west-2"
+
         self.dynamodb_endpoint = aws.ec2.VpcEndpoint(
             f"{name}-dynamodb-endpoint",
             vpc_id=self.vpc.id,
-            # Diagnostic print for get_region
-            service_name=f"com.amazonaws.{aws.get_region().name}.dynamodb",
+            service_name=f"com.amazonaws.{region}.dynamodb",
             vpc_endpoint_type="Gateway",
             route_table_ids=[rt.id for rt in self.private_route_tables],
             tags={**tags, "Name": f"{name}-dynamodb-endpoint"},
@@ -245,7 +248,7 @@ class NetworkInfrastructure(pulumi.ComponentResource):
         self.s3_endpoint = aws.ec2.VpcEndpoint(
             f"{name}-s3-endpoint",
             vpc_id=self.vpc.id,
-            service_name=f"com.amazonaws.{aws.get_region().name}.s3",
+            service_name=f"com.amazonaws.{region}.s3",
             vpc_endpoint_type="Gateway",
             route_table_ids=[rt.id for rt in self.private_route_tables],
             tags={**tags, "Name": f"{name}-s3-endpoint"},
@@ -255,8 +258,7 @@ class NetworkInfrastructure(pulumi.ComponentResource):
         self.kinesis_endpoint = aws.ec2.VpcEndpoint(
             f"{name}-kinesis-endpoint",
             vpc_id=self.vpc.id,
-            service_name=f"com.amazonaws.{
-                aws.get_region().name}.kinesis-streams",
+            service_name=f"com.amazonaws.{region}.kinesis-streams",
             vpc_endpoint_type="Interface",
             subnet_ids=self.private_subnet_ids,
             security_group_ids=[

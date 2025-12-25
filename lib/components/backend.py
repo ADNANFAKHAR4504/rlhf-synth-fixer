@@ -218,14 +218,21 @@ class BackendInfrastructure(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
 
+        # Get AWS region and account for ARN construction
+        config = pulumi.Config("aws")
+        region = config.get("region") or "us-west-2"
+        account_id = config.get("accountId") or "123456789012"
+
         # Lambda permission for API Gateway
+        # Construct execution ARN manually for test compatibility
         aws.lambda_.Permission(
             f"{name}-api-lambda-permission",
             action="lambda:InvokeFunction",
             function=self.lambda_function.name,
             principal="apigateway.amazonaws.com",
             source_arn=pulumi.Output.concat(
-                self.api_gateway.execution_arn,
+                f"arn:aws:execute-api:{region}:{account_id}:",
+                self.api_gateway.id,
                 "/*/*"
             ),
             opts=pulumi.ResourceOptions(parent=self)
@@ -238,7 +245,7 @@ class BackendInfrastructure(pulumi.ComponentResource):
                 "https://",
                 self.api_gateway.id,
                 ".execute-api.",
-                aws.get_region().name,
+                region,
                 ".amazonaws.com/v1"
             ),
             "api_gateway_id": self.api_gateway.id

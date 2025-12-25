@@ -14,7 +14,7 @@ class PulumiMocks(pulumi.runtime.Mocks):
         if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
             return {"names": ["us-west-2a", "us-west-2b"]}
         if args.token == "aws:index/getRegion:getRegion":
-            return {"name": "us-west-2"}
+            return {"region": "us-west-2"}
         return {}
 
 
