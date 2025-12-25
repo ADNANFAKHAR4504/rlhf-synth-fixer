@@ -94,21 +94,21 @@ npm test
 
 | Feature | LocalStack Community | LocalStack Pro | AWS |
 |---------|---------------------|----------------|-----|
-| S3 Basic Operations | ✅ Full | ✅ Full | ✅ Full |
-| S3 Encryption (KMS) | ✅ Full | ✅ Full | ✅ Full |
-| S3 Versioning | ✅ Full | ✅ Full | ✅ Full |
-| S3 Object Lock | ⚠️ Limited | ✅ Full | ✅ Full |
-| S3 Bucket Logging | ⚠️ Limited | ✅ Full | ✅ Full |
-| KMS Keys | ✅ Full | ✅ Full | ✅ Full |
-| KMS Key Rotation | ⚠️ Limited | ✅ Full | ✅ Full |
-| EventBridge S3 Notifications | ⚠️ Limited | ✅ Full | ✅ Full |
-| VPC Restrictions | ❌ Not Supported | ⚠️ Limited | ✅ Full |
-| CloudWatch Logs | ✅ Basic | ✅ Full | ✅ Full |
+| S3 Basic Operations |  Full |  Full |  Full |
+| S3 Encryption (KMS) |  Full |  Full |  Full |
+| S3 Versioning |  Full |  Full |  Full |
+| S3 Object Lock |  Limited |  Full |  Full |
+| S3 Bucket Logging |  Limited |  Full |  Full |
+| KMS Keys |  Full |  Full |  Full |
+| KMS Key Rotation |  Limited |  Full |  Full |
+| EventBridge S3 Notifications |  Limited |  Full |  Full |
+| VPC Restrictions |  Not Supported |  Limited |  Full |
+| CloudWatch Logs |  Basic |  Full |  Full |
 
 Legend:
-- ✅ Full: Fully supported
-- ⚠️ Limited: Partially supported or may not work as expected
-- ❌ Not Supported: Not available
+-  Full: Fully supported
+-  Limited: Partially supported or may not work as expected
+-  Not Supported: Not available
 
 ## Conditions in Template
 
