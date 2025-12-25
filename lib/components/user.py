@@ -1,151 +1,151 @@
 # lib/components/frontend.py
-
-import pulumi
-import pulumi_aws as aws
-import json
-
 """
 Frontend Infrastructure Component
 Creates S3 bucket, CloudFront distribution, and related resources
 """
 
+import pulumi
+import pulumi_aws as aws
+import json
+
+
 class FrontendInfrastructure(pulumi.ComponentResource):
-  def __init__(self, name: str, tags: dict, opts=None):
-    super().__init__("custom:frontend:Infrastructure", name, None, opts)
+    def __init__(self, name: str, tags: dict, opts=None):
+        super().__init__("custom:frontend:Infrastructure", name, None, opts)
 
-    # S3 bucket for static website content
-    self.bucket = aws.s3.Bucket(
-      f"{name}-website",
-      website=aws.s3.BucketWebsiteArgs(
-        index_document="index.html",
-        error_document="error.html"
-      ),
-      acl="private",
-      tags={**tags, "Name": f"{name}-website"},
-      opts=pulumi.ResourceOptions(parent=self, retain_on_delete=False)
-    )
-
-    # Block public access to the S3 bucket
-    aws.s3.BucketPublicAccessBlock(
-      f"{name}-website-pab",
-      bucket=self.bucket.id,
-      block_public_acls=True,
-      block_public_policy=True,
-      ignore_public_acls=True,
-      restrict_public_buckets=True,
-      opts=pulumi.ResourceOptions(parent=self)
-    )
-
-    # Origin Access Control for CloudFront to access S3
-    self.oac = aws.cloudfront.OriginAccessControl(
-      f"{name}-oac",
-      name=f"{name}-oac",
-      description="OAC for S3 bucket access",
-      origin_access_control_origin_type="s3",
-      signing_behavior="always",
-      signing_protocol="sigv4",
-      opts=pulumi.ResourceOptions(parent=self)
-    )
-
-    # CloudFront distribution with S3 origin
-    self.cloudfront_distribution = aws.cloudfront.Distribution(
-      f"{name}-distribution",
-      origins=[
-        aws.cloudfront.DistributionOriginArgs(
-          domain_name=self.bucket.bucket_domain_name,
-          origin_id=f"{name}-s3-origin",
-          origin_access_control_id=self.oac.id,
+        # S3 bucket for static website content
+        self.bucket = aws.s3.Bucket(
+            f"{name}-website",
+            website=aws.s3.BucketWebsiteArgs(
+                index_document="index.html",
+                error_document="error.html"
+            ),
+            acl="private",
+            tags={**tags, "Name": f"{name}-website"},
+            opts=pulumi.ResourceOptions(parent=self, retain_on_delete=False)
         )
-      ],
-      enabled=True,
-      is_ipv6_enabled=True,
-      default_root_object="index.html",
-      default_cache_behavior=aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
-        allowed_methods=["GET", "HEAD", "OPTIONS"],
-        cached_methods=["GET", "HEAD"],
-        target_origin_id=f"{name}-s3-origin",
-        compress=True,
-        viewer_protocol_policy="redirect-to-https",
-        forwarded_values=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
-          query_string=False,
-          cookies=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs(
-            forward="none"
-          ),
-        ),
-        min_ttl=0,
-        default_ttl=3600,
-        max_ttl=86400,
-      ),
-      custom_error_responses=[
-        aws.cloudfront.DistributionCustomErrorResponseArgs(
-          error_code=404,
-          response_code=200,
-          response_page_path="/index.html",
-          error_caching_min_ttl=300,
-        ),
-        aws.cloudfront.DistributionCustomErrorResponseArgs(
-          error_code=403,
-          response_code=200,
-          response_page_path="/index.html",
-          error_caching_min_ttl=300,
+
+        # Block public access to the S3 bucket
+        aws.s3.BucketPublicAccessBlock(
+            f"{name}-website-pab",
+            bucket=self.bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=pulumi.ResourceOptions(parent=self)
         )
-      ],
-      restrictions=aws.cloudfront.DistributionRestrictionsArgs(
-        geo_restriction=aws.cloudfront.DistributionRestrictionsGeoRestrictionArgs(
-          restriction_type="none",
-        ),
-      ),
-      viewer_certificate=aws.cloudfront.DistributionViewerCertificateArgs(
-        cloudfront_default_certificate=True,
-      ),
-      price_class="PriceClass_100",
-      tags={**tags, "Name": f"{name}-distribution"},
-      opts=pulumi.ResourceOptions(parent=self)
-    )
 
-    # S3 bucket policy to allow CloudFront access
-    bucket_policy = pulumi.Output.all(
-      self.bucket.arn,
-      self.cloudfront_distribution.arn
-    ).apply(lambda args: json.dumps({
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Sid": "AllowCloudFrontServicePrincipal",
-          "Effect": "Allow",
-          "Principal": {
-            "Service": "cloudfront.amazonaws.com"
-          },
-          "Action": "s3:GetObject",
-          "Resource": f"{args[0]}/*",
-          "Condition": {
-            "StringEquals": {
-              "AWS:SourceArn": args[1]
-            }
-          }
-        }
-      ]
-    }))
+        # Origin Access Control for CloudFront to access S3
+        self.oac = aws.cloudfront.OriginAccessControl(
+            f"{name}-oac",
+            name=f"{name}-oac",
+            description="OAC for S3 bucket access",
+            origin_access_control_origin_type="s3",
+            signing_behavior="always",
+            signing_protocol="sigv4",
+            opts=pulumi.ResourceOptions(parent=self)
+        )
 
-    aws.s3.BucketPolicy(
-      f"{name}-bucket-policy",
-      bucket=self.bucket.id,
-      policy=bucket_policy,
-      opts=pulumi.ResourceOptions(parent=self)
-    )
+        # CloudFront distribution with S3 origin
+        self.cloudfront_distribution = aws.cloudfront.Distribution(
+            f"{name}-distribution",
+            origins=[
+                aws.cloudfront.DistributionOriginArgs(
+                    domain_name=self.bucket.bucket_domain_name,
+                    origin_id=f"{name}-s3-origin",
+                    origin_access_control_id=self.oac.id,
+                )
+            ],
+            enabled=True,
+            is_ipv6_enabled=True,
+            default_root_object="index.html",
+            default_cache_behavior=aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
+                allowed_methods=["GET", "HEAD", "OPTIONS"],
+                cached_methods=["GET", "HEAD"],
+                target_origin_id=f"{name}-s3-origin",
+                compress=True,
+                viewer_protocol_policy="redirect-to-https",
+                forwarded_values=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
+                    query_string=False,
+                    cookies=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs(
+                        forward="none"
+                    ),
+                ),
+                min_ttl=0,
+                default_ttl=3600,
+                max_ttl=86400,
+            ),
+            custom_error_responses=[
+                aws.cloudfront.DistributionCustomErrorResponseArgs(
+                    error_code=404,
+                    response_code=200,
+                    response_page_path="/index.html",
+                    error_caching_min_ttl=300,
+                ),
+                aws.cloudfront.DistributionCustomErrorResponseArgs(
+                    error_code=403,
+                    response_code=200,
+                    response_page_path="/index.html",
+                    error_caching_min_ttl=300,
+                )
+            ],
+            restrictions=aws.cloudfront.DistributionRestrictionsArgs(
+                geo_restriction=aws.cloudfront.DistributionRestrictionsGeoRestrictionArgs(
+                    restriction_type="none",
+                ),
+            ),
+            viewer_certificate=aws.cloudfront.DistributionViewerCertificateArgs(
+                cloudfront_default_certificate=True,
+            ),
+            price_class="PriceClass_100",
+            tags={**tags, "Name": f"{name}-distribution"},
+            opts=pulumi.ResourceOptions(parent=self)
+        )
 
-    self._upload_sample_files(name)
+        # S3 bucket policy to allow CloudFront access
+        bucket_policy = pulumi.Output.all(
+            self.bucket.arn,
+            self.cloudfront_distribution.arn
+        ).apply(lambda args: json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "AllowCloudFrontServicePrincipal",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "cloudfront.amazonaws.com"
+                    },
+                    "Action": "s3:GetObject",
+                    "Resource": f"{args[0]}/*",
+                    "Condition": {
+                        "StringEquals": {
+                            "AWS:SourceArn": args[1]
+                        }
+                    }
+                }
+            ]
+        }))
 
-    self.register_outputs({
-      "bucket_name": self.bucket.id,
-      "cloudfront_domain": self.cloudfront_distribution.domain_name,
-      "cloudfront_distribution_id": self.cloudfront_distribution.id
-    })
+        aws.s3.BucketPolicy(
+            f"{name}-bucket-policy",
+            bucket=self.bucket.id,
+            policy=bucket_policy,
+            opts=pulumi.ResourceOptions(parent=self)
+        )
 
-  def _upload_sample_files(self, name: str):
-    """Upload sample HTML, CSS, and JS files"""
+        self._upload_sample_files(name)
 
-    index_html = """<!DOCTYPE html>
+        self.register_outputs({
+            "bucket_name": self.bucket.id,
+            "cloudfront_domain": self.cloudfront_distribution.domain_name,
+            "cloudfront_distribution_id": self.cloudfront_distribution.id
+        })
+
+    def _upload_sample_files(self, name: str):
+        """Upload sample HTML, CSS, and JS files"""
+
+        index_html = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -166,16 +166,16 @@ class FrontendInfrastructure(pulumi.ComponentResource):
 </body>
 </html>"""
 
-    aws.s3.BucketObject(
-      f"{name}-index-html",
-      bucket=self.bucket.id,
-      key="index.html",
-      content=index_html,
-      content_type="text/html",
-      opts=pulumi.ResourceOptions(parent=self)
-    )
+        aws.s3.BucketObject(
+            f"{name}-index-html",
+            bucket=self.bucket.id,
+            key="index.html",
+            content=index_html,
+            content_type="text/html",
+            opts=pulumi.ResourceOptions(parent=self)
+        )
 
-    css_content = """
+        css_content = """
 body {
   font-family: Arial, sans-serif;
   margin: 0;
@@ -220,16 +220,16 @@ button:hover {
 }
 """
 
-    aws.s3.BucketObject(
-      f"{name}-css",
-      bucket=self.bucket.id,
-      key="styles.css",
-      content=css_content,
-      content_type="text/css",
-      opts=pulumi.ResourceOptions(parent=self)
-    )
+        aws.s3.BucketObject(
+            f"{name}-css",
+            bucket=self.bucket.id,
+            key="styles.css",
+            content=css_content,
+            content_type="text/css",
+            opts=pulumi.ResourceOptions(parent=self)
+        )
 
-    js_content = """
+        js_content = """
 async function testAPI() {
   const resultDiv = document.getElementById('api-result');
   resultDiv.innerHTML = 'Testing API...';
@@ -255,16 +255,16 @@ async function testAPI() {
 }
 """
 
-    aws.s3.BucketObject(
-      f"{name}-js",
-      bucket=self.bucket.id,
-      key="app.js",
-      content=js_content,
-      content_type="application/javascript",
-      opts=pulumi.ResourceOptions(parent=self)
-    )
+        aws.s3.BucketObject(
+            f"{name}-js",
+            bucket=self.bucket.id,
+            key="app.js",
+            content=js_content,
+            content_type="application/javascript",
+            opts=pulumi.ResourceOptions(parent=self)
+        )
 
-    error_html = """<!DOCTYPE html>
+        error_html = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -281,13 +281,11 @@ async function testAPI() {
 </body>
 </html>"""
 
-    aws.s3.BucketObject(
-      f"{name}-error-html",
-      bucket=self.bucket.id,
-      key="error.html",
-      content=error_html,
-      content_type="text/html",
-      opts=pulumi.ResourceOptions(parent=self)
-    )
-
-
+        aws.s3.BucketObject(
+            f"{name}-error-html",
+            bucket=self.bucket.id,
+            key="error.html",
+            content=error_html,
+            content_type="text/html",
+            opts=pulumi.ResourceOptions(parent=self)
+        )

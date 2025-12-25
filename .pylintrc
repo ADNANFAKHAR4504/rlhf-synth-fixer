@@ -24,6 +24,7 @@ disable=
     R0917, # too-many-positional-arguments
     W0621, # redefined-outer-name (for pytest fixtures)
     W0718, # broad-exception-caught
+    R0801, # duplicate-code
 
 [FORMAT]
 # Maximum number of characters on a single line
