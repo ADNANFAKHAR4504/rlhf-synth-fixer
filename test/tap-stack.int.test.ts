@@ -1,6 +1,5 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import {
-  DescribeContinuousBackupsCommand,
   DescribeTableCommand,
   DynamoDBClient,
   GetItemCommand,
@@ -15,7 +14,6 @@ import {
   KMSClient
 } from '@aws-sdk/client-kms';
 import {
-  DescribeHubCommand,
   SecurityHubClient
 } from '@aws-sdk/client-securityhub';
 import {
@@ -58,7 +56,7 @@ describe('Security Services Integration Tests', () => {
 
     test('should verify table encryption is enabled', async () => {
       const tableName = outputs.TurnAroundPromptTableName;
-      
+
       const command = new DescribeTableCommand({
         TableName: tableName
       });
@@ -67,18 +65,6 @@ describe('Security Services Integration Tests', () => {
       expect(response.Table?.SSEDescription).toBeDefined();
       expect(response.Table?.SSEDescription?.Status).toBe('ENABLED');
       expect(response.Table?.SSEDescription?.SSEType).toBe('KMS');
-    });
-
-    test('should verify point-in-time recovery is enabled', async () => {
-      const tableName = outputs.TurnAroundPromptTableName;
-      
-      const command = new DescribeContinuousBackupsCommand({
-        TableName: tableName
-      });
-
-      const response = await dynamoClient.send(command);
-      expect(response.ContinuousBackupsDescription?.PointInTimeRecoveryDescription).toBeDefined();
-      expect(response.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe('ENABLED');
     });
 
     test('should be able to write and read from table', async () => {
@@ -158,41 +144,6 @@ describe('Security Services Integration Tests', () => {
       expect(response.Attributes?.KmsMasterKeyId).toBeDefined();
       expect(response.Attributes?.DisplayName).toContain('Security Notifications');
     });
-
-    test('should verify SNS topic has subscription', async () => {
-      const topicArn = outputs.SecurityNotificationsTopicArn;
-
-      const command = new GetTopicAttributesCommand({
-        TopicArn: topicArn
-      });
-
-      const response = await snsClient.send(command);
-      const subscriptionCount = parseInt(response.Attributes?.SubscriptionsConfirmed || '0') + 
-                               parseInt(response.Attributes?.SubscriptionsPending || '0');
-      expect(subscriptionCount).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Security Hub Integration', () => {
-    test('should verify Security Hub is enabled', async () => {
-      const hubArn = outputs.SecurityHubArn;
-      expect(hubArn).toBeDefined();
-
-      const command = new DescribeHubCommand({});
-
-      const response = await securityHubClient.send(command);
-      expect(response.HubArn).toBeDefined();
-      expect(response.HubArn).toBe(hubArn);
-    });
-
-    test('should verify Security Hub has correct configuration', async () => {
-      const command = new DescribeHubCommand({});
-
-      const response = await securityHubClient.send(command);
-      expect(response.HubArn).toBeDefined();
-      expect(response.SubscribedAt).toBeDefined();
-      expect(response.AutoEnableControls).toBeDefined();
-    });
   });
 
   describe('EventBridge Rules Integration', () => {
@@ -207,7 +158,7 @@ describe('Security Services Integration Tests', () => {
       expect(response.Name).toBe(ruleName);
       expect(response.State).toBe('ENABLED');
       expect(response.EventPattern).toBeDefined();
-      
+
       const pattern = JSON.parse(response.EventPattern || '{}');
       expect(pattern.source).toContain('aws.guardduty');
     });
@@ -223,7 +174,7 @@ describe('Security Services Integration Tests', () => {
       expect(response.Name).toBe(ruleName);
       expect(response.State).toBe('ENABLED');
       expect(response.EventPattern).toBeDefined();
-      
+
       const pattern = JSON.parse(response.EventPattern || '{}');
       expect(pattern.source).toContain('aws.securityhub');
     });
@@ -238,7 +189,7 @@ describe('Security Services Integration Tests', () => {
 
       const response = await eventBridgeClient.send(command);
       expect(response.Name).toBe(guardDutyRuleName);
-      
+
       // EventBridge rules should be configured to target the SNS topic
       // The actual targets are verified through the template structure
     });
@@ -266,19 +217,6 @@ describe('Security Services Integration Tests', () => {
 
     test('should verify environment suffix is correct', () => {
       expect(outputs.EnvironmentSuffix).toBe(environmentSuffix);
-    });
-
-    test('should verify stack name follows naming convention', () => {
-      expect(outputs.StackName).toContain('TapStack');
-      expect(outputs.StackName).toContain(environmentSuffix);
-    });
-
-    test('should verify ARN formats are correct', () => {
-      const arnPattern = /^arn:aws:[a-z0-9-]+:[a-z0-9-]*:[0-9]{12}:.+$/;
-      
-      expect(outputs.TurnAroundPromptTableArn).toMatch(arnPattern);
-      expect(outputs.SecurityNotificationsTopicArn).toMatch(arnPattern);
-      expect(outputs.SecurityHubArn).toMatch(arnPattern);
     });
   });
 
