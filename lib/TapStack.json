@@ -570,7 +570,9 @@
                                         "s3:GetObject",
                                         "s3:PutObject"
                                     ],
-                                    "Resource": "*"
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ProdS3Bucket}/*"
+                                    }
                                 }
                             ]
                         }

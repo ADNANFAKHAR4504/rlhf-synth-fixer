@@ -492,7 +492,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(s3Policy.PolicyDocument.Statement[0].Action).toContain(
         's3:PutObject'
       );
-      expect(s3Policy.PolicyDocument.Statement[0].Resource).toBe('*');
+      expect(s3Policy.PolicyDocument.Statement[0].Resource).toEqual({
+        'Fn::Sub': 'arn:aws:s3:::${ProdS3Bucket}/*',
+      });
     });
 
     test('RDS monitoring role has correct configuration', () => {
