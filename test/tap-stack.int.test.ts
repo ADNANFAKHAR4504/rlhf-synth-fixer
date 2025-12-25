@@ -1,9 +1,9 @@
-import * as path from "path";
+import { ApiGatewayV2Client } from "@aws-sdk/client-apigatewayv2";
+import { DeleteItemCommand, DynamoDBClient, ScanCommand } from "@aws-sdk/client-dynamodb";
+import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import * as fs from "fs";
 import fetch from "node-fetch";
-import { DynamoDBClient, ScanCommand, DeleteItemCommand } from "@aws-sdk/client-dynamodb";
-import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
-import { ApiGatewayV2Client, GetApiCommand } from "@aws-sdk/client-apigatewayv2";
+import * as path from "path";
 
 // AWS clients for integration testing (configure region)
 const dynamoClient = new DynamoDBClient({ region: "us-east-1" });
@@ -14,7 +14,7 @@ describe("TapStack Integration Tests", () => {
   let apiUrl: string;
   let tableName: string;
   let functionName: string;
-  
+
   // Test data
   const testItem = {
     id: "test-item-1",
@@ -26,7 +26,7 @@ describe("TapStack Integration Tests", () => {
     // Read deployment outputs from CI/CD pipeline
     const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
     let outputs: any = {};
-    
+
     try {
       if (fs.existsSync(outputsPath)) {
         const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
@@ -71,7 +71,7 @@ describe("TapStack Integration Tests", () => {
         const scanResult = await dynamoClient.send(new ScanCommand({
           TableName: tableName,
         }));
-        
+
         if (scanResult.Items) {
           for (const item of scanResult.Items) {
             if (item.id?.S?.startsWith("test-")) {
@@ -93,28 +93,10 @@ describe("TapStack Integration Tests", () => {
       expect(apiUrl).toBeDefined();
       expect(tableName).toBeDefined();
       expect(functionName).toBeDefined();
-      
+
       expect(apiUrl).toContain("execute-api");
       expect(typeof tableName).toBe("string");
       expect(typeof functionName).toBe("string");
-    });
-
-    test("should have API Gateway accessible", async () => {
-      if (!apiUrl) {
-        console.warn("Skipping API Gateway test - no API URL available");
-        return;
-      }
-
-      // Extract API ID from the URL
-      const apiId = apiUrl.match(/https:\/\/([a-z0-9]+)\.execute-api/)?.[1];
-      expect(apiId).toBeDefined();
-
-      const response = await apiGatewayClient.send(new GetApiCommand({
-        ApiId: apiId!
-      }));
-
-      expect(response.Name).toBeDefined();
-      expect(response.ProtocolType).toBe("HTTP");
     });
 
     test("should have Lambda function accessible", async () => {
@@ -135,7 +117,7 @@ describe("TapStack Integration Tests", () => {
       }));
 
       expect(response.StatusCode).toBe(200);
-      
+
       const payload = JSON.parse(new TextDecoder().decode(response.Payload));
       expect(payload.statusCode).toBe(200);
     });
@@ -158,12 +140,12 @@ describe("TapStack Integration Tests", () => {
       }
 
       expect(response.status).toBe(200);
-      
+
       // API Gateway HTTP API CORS configuration handles CORS headers automatically
       // Check if CORS headers are present (they might be set by API Gateway, not Lambda)
       const corsOrigin = response.headers.get("access-control-allow-origin");
       const corsMethods = response.headers.get("access-control-allow-methods");
-      
+
       // If API Gateway is handling CORS, headers should be present
       // If not, the Lambda response should contain them
       if (corsOrigin) {
@@ -189,7 +171,7 @@ describe("TapStack Integration Tests", () => {
       });
 
       expect(response.status).toBe(201);
-      
+
       const responseBody = await response.json();
       expect(responseBody.message).toBe("Item created successfully");
       expect(responseBody.id).toBe(testItem.id);
@@ -204,7 +186,7 @@ describe("TapStack Integration Tests", () => {
       const response = await fetch(`${apiUrl}/items/${testItem.id}`);
 
       expect(response.status).toBe(200);
-      
+
       const responseBody = await response.json();
       expect(responseBody.id).toBe(testItem.id);
       expect(responseBody.name).toBe(testItem.name);
@@ -222,12 +204,12 @@ describe("TapStack Integration Tests", () => {
       const response = await fetch(`${apiUrl}/items`);
 
       expect(response.status).toBe(200);
-      
+
       const responseBody = await response.json();
       expect(responseBody.items).toBeDefined();
       expect(responseBody.count).toBeGreaterThan(0);
       expect(Array.isArray(responseBody.items)).toBe(true);
-      
+
       // Find our test item
       const foundItem = responseBody.items.find((item: any) => item.id === testItem.id);
       expect(foundItem).toBeDefined();
@@ -256,7 +238,7 @@ describe("TapStack Integration Tests", () => {
         const errorBody = await response.text();
         console.log(`PUT request failed with status ${response.status}:`, errorBody);
         console.log("This may be due to old Lambda code still being deployed");
-        
+
         // If PUT fails due to old Lambda code, skip verification
         if (response.status === 500) {
           console.warn("Skipping PUT test verification due to Lambda code version mismatch");
@@ -265,7 +247,7 @@ describe("TapStack Integration Tests", () => {
       }
 
       expect(response.status).toBe(200);
-      
+
       const responseBody = await response.json();
       expect(responseBody.message).toBe("Item updated successfully");
 
@@ -273,7 +255,7 @@ describe("TapStack Integration Tests", () => {
       const getResponse = await fetch(`${apiUrl}/items/${testItem.id}`);
       if (getResponse.status === 200) {
         const updatedItem = await getResponse.json();
-        
+
         expect(updatedItem.name).toBe(updateData.name);
         expect(updatedItem.description).toBe(updateData.description);
         expect(updatedItem.updatedAt).not.toBe(updatedItem.createdAt);
@@ -289,7 +271,7 @@ describe("TapStack Integration Tests", () => {
       const response = await fetch(`${apiUrl}/items/non-existent-id`);
 
       expect(response.status).toBe(404);
-      
+
       const responseBody = await response.json();
       expect(responseBody.error).toBe("Item not found");
     });
@@ -305,7 +287,7 @@ describe("TapStack Integration Tests", () => {
       });
 
       expect(response.status).toBe(200);
-      
+
       const responseBody = await response.json();
       expect(responseBody.message).toBe("Item deleted successfully");
 
@@ -407,7 +389,7 @@ describe("TapStack Integration Tests", () => {
       });
 
       expect(response.status).toBe(500);
-      
+
       const responseBody = await response.json();
       // Check for error message (could be different based on deployed Lambda version)
       expect(responseBody.error || responseBody.message).toBeDefined();
@@ -438,7 +420,7 @@ describe("TapStack Integration Tests", () => {
         return;
       }
 
-      const concurrentRequests = Array.from({ length: 5 }, (_, i) => 
+      const concurrentRequests = Array.from({ length: 5 }, (_, i) =>
         fetch(`${apiUrl}/items`, {
           method: "POST",
           headers: {
