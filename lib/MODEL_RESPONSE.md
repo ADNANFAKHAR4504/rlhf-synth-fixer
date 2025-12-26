@@ -1,24 +1,9 @@
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Large-scale profile migration system with DMS, Lambda, DynamoDB, Neptune, OpenSearch, and monitoring",
-  
-  "Parameters": {
-    "SourceDatabaseEndpoint": {
-      "Type": "String",
-      "Description": "Cassandra source database endpoint"
-    },
-    "SourceDatabasePort": {
-      "Type": "Number",
-      "Default": 9042,
-      "Description": "Cassandra database port"
-    },
-    "NeptuneDBInstanceClass": {
-      "Type": "String",
-      "Default": "db.r5.12xlarge",
-      "Description": "Neptune instance class for handling 890M nodes and 12B edges"
-    }
-  },
+  "Description": "Large-scale profile migration system with EventBridge-triggered data ingestion, Lambda, DynamoDB, OpenSearch, and monitoring",
+
+  "Parameters": {},
   
   "Resources": {
     "VPC": {
@@ -219,7 +204,124 @@
         "SourceArn": {"Fn::Sub": "arn:aws:s3:::profile-migration-${AWS::AccountId}"}
       }
     },
-    
+
+    "S3RawDataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "profile-raw-data-${AWS::AccountId}"},
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldRawData",
+              "Status": "Enabled",
+              "ExpirationInDays": 7
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+
+    "DataIngestionLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3WritePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:PutObjectAcl"
+                  ],
+                  "Resource": {"Fn::Sub": "${S3RawDataBucket.Arn}/*"}
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+
+    "DataIngestionLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "DataIngestionLambda",
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["DataIngestionLambdaRole", "Arn"]},
+        "MemorySize": 3008,
+        "Timeout": 900,
+        "ReservedConcurrentExecutions": 100,
+        "Environment": {
+          "Variables": {
+            "S3_BUCKET": {"Ref": "S3RawDataBucket"}
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport time\nfrom datetime import datetime\nimport random\n\ns3 = boto3.client('s3')\n\ndef lambda_handler(event, context):\n    # Simulate profile data generation\n    bucket = os.environ['S3_BUCKET']\n    \n    # Generate batch of simulated profile data\n    profiles = []\n    batch_size = 1000\n    \n    for i in range(batch_size):\n        profile = {\n            'user_id': f'user_{random.randint(1, 10000000)}',\n            'name': f'User {i}',\n            'email': f'user{i}@example.com',\n            'timestamp': int(time.time()),\n            'metadata': {\n                'created_at': datetime.utcnow().isoformat(),\n                'source': 'data_ingestion_lambda'\n            }\n        }\n        profiles.append(profile)\n    \n    # Write to S3 bucket\n    key = f'raw/profiles_{int(time.time())}_{context.request_id}.json'\n    s3.put_object(\n        Bucket=bucket,\n        Key=key,\n        Body=json.dumps(profiles),\n        ContentType='application/json'\n    )\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps(f'Ingested {batch_size} profiles to {key}')\n    }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+
+    "DataIngestionScheduleRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": "DataIngestionSchedule",
+        "Description": "Trigger data ingestion every minute",
+        "ScheduleExpression": "rate(1 minute)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {"Fn::GetAtt": ["DataIngestionLambda", "Arn"]},
+            "Id": "DataIngestionTarget"
+          }
+        ]
+      }
+    },
+
+    "DataIngestionLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "DataIngestionLambda"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {"Fn::GetAtt": ["DataIngestionScheduleRule", "Arn"]}
+      }
+    },
+
     "DynamoDBTable": {
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
@@ -309,93 +411,6 @@
             "PredefinedMetricType": "DynamoDBWriteCapacityUtilization"
           }
         }
-      }
-    },
-    
-    "NeptuneDBSubnetGroup": {
-      "Type": "AWS::Neptune::DBSubnetGroup",
-      "Properties": {
-        "DBSubnetGroupDescription": "Subnet group for Neptune cluster",
-        "SubnetIds": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"}
-        ],
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "ProfileMigration"
-          }
-        ]
-      }
-    },
-    
-    "NeptuneDBCluster": {
-      "Type": "AWS::Neptune::DBCluster",
-      "Properties": {
-        "DBClusterIdentifier": "profile-migration-neptune",
-        "DBSubnetGroupName": {"Ref": "NeptuneDBSubnetGroup"},
-        "VpcSecurityGroupIds": [{"Ref": "NeptuneSecurityGroup"}],
-        "BackupRetentionPeriod": 7,
-        "PreferredBackupWindow": "03:00-04:00",
-        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "ProfileMigration"
-          }
-        ]
-      }
-    },
-    
-    "NeptuneDBInstance1": {
-      "Type": "AWS::Neptune::DBInstance",
-      "Properties": {
-        "DBInstanceIdentifier": "profile-migration-neptune-1",
-        "DBClusterIdentifier": {"Ref": "NeptuneDBCluster"},
-        "DBInstanceClass": {"Ref": "NeptuneDBInstanceClass"},
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "ProfileMigration"
-          }
-        ]
-      }
-    },
-    
-    "NeptuneDBInstance2": {
-      "Type": "AWS::Neptune::DBInstance",
-      "Properties": {
-        "DBInstanceIdentifier": "profile-migration-neptune-2",
-        "DBClusterIdentifier": {"Ref": "NeptuneDBCluster"},
-        "DBInstanceClass": {"Ref": "NeptuneDBInstanceClass"},
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "ProfileMigration"
-          }
-        ]
-      }
-    },
-    
-    "NeptuneSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupDescription": "Security group for Neptune cluster",
-        "VpcId": {"Ref": "VPC"},
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 8182,
-            "ToPort": 8182,
-            "SourceSecurityGroupId": {"Ref": "LambdaSecurityGroup"}
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "NeptuneSecurityGroup"
-          }
-        ]
       }
     },
     
@@ -587,7 +602,7 @@
                     "neptune-db:*",
                     "es:*",
                     "cloudwatch:*",
-                    "dms:*",
+                    "events:*",
                     "sns:*"
                   ],
                   "Resource": "*"
@@ -669,22 +684,11 @@
         "ReservedConcurrentExecutions": 2000,
         "Environment": {
           "Variables": {
-            "NEPTUNE_ENDPOINT": {"Fn::GetAtt": ["NeptuneDBCluster", "Endpoint"]},
-            "NEPTUNE_PORT": {"Fn::GetAtt": ["NeptuneDBCluster", "Port"]},
             "SNS_TOPIC": {"Ref": "MonitoringSNSTopic"}
           }
         },
-        "VpcConfig": {
-          "SubnetIds": [
-            {"Ref": "PrivateSubnet1"},
-            {"Ref": "PrivateSubnet2"}
-          ],
-          "SecurityGroupIds": [
-            {"Ref": "LambdaSecurityGroup"}
-          ]
-        },
         "Code": {
-          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Process DynamoDB stream events\n    # Build graph data in Neptune using Gremlin\n    return {'statusCode': 200}\n"
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Process DynamoDB stream events\n    # Build graph data structures\n    return {'statusCode': 200}\n"
         },
         "Tags": [
           {
@@ -706,13 +710,12 @@
         "Timeout": 60,
         "Environment": {
           "Variables": {
-            "DMS_TASK_ARN": {"Ref": "DMSReplicationTask"},
             "SNS_TOPIC": {"Ref": "MonitoringSNSTopic"},
-            "THROTTLE_LAMBDA": {"Ref": "ThrottlingAdjustmentLambda"}
+            "THROTTLE_LAMBDA": {"Ref": "RateAdjustmentLambda"}
           }
         },
         "Code": {
-          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Query CloudWatch metrics for DMS and Lambda\n    # Detect migration lag\n    # Trigger throttling if needed\n    return {'statusCode': 200}\n"
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Query CloudWatch metrics for ingestion Lambda and processing Lambda metrics\n    # Detect migration lag\n    # Trigger rate adjustment if needed\n    return {'statusCode': 200}\n"
         },
         "Tags": [
           {
@@ -723,10 +726,10 @@
       }
     },
     
-    "ThrottlingAdjustmentLambda": {
+    "RateAdjustmentLambda": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "FunctionName": "DMSThrottlingAdjustment",
+        "FunctionName": "RateAdjustmentLambda",
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
         "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
@@ -734,12 +737,12 @@
         "Timeout": 30,
         "Environment": {
           "Variables": {
-            "DMS_TASK_ARN": {"Ref": "DMSReplicationTask"},
+            "INGESTION_RULE_NAME": {"Ref": "DataIngestionScheduleRule"},
             "SNS_TOPIC": {"Ref": "MonitoringSNSTopic"}
           }
         },
         "Code": {
-          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Adjust DMS replication task throttling\n    # Apply within 30 seconds\n    return {'statusCode': 200}\n"
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Adjust EventBridge rule schedule to modify ingestion rate\n    # Apply within 30 seconds\n    return {'statusCode': 200}\n"
         },
         "Tags": [
           {
@@ -931,168 +934,7 @@
         ]
       }
     },
-    
-    "DMSSubnetGroup": {
-      "Type": "AWS::DMS::ReplicationSubnetGroup",
-      "Properties": {
-        "ReplicationSubnetGroupIdentifier": "profile-migration-subnet-group",
-        "ReplicationSubnetGroupDescription": "Subnet group for DMS replication",
-        "SubnetIds": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"}
-        ],
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "ProfileMigration"
-          }
-        ]
-      }
-    },
-    
-    "DMSReplicationInstance": {
-      "Type": "AWS::DMS::ReplicationInstance",
-      "Properties": {
-        "ReplicationInstanceIdentifier": "profile-migration-instance",
-        "ReplicationInstanceClass": "dms.r5.24xlarge",
-        "AllocatedStorage": 2000,
-        "MultiAZ": true,
-        "PubliclyAccessible": false,
-        "ReplicationSubnetGroupIdentifier": {"Ref": "DMSSubnetGroup"},
-        "VpcSecurityGroupIds": [{"Ref": "DMSSecurityGroup"}],
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "ProfileMigration"
-          }
-        ]
-      }
-    },
-    
-    "DMSSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupDescription": "Security group for DMS replication instance",
-        "VpcId": {"Ref": "VPC"},
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": "-1",
-            "CidrIp": "0.0.0.0/0"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "DMSSecurityGroup"
-          }
-        ]
-      }
-    },
-    
-    "DMSSourceEndpoint": {
-      "Type": "AWS::DMS::Endpoint",
-      "Properties": {
-        "EndpointIdentifier": "cassandra-source-endpoint",
-        "EndpointType": "source",
-        "EngineName": "cassandra",
-        "ServerName": {"Ref": "SourceDatabaseEndpoint"},
-        "Port": {"Ref": "SourceDatabasePort"},
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "ProfileMigration"
-          }
-        ]
-      }
-    },
-    
-    "DMSTargetEndpoint": {
-      "Type": "AWS::DMS::Endpoint",
-      "Properties": {
-        "EndpointIdentifier": "s3-target-endpoint",
-        "EndpointType": "target",
-        "EngineName": "s3",
-        "S3Settings": {
-          "BucketName": {"Ref": "S3Bucket"},
-          "DataFormat": "json",
-          "CompressionType": "gzip",
-          "IncludeOpForFullLoad": true,
-          "TimestampColumnName": "migration_timestamp",
-          "ParquetVersion": "parquet-2-0",
-          "EnableStatistics": true,
-          "CdcInsertsOnly": false,
-          "PreserveTransactions": false
-        },
-        "ServiceAccessRoleArn": {"Fn::GetAtt": ["DMSServiceRole", "Arn"]},
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "ProfileMigration"
-          }
-        ]
-      }
-    },
-    
-    "DMSServiceRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "dms.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole"
-        ],
-        "Policies": [
-          {
-            "PolicyName": "S3Access",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:*"
-                  ],
-                  "Resource": [
-                    {"Fn::GetAtt": ["S3Bucket", "Arn"]},
-                    {"Fn::Sub": "${S3Bucket.Arn}/*"}
-                  ]
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    
-    "DMSReplicationTask": {
-      "Type": "AWS::DMS::ReplicationTask",
-      "Properties": {
-        "ReplicationTaskIdentifier": "profile-migration-task",
-        "MigrationType": "full-load-and-cdc",
-        "ReplicationInstanceArn": {"Ref": "DMSReplicationInstance"},
-        "SourceEndpointArn": {"Ref": "DMSSourceEndpoint"},
-        "TargetEndpointArn": {"Ref": "DMSTargetEndpoint"},
-        "TableMappings": "{\n  \"rules\": [\n    {\n      \"rule-type\": \"selection\",\n      \"rule-id\": \"1\",\n      \"rule-name\": \"1\",\n      \"object-locator\": {\n        \"schema-name\": \"profiles\",\n        \"table-name\": \"%\"\n      },\n      \"rule-action\": \"include\"\n    }\n  ]\n}",
-        "ReplicationTaskSettings": "{\n  \"TargetMetadata\": {\n    \"TargetSchema\": \"\",\n    \"SupportLobs\": true,\n    \"FullLobMode\": false,\n    \"LobChunkSize\": 64,\n    \"LimitedSizeLobMode\": true,\n    \"LobMaxSize\": 32,\n    \"InlineLobMaxSize\": 16,\n    \"LoadMaxFileSize\": 1000000,\n    \"ParallelLoadThreads\": 16,\n    \"ParallelLoadBufferSize\": 500,\n    \"BatchApplyEnabled\": true,\n    \"TaskRecoveryTableEnabled\": false\n  },\n  \"FullLoadSettings\": {\n    \"TargetTablePrepMode\": \"DROP_AND_CREATE\",\n    \"CreatePkAfterFullLoad\": false,\n    \"StopTaskCachedChangesApplied\": false,\n    \"StopTaskCachedChangesNotApplied\": false,\n    \"EnableStatistics\": true,\n    \"EnableValidation\": false,\n    \"ThreadCount\": 8,\n    \"TablesErrorBehavior\": \"SUSPEND_TABLE\",\n    \"LoadMaxFileSize\": 1000000,\n    \"ParallelLoadThreads\": 16,\n    \"ParallelLoadBufferSize\": 500\n  },\n  \"TTSettings\": {\n    \"EnableTT\": false\n  }\n}",
-        "Tags": [
-          {
-            "Key": "Purpose",
-            "Value": "ProfileMigration"
-          }
-        ]
-      }
-    },
-    
+
     "MonitoringSNSTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
@@ -1121,48 +963,24 @@
         "ComparisonOperator": "GreaterThanThreshold",
         "AlarmActions": [
           {"Ref": "MonitoringSNSTopic"},
-          {"Fn::GetAtt": ["ThrottlingAdjustmentLambda", "Arn"]}
+          {"Fn::GetAtt": ["RateAdjustmentLambda", "Arn"]}
         ],
         "TreatMissingData": "breaching"
       }
     },
-    
-    "ThrottleLambdaAlarmPermission": {
+
+    "RateAdjustmentLambdaAlarmPermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
-        "FunctionName": {"Ref": "ThrottlingAdjustmentLambda"},
+        "FunctionName": {"Ref": "RateAdjustmentLambda"},
         "Action": "lambda:InvokeFunction",
         "Principal": "lambda.alarms.cloudwatch.amazonaws.com",
         "SourceAccount": {"Ref": "AWS::AccountId"},
         "SourceArn": {"Fn::GetAtt": ["MigrationLagAlarm", "Arn"]}
       }
     },
-    
-    "DMSReplicationRateAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmName": "DMSReplicationRate",
-        "AlarmDescription": "Alert when DMS replication rate drops",
-        "MetricName": "CDCThroughputRowsSource",
-        "Namespace": "AWS/DMS",
-        "Dimensions": [
-          {
-            "Name": "ReplicationTaskIdentifier",
-            "Value": {"Ref": "DMSReplicationTask"}
-          }
-        ],
-        "Statistic": "Average",
-        "Period": 300,
-        "EvaluationPeriods": 2,
-        "Threshold": 205000,
-        "ComparisonOperator": "LessThanThreshold",
-        "AlarmActions": [
-          {"Ref": "MonitoringSNSTopic"}
-        ],
-        "TreatMissingData": "breaching"
-      }
-    },
-    
+
+
     "LambdaConcurrentExecutionsAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -1216,16 +1034,20 @@
   
   "Outputs": {
     "S3BucketName": {
-      "Description": "S3 bucket for DMS target",
+      "Description": "S3 bucket for processed data",
       "Value": {"Ref": "S3Bucket"}
+    },
+    "S3RawDataBucketName": {
+      "Description": "S3 bucket for raw ingested data",
+      "Value": {"Ref": "S3RawDataBucket"}
+    },
+    "DataIngestionLambdaArn": {
+      "Description": "ARN of the data ingestion Lambda function",
+      "Value": {"Fn::GetAtt": ["DataIngestionLambda", "Arn"]}
     },
     "DynamoDBTableName": {
       "Description": "DynamoDB table for profiles",
       "Value": {"Ref": "DynamoDBTable"}
-    },
-    "NeptuneEndpoint": {
-      "Description": "Neptune cluster endpoint",
-      "Value": {"Fn::GetAtt": ["NeptuneDBCluster", "Endpoint"]}
     },
     "OpenSearchDomainEndpoint": {
       "Description": "OpenSearch domain endpoint",

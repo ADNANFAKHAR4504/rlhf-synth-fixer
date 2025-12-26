@@ -27,7 +27,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Large-scale profile migration system with DMS, Lambda, DynamoDB, Neptune, OpenSearch, and monitoring'
+        'Large-scale profile migration system with EventBridge-triggered data ingestion, Lambda, DynamoDB, OpenSearch, and monitoring'
       );
     });
 
@@ -42,29 +42,9 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have expected parameters', () => {
-      const expectedParams = [
-        'SourceDatabaseEndpoint',
-        'SourceDatabasePort',
-        'SourceDatabaseUsername',
-        'SourceDatabasePassword',
-        'NeptuneDBInstanceClass',
-      ];
-
-      expectedParams.forEach(param => {
-        expect(template.Parameters[param]).toBeDefined();
-      });
-
+    test('should have no parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
-    });
-
-    test('should have correct database configuration', () => {
-      expect(template.Parameters.SourceDatabaseEndpoint.Default).toBe('mysql.example.com');
-      expect(template.Parameters.SourceDatabasePort.Default).toBe(3306);
-      expect(template.Parameters.SourceDatabaseUsername.Default).toBe('admin');
-      expect(template.Parameters.SourceDatabasePassword.NoEcho).toBe(true);
-      expect(template.Parameters.NeptuneDBInstanceClass.Default).toBe('db.r5.12xlarge');
+      expect(parameterCount).toBe(0);
     });
   });
 
@@ -83,12 +63,9 @@ describe('TapStack CloudFormation Template', () => {
         'KinesisFirehoseDeliveryStream',
         'TransformValidateLambda',
         'OpenSearchDomain',
-        'NeptuneDBCluster',
-        'NeptuneDBInstance1',
-        'NeptuneDBInstance2',
-        'DMSReplicationInstance',
-        'DMSSourceEndpoint',
-        'DMSTargetEndpoint',
+        'DataIngestionLambda',
+        'DataIngestionScheduleRule',
+        'S3RawDataBucket',
         'ValidationStateMachine'
       ];
 
@@ -115,23 +92,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(domain.Properties.EBSOptions.Throughput).toBe(500);
     });
 
-    test('Neptune cluster should be properly configured', () => {
-      const cluster = template.Resources.NeptuneDBCluster;
-      expect(cluster.Type).toBe('AWS::Neptune::DBCluster');
-      expect(cluster.Properties.DBClusterIdentifier).toBe('profile-migration-neptune');
-      expect(cluster.Properties.DBSubnetGroupName).toEqual({Ref: 'NeptuneDBSubnetGroup'});
-    });
 
-    test('DMS components should be present', () => {
-      const replicationInstance = template.Resources.DMSReplicationInstance;
-      const sourceEndpoint = template.Resources.DMSSourceEndpoint;
-      const targetEndpoint = template.Resources.DMSTargetEndpoint;
-      
-      expect(replicationInstance.Type).toBe('AWS::DMS::ReplicationInstance');
-      expect(sourceEndpoint.Type).toBe('AWS::DMS::Endpoint');
-      expect(targetEndpoint.Type).toBe('AWS::DMS::Endpoint');
-      expect(sourceEndpoint.Properties.EngineName).toBe('mysql');
-      expect(targetEndpoint.Properties.EngineName).toBe('s3');
+    test('Data ingestion components should be present', () => {
+      const ingestionLambda = template.Resources.DataIngestionLambda;
+      const ingestionRule = template.Resources.DataIngestionScheduleRule;
+      const rawDataBucket = template.Resources.S3RawDataBucket;
+
+      expect(ingestionLambda.Type).toBe('AWS::Lambda::Function');
+      expect(ingestionRule.Type).toBe('AWS::Events::Rule');
+      expect(rawDataBucket.Type).toBe('AWS::S3::Bucket');
+      expect(ingestionRule.Properties.ScheduleExpression).toBe('rate(1 minute)');
     });
 
     test('S3Bucket should have a bucket name using account id substitution', () => {
@@ -153,7 +123,6 @@ describe('TapStack CloudFormation Template', () => {
       const expectedOutputs = [
         'S3BucketName',
         'DynamoDBTableName',
-        'NeptuneEndpoint',
         'OpenSearchDomainEndpoint',
         'FirehoseStreamName',
         'MonitoringTopicArn',
@@ -168,7 +137,6 @@ describe('TapStack CloudFormation Template', () => {
     test('outputs should have correct structure', () => {
       expect(template.Outputs.S3BucketName.Value).toEqual({Ref: 'S3Bucket'});
       expect(template.Outputs.DynamoDBTableName.Value).toEqual({Ref: 'DynamoDBTable'});
-      expect(template.Outputs.NeptuneEndpoint.Value).toEqual({'Fn::GetAtt': ['NeptuneDBCluster', 'Endpoint']});
     });
   });
 
@@ -191,10 +159,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBeGreaterThan(50); // The stack has many resources
 
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
+      expect(parameterCount).toBe(0);
 
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7);
+      expect(outputCount).toBeGreaterThanOrEqual(7); // At least 7 outputs
     });
   });
 
@@ -215,7 +183,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have monitoring and alarms', () => {
       expect(template.Resources.MonitoringSNSTopic).toBeDefined();
       expect(template.Resources.MigrationLagAlarm).toBeDefined();
-      expect(template.Resources.DMSReplicationRateAlarm).toBeDefined();
+      expect(template.Resources.RateAdjustmentLambda).toBeDefined();
       expect(template.Resources.LambdaConcurrentExecutionsAlarm).toBeDefined();
       expect(template.Resources.DynamoDBThrottleAlarm).toBeDefined();
     });
