@@ -15,7 +15,19 @@
     "CloudFront",
     "WAF",
     "S3",
-    "VPC"
+    "VPC",
+    "Lambda",
+    "API Gateway",
+    "Secrets Manager",
+    "IAM",
+    "KMS"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
