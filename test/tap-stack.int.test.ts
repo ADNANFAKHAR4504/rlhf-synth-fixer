@@ -98,10 +98,10 @@ beforeAll(async () => {
   const outputsPath = 'cfn-outputs/flat-outputs.json';
   if (fs.existsSync(outputsPath)) {
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-    stackName = `TapStack${environmentSuffix}`;
+    stackName = `localstack-stack-${environmentSuffix}`;
   } else {
     // Fallback: construct expected ARNs based on stack naming convention
-    stackName = `TapStack${environmentSuffix}`;
+    stackName = `localstack-stack-${environmentSuffix}`;
     outputs = {
       EC2ApplicationRoleARN: `arn:aws:iam::${accountId}:role/${stackName}-EC2ApplicationRole-*`,
       LambdaExecutionRoleARN: `arn:aws:iam::${accountId}:role/${stackName}-LambdaExecutionRole-*`,
