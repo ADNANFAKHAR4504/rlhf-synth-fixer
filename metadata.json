@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-229216",
+  "team": "synth-2",
+  "startedAt": "2025-07-29T10:12:06.958Z",
+  "subtask": "deploy",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "IAM",
+    "S3"
+  ],
+  "wave": "P0"
+}
