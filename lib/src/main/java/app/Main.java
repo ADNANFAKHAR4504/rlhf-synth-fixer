@@ -69,15 +69,24 @@ class TapStack extends Stack {
                         .map(Object::toString))
                 .orElse("dev");
 
+        // Detect LocalStack environment
+        String awsEndpointUrl = System.getenv("AWS_ENDPOINT_URL");
+        boolean isLocalStack = awsEndpointUrl != null &&
+                               (awsEndpointUrl.contains("localhost") || awsEndpointUrl.contains("4566"));
+
+        // Build environment - use specific account/region for AWS, generic for LocalStack
+        Environment.Builder envBuilder = Environment.builder();
+        if (!isLocalStack) {
+            envBuilder.account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                     .region("us-east-1");
+        }
+
         // Create the infrastructure stack
         this.infrastructureStack = new InfrastructureStack(
             this,
             "InfrastructureStack" + environmentSuffix,
             StackProps.builder()
-                .env(Environment.builder()
-                    .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                    .region("us-east-1") // Fixed region as per requirements
-                    .build())
+                .env(envBuilder.build())
                 .build(),
             environmentSuffix
         );
@@ -122,14 +131,24 @@ public final class Main {
             environmentSuffix = "dev";
         }
 
+        // Detect LocalStack environment
+        String awsEndpointUrl = System.getenv("AWS_ENDPOINT_URL");
+        boolean isLocalStack = awsEndpointUrl != null &&
+                               (awsEndpointUrl.contains("localhost") || awsEndpointUrl.contains("4566"));
+
+        // Build environment - use specific account/region for AWS, generic for LocalStack
+        Environment.Builder envBuilder = Environment.builder();
+        if (!isLocalStack) {
+            envBuilder.account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                     .region("us-east-1");
+        }
+        // For LocalStack, we don't specify account/region to avoid validation
+
         // Create the main stack
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
                 .stackProps(StackProps.builder()
-                        .env(Environment.builder()
-                                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                                .region("us-east-1") // Fixed region as per requirements
-                                .build())
+                        .env(envBuilder.build())
                         .build())
                 .build());
 

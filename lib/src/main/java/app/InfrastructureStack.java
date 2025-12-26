@@ -124,7 +124,11 @@ public class InfrastructureStack extends Stack {
 
         // Create EC2 instances
         UserData userData = createUserData();
-        IMachineImage amzLinux = MachineImage.latestAmazonLinux2023();
+        // Use a specific AMI to avoid lookups (Amazon Linux 2023 in us-east-1)
+        // For other regions, this would need to be parameterized
+        IMachineImage amzLinux = MachineImage.genericLinux(
+            java.util.Map.of("us-east-1", "ami-0453ec754f44f9a4a")
+        );
 
         // Create first EC2 instance in first public subnet
         this.webInstance1 = Instance.Builder.create(this, "WebInstance1")
