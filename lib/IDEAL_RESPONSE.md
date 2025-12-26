@@ -1406,7 +1406,7 @@ This is a CloudFormation JSON template that defines all infrastructure resources
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```
 import fs from 'fs';
 import {
   DynamoDBClient,
@@ -1887,7 +1887,7 @@ describe('Document Automation System Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```
 import fs from 'fs';
 import path from 'path';
 
