@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr490cdkjava",
+  "team": "synth-2",
+  "startedAt": "2025-08-26T22:23:28+05:30",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Security Configuration",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Auto Scaling Groups",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "Launch Template",
+    "Target Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": "",
+  "wave": "P1"
+}
