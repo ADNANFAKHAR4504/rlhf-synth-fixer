@@ -251,3 +251,4 @@ For issues with:
 - [LocalStack IAM Documentation](https://docs.localstack.cloud/user-guide/aws/iam/)
 - [Terraform LocalStack Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/guides/custom-service-endpoints)
 - [Original PR #1677](https://github.com/TuringGpt/iac-test-automations/pull/1677)
+
