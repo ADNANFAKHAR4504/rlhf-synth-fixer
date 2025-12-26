@@ -1,6 +1,13 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Secure EC2 and S3 infrastructure with minimal IAM permissions, logging, randomized naming, and production-grade security",
+    "Metadata": {
+        "cfn-lint": {
+            "config": {
+                "ignore_checks": ["W2506"]
+            }
+        }
+    },
     "Parameters": {
         "EnvironmentSuffix": {
             "Type": "String",
@@ -26,8 +33,8 @@
         },
         "LatestAmiId": {
             "Type": "String",
-            "Default": "ami-0c02fb55956c7d316",
-            "Description": "Amazon Linux 2023 AMI ID (LocalStack compatible - using hardcoded AMI for deployment)"
+            "Default": "ami-03cf127a",
+            "Description": "Amazon Linux 2023 AMI ID (LocalStack compatible - using LocalStack mock AMI for deployment)"
         }
     },
     "Conditions": {
@@ -836,6 +843,9 @@
         "EC2Instance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"

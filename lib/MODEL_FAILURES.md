@@ -65,3 +65,38 @@ After implementing these changes, the CloudFormation validation passes cleanly, 
 We transformed a basic CloudFormation template into enterprise-grade infrastructure with multi-layered security controls, comprehensive logging and monitoring, production-grade security standards, dynamic configuration for multiple environments, robust testing and validation, and efficient resource utilization.
 
 The infrastructure now meets enterprise requirements for security, compliance, and operational excellence while maintaining cost efficiency and scalability.
+
+## LocalStack Compatibility Adjustments
+
+This section documents changes made for LocalStack deployment compatibility. These changes do not affect production AWS deployment functionality.
+
+### Category A: Unsupported Resources (Entire resource commented/removed)
+
+No resources were commented out or removed. All resources in this stack are supported by LocalStack Pro.
+
+### Category B: Deep Functionality Limitations (Property/feature disabled)
+
+| Resource | Feature | LocalStack Limitation | Solution Applied | Production Status |
+|----------|---------|----------------------|------------------|-------------------|
+| LatestAmiId Parameter | AWS::EC2::Image::Id type | LocalStack uses mock AMI IDs | Using String type with hardcoded AMI | Can use SSM parameter in AWS |
+| EC2Instance | Instance behavior | Mock instance, no actual compute | Used for testing deployment | Full compute in AWS |
+| VPCFlowLogs | Network capture | May not capture real traffic | Documented as test-only | Full capture in AWS |
+| CloudWatch Logs KMS | KMS encryption | Works but simplified key policy | Standard key policy used | Full KMS integration in AWS |
+
+### Category C: Behavioral Differences (Works but behaves differently)
+
+| Resource | Feature | LocalStack Behavior | Production Behavior |
+|----------|---------|---------------------|---------------------|
+| EC2Instance | Compute | Mock instance (no actual VM) | Real compute instance |
+| VPCFlowLogs | Traffic capture | Logs may not capture real traffic | Full network traffic capture |
+| CloudWatch Agent | Metrics collection | Agent not installed on mock EC2 | Real metrics collection |
+| S3 Access Logs | Log delivery | May have delays in LocalStack | Near real-time in AWS |
+
+### Category D: Test-Specific Adjustments
+
+| Test File | Adjustment | Reason |
+|-----------|------------|--------|
+| tap-stack.int.test.ts | Using LocalStack endpoints | AWS_ENDPOINT_URL set to localhost:4566 |
+| tap-stack.int.test.ts | Account ID 000000000000 | LocalStack default account |
+| tap-stack.int.test.ts | Region us-east-1 | LocalStack default region |
+| TapStack.yml | cfn-lint ignore W2506 | AMI parameter type for LocalStack compatibility |

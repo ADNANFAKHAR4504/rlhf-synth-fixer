@@ -50,7 +50,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have LatestAmiId parameter', () => {
       expect(template.Parameters.LatestAmiId).toBeDefined();
       expect(template.Parameters.LatestAmiId.Type).toBe('String');
-      expect(template.Parameters.LatestAmiId.Default).toBe('ami-0c02fb55956c7d316');
+      expect(template.Parameters.LatestAmiId.Default).toBe('ami-03cf127a');
       expect(template.Parameters.LatestAmiId.Description).toContain('LocalStack compatible');
     });
   });
