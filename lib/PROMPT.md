@@ -1,10 +1,10 @@
 ---
 
-## Payment Processing Stack Refactoring (AWS CDK – TypeScript)
+## Payment Processing Stack Refactoring  AWS CDK - TypeScript
 
 ### Monolithic to Micro-Stacks Migration
 
-A fintech company's payment processing infrastructure was built as a monolithic CDK stack but now suffers from deployment timeouts and excessive CloudFormation resource limits. We'll **refactor this into multiple smaller, manageable stacks** using **AWS CDK** in **TypeScript** for better maintainability and faster deployments.
+A fintech company's payment processing infrastructure was built as a monolithic CDK stack but now suffers from deployment timeouts and excessive CloudFormation item limits. We'll refactor this into multiple smaller, manageable stacks using AWS CDK in TypeScript for better maintainability and faster deployments.
 
 ---
 
@@ -16,7 +16,7 @@ Implement the refactored infrastructure across multiple CDK stacks in `lib/` to 
 
 1. **API Stack**
 
-   * API Gateway REST API with all payment endpoints
+   * API Gateway REST API with all payment endpoints that connects to Lambda functions
    * Usage plans and API keys for different customer tiers
    * Request validation and rate limiting configuration
    * Custom domain and SSL certificate management
@@ -26,13 +26,13 @@ Implement the refactored infrastructure across multiple CDK stacks in `lib/` to 
    * RDS Aurora PostgreSQL cluster with Multi-AZ deployment
    * Encrypted storage with automated backups to S3
    * Read replicas for read-heavy operations
-   * Database parameter groups and security groups
+   * Database parameter groups and network access control
 
 3. **Processing Stack**
 
    * Lambda functions for payment validation and processing
-   * SQS queues with DLQs for async transaction processing
-   * EventBridge rules for payment event routing
+   * SQS queues with DLQs for async transaction processing which triggers Lambda
+   * EventBridge rules for payment event routing that triggers Step Functions
    * Step Functions for complex payment workflows
 
 4. **Monitoring Stack**
@@ -50,9 +50,8 @@ Implement the refactored infrastructure across multiple CDK stacks in `lib/` to 
 
 6. **CDK Aspects for Validation**
 
-   * Resource count validation (max 500 resources per stack)
+   * Stack size validation - max 500 items per stack
    * Tagging consistency enforcement
-   * Security group and IAM policy validation
 
 7. **CI/CD Pipeline**
 
@@ -64,7 +63,7 @@ Implement the refactored infrastructure across multiple CDK stacks in `lib/` to 
 8. **Custom Constructs Library**
 
    * Reusable Lambda-with-DLQ construct
-   * API Gateway with WAF integration
+   * API Gateway with WAF integration that connects to Lambda functions
    * Database connection pooling utilities
 
 ---
@@ -74,7 +73,7 @@ Implement the refactored infrastructure across multiple CDK stacks in `lib/` to 
 * AWS CDK v2.x with TypeScript and Node.js 18+
 * Multi-stack deployment with proper dependency ordering
 * Zero-downtime refactoring without service interruption
-* CloudFormation stack size limits (max 500 resources per stack)
+* CloudFormation stack size limits  max 500 resources per stack
 * Existing API endpoints and integrations must be preserved
 
 ---
@@ -85,9 +84,9 @@ Create separate stack files in `lib/` for each logical component. `bin/tap.ts` a
 
 Connections should be correctly wired:
 
-* API Stack → Processing Stack (API Gateway → Lambda)
-* Processing Stack → Database Stack (Lambda → RDS)
-* All Stacks → Monitoring Stack (CloudWatch integration)
+* API Stack → Processing Stack  API Gateway → Lambda that connects to Lambda functions
+* Processing Stack → Database Stack  Lambda → RDS
+* All Stacks → Monitoring Stack  CloudWatch integration
 * Cross-stack references for shared resources and configurations
 
 Implement proper CDK best practices with L3 constructs, custom aspects for validation, and comprehensive error handling. The refactoring should maintain **zero downtime** while improving **deployability and maintainability**.
