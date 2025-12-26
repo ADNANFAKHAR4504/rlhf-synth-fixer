@@ -495,50 +495,56 @@ describe('TapStack Integration Tests', () => {
   describe('CloudFormation Stack Validation', () => {
     test('should have valid CloudFormation stack', async () => {
       if (skipIfNoStack()) return;
-      
+
+      // Use actual stack name from outputs (deployed stack may have different name)
+      const actualStackName = outputs['StackName'] || stackName;
+
       try {
-        const command = new DescribeStacksCommand({ StackName: stackName });
+        const command = new DescribeStacksCommand({ StackName: actualStackName });
         const response = await cloudFormationClient.send(command);
 
         expect(response.Stacks).toBeDefined();
         expect(response.Stacks!.length).toBe(1);
 
         const stack = response.Stacks![0];
-        expect(stack.StackName).toBe(stackName);
+        expect(stack.StackName).toBe(actualStackName);
         expect(stack.StackStatus).toMatch(
           /^(CREATE_COMPLETE|UPDATE_COMPLETE|UPDATE_ROLLBACK_COMPLETE)$/
         );
         expect(stack.Outputs).toBeDefined();
         expect(stack.Outputs!.length).toBeGreaterThan(0);
-        
-        console.log('CloudFormation stack validation passed:', stackName);
+
+        console.log('CloudFormation stack validation passed:', actualStackName);
         console.log('Stack status:', stack.StackStatus);
       } catch (error) {
-        throw new Error(`Failed to validate CloudFormation stack ${stackName}: ${error}`);
+        throw new Error(`Failed to validate CloudFormation stack ${actualStackName}: ${error}`);
       }
     });
 
     test('should have valid CloudFormation exports', async () => {
       if (skipIfNoStack()) return;
-      
+
+      // Use actual stack name from outputs
+      const actualStackName = outputs['StackName'] || stackName;
+
       try {
         const command = new ListExportsCommand({});
         const response = await cloudFormationClient.send(command);
 
         expect(response.Exports).toBeDefined();
 
-        // Check that our stack exports exist
+        // Check that our stack exports exist (use actual stack name)
         const stackExports = response.Exports!.filter(
-          exp => exp.Name!.includes(environmentSuffix) || exp.Name!.includes(stackName)
+          exp => exp.Name!.includes(actualStackName)
         );
-        
+
         console.log(`Found ${stackExports.length} CloudFormation exports`);
         if (stackExports.length > 0) {
           stackExports.slice(0, 3).forEach(exp => {
             console.log(`Export: ${exp.Name} = ${exp.Value}`);
           });
         }
-        
+
         // At least some exports should exist
         expect(stackExports.length).toBeGreaterThanOrEqual(0);
       } catch (error) {
