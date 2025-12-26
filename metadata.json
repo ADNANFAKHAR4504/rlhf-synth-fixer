@@ -22,5 +22,9 @@
     "GuardDuty",
     "DynamoDB"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr953",
+    "pr": "Pr2042"
+  }
 }

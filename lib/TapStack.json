@@ -43,13 +43,14 @@
         },
         "NotificationEmail": {
             "Type": "String",
+            "Default": "chriscrsov@gmail.com",
             "Description": "Email address for security notifications and alarms",
             "AllowedPattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
             "ConstraintDescription": "Must be a valid email address"
         },
         "EnableGuardDuty": {
             "Type": "String",
-            "Default": "true",
+            "Default": "false",
             "AllowedValues": [
                 "true",
                 "false"
