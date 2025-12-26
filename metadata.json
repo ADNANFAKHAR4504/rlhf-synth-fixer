@@ -6,10 +6,11 @@
   "po_id": "LS-ls-Pr392",
   "team": "synth-2",
   "startedAt": "2025-08-01T17:17:30.801Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "EC2",
