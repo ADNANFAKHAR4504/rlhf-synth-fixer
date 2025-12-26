@@ -50,7 +50,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         );
         return null;
       }
-      
+
       // Handle resource not found errors (stale or missing deployment outputs)
       if (
         error.name === 'InvalidVpcID.NotFound' ||
@@ -67,7 +67,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         );
         return null;
       }
-      
+
       // Handle HTTP status errors (301 Moved Permanently, 403 Forbidden, etc.)
       if (
         error.$metadata?.httpStatusCode === 301 ||
@@ -82,7 +82,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         );
         return null;
       }
-      
+
       throw error;
     }
   };
@@ -93,15 +93,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
       try {
         const outputsContent = fs.readFileSync(flatOutputsPath, 'utf8');
         outputs = JSON.parse(outputsContent);
-        
+
         // Check if outputs contain valid AWS resource IDs
         const hasVpcId = (outputs.VPCId || outputs.vpc_id)?.startsWith('vpc-');
-        const hasSubnetIds = 
+        const hasSubnetIds =
           (outputs.PublicSubnetId || outputs.public_subnet_id)?.startsWith('subnet-') &&
           (outputs.PrivateSubnetId || outputs.private_subnet_id)?.startsWith('subnet-');
-        
+
         hasValidOutputs = hasVpcId && hasSubnetIds;
-        
+
         if (hasValidOutputs) {
           console.log('✅ Found valid deployment outputs:', Object.keys(outputs));
         } else {
@@ -218,10 +218,10 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('Auto Scaling Group exists and is configured', async () => {
       const asgName =
         outputs.AutoScalingGroupName || outputs.autoscaling_group_name;
-      
+
       expect(asgName).toBeDefined();
       expect(asgName).toMatch(/secure-infra-.*-asg/);
-      
+
       // In a real deployment, we would verify the ASG exists via AWS API
       // For CI testing, we validate the naming pattern matches our terraform configuration
       if (hasValidOutputs) {
@@ -278,10 +278,10 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('Launch template is configured correctly', async () => {
       const launchTemplateId =
         outputs.LaunchTemplateId || outputs.launch_template_id;
-      
+
       expect(launchTemplateId).toBeDefined();
       expect(launchTemplateId).toMatch(/^lt-[a-f0-9mock]+/);
-      
+
       // In a real deployment, we would verify the launch template configuration
       // For CI testing, we validate the ID format matches AWS standards
     });
@@ -330,7 +330,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('CloudTrail S3 bucket exists and is accessible', async () => {
       const s3BucketName =
         outputs.CloudTrailS3Bucket || outputs.cloudtrail_s3_bucket;
-      
+
       expect(s3BucketName).toBeDefined();
       expect(s3BucketName).toMatch(/secure-infra-.*-cloudtrail-logs/);
 
@@ -349,7 +349,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
         if (locationResponse) {
           // us-east-1 returns null for LocationConstraint (it's the default)
-          expect([null, 'us-east-1']).toContain(locationResponse.LocationConstraint);
+          // LocalStack may return undefined instead of null
+          expect([null, 'us-east-1', undefined]).toContain(locationResponse.LocationConstraint);
         }
       }
     });
@@ -379,7 +380,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('Auto Scaling Group uses secure subnets', async () => {
       const asgName =
         outputs.AutoScalingGroupName || outputs.autoscaling_group_name;
-      
+
       expect(asgName).toBeDefined();
       // Auto Scaling Group should be in private subnets for security
       expect(asgName).toMatch(/secure-infra-.*-asg/);
