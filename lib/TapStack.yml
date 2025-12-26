@@ -1055,7 +1055,7 @@ Resources:
         LaunchTemplate:
           LaunchTemplateSpecification:
             LaunchTemplateId: !Ref LaunchTemplate
-            Version: !GetAtt LaunchTemplate.LatestVersionNumber
+            Version: $Latest
           Overrides:
             - InstanceType: !If
                 - IsDev
