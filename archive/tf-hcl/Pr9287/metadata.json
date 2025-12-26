@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr868",
+  "team": "synth-2",
+  "startedAt": "2025-08-15T12:07:30+05:30",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "KMS",
+    "SecretsManager",
+    "IAM",
+    "AutoScaling"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr868",
+    "pr": "Pr1299"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
