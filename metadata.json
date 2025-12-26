@@ -1,0 +1,30 @@
+{
+  "provider": "localstack",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291882",
+  "team": "synth-2",
+  "wave": "P0",
+  "startedAt": "2025-08-19T11:22:36.813Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "ELB",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Secrets Manager",
+    "DynamoDB"
+  ]
+}
