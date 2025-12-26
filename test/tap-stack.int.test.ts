@@ -38,9 +38,9 @@ const discoverStack = async (): Promise<any> => {
 
   for (const searchRegion of regionsToSearch) {
     try {
-      console.log(`Searching for TapStack stacks in region: ${searchRegion}`);
+      console.log(`Searching for TapStack or localstack-stack stacks in region: ${searchRegion}`);
 
-      const { stdout: listStacks } = await execAsync(`aws cloudformation list-stacks --region ${searchRegion} --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?starts_with(StackName, \`TapStack\`)].{StackName:StackName,StackStatus:StackStatus}' --output json`);
+      const { stdout: listStacks } = await execAsync(`aws cloudformation list-stacks --region ${searchRegion} --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?starts_with(StackName, \`TapStack\`) || starts_with(StackName, \`localstack-stack\`)].{StackName:StackName,StackStatus:StackStatus}' --output json`);
       const availableStacks = JSON.parse(listStacks) || [];
 
       if (availableStacks.length > 0) {
@@ -59,7 +59,7 @@ const discoverStack = async (): Promise<any> => {
     }
   }
 
-  throw new Error('No TapStack CloudFormation stacks found in any searched regions');
+  throw new Error('No TapStack or localstack-stack CloudFormation stacks found in any searched regions');
 };
 
 // Helper function to get output value by key from discovered stack (returns null if not found)
