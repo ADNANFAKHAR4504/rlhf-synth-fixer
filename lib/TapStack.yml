@@ -151,8 +151,123 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${ProjectName}-${EnvironmentSuffix}-serverless-function'
-      CodeUri: ./src/
-      Handler: app.lambda_handler
+      InlineCode: |
+        import json
+        import os
+        import boto3
+        from datetime import datetime
+
+        dynamodb = boto3.resource('dynamodb')
+        table_name = os.environ['TABLE_NAME']
+        table = dynamodb.Table(table_name)
+
+        def lambda_handler(event, context):
+            """
+            Main Lambda handler for API Gateway requests
+            Supports GET, POST, PUT, DELETE operations on DynamoDB
+            """
+            try:
+                http_method = event.get('httpMethod', '')
+                path_parameters = event.get('pathParameters', {})
+                body = event.get('body', '{}')
+
+                if http_method == 'GET':
+                    # GET /data - scan all items
+                    response = table.scan()
+                    return {
+                        'statusCode': 200,
+                        'headers': {'Content-Type': 'application/json'},
+                        'body': json.dumps({
+                            'items': response.get('Items', []),
+                            'count': response.get('Count', 0)
+                        })
+                    }
+
+                elif http_method == 'POST':
+                    # POST /data - create new item
+                    data = json.loads(body)
+                    item_id = data.get('id', str(datetime.now().timestamp()))
+                    timestamp = int(datetime.now().timestamp())
+
+                    item = {
+                        'id': item_id,
+                        'timestamp': timestamp,
+                        'data': data.get('data', {}),
+                        'created_at': datetime.now().isoformat()
+                    }
+
+                    table.put_item(Item=item)
+                    return {
+                        'statusCode': 201,
+                        'headers': {'Content-Type': 'application/json'},
+                        'body': json.dumps({
+                            'message': 'Item created successfully',
+                            'item': item
+                        })
+                    }
+
+                elif http_method == 'PUT':
+                    # PUT /data/{id} - update existing item
+                    item_id = path_parameters.get('id')
+                    data = json.loads(body)
+                    timestamp = data.get('timestamp', int(datetime.now().timestamp()))
+
+                    response = table.update_item(
+                        Key={'id': item_id, 'timestamp': timestamp},
+                        UpdateExpression='SET #data = :data, updated_at = :updated_at',
+                        ExpressionAttributeNames={'#data': 'data'},
+                        ExpressionAttributeValues={
+                            ':data': data.get('data', {}),
+                            ':updated_at': datetime.now().isoformat()
+                        },
+                        ReturnValues='ALL_NEW'
+                    )
+
+                    return {
+                        'statusCode': 200,
+                        'headers': {'Content-Type': 'application/json'},
+                        'body': json.dumps({
+                            'message': 'Item updated successfully',
+                            'item': response.get('Attributes', {})
+                        })
+                    }
+
+                elif http_method == 'DELETE':
+                    # DELETE /data/{id} - delete item
+                    item_id = path_parameters.get('id')
+                    data = json.loads(body) if body else {}
+                    timestamp = data.get('timestamp', int(datetime.now().timestamp()))
+
+                    table.delete_item(
+                        Key={'id': item_id, 'timestamp': timestamp}
+                    )
+
+                    return {
+                        'statusCode': 200,
+                        'headers': {'Content-Type': 'application/json'},
+                        'body': json.dumps({
+                            'message': 'Item deleted successfully'
+                        })
+                    }
+
+                else:
+                    return {
+                        'statusCode': 405,
+                        'headers': {'Content-Type': 'application/json'},
+                        'body': json.dumps({
+                            'error': 'Method not allowed'
+                        })
+                    }
+
+            except Exception as e:
+                return {
+                    'statusCode': 500,
+                    'headers': {'Content-Type': 'application/json'},
+                    'body': json.dumps({
+                        'error': str(e)
+                    })
+                }
+      Handler: index.lambda_handler
       Runtime: python3.11
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
