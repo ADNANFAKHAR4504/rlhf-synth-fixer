@@ -22,16 +22,16 @@ Design a **CloudFormation YAML template** that enforces **least-privilege IAM de
      - One for **EC2** instances that connects to S3 to read configuration data, writes application logs to CloudWatch Logs, queries DynamoDB tables, and retrieves secrets from SSM Parameter Store
      - One for **Lambda** functions that publishes execution logs to CloudWatch Logs, reads and writes data to DynamoDB tables, and stores processed results in S3 buckets
    - Each must have **inline policies** granting only the **minimum required permissions**.
-   - Explicitly **deny any wildcard actions** (no asterisk wildcards allowed).
+   - Explicitly **deny any wildcard actions** - no asterisk wildcards allowed.
 
 2. **Permission Boundaries**
-   - Apply a **permissions boundary policy** that restricts privilege escalation (deny all IAM, STS, and Organizations actions).
+   - Apply a **permissions boundary policy** that restricts privilege escalation by denying all IAM, STS, and Organizations actions.
    - All roles created by the stack must reference this boundary.
 
 3. **Validation**
    - Template must pass **cfn-nag** scan with **no findings**.
    - Explicit deny statements or boundaries must prevent policy escalation.
-   - Intrinsic functions (`!Ref`, `!Sub`, `!GetAtt`) must be used instead of hard-coded ARNs.
+   - Intrinsic functions like !Ref, !Sub, and !GetAtt must be used instead of hard-coded ARNs.
 
 ---
 
@@ -49,7 +49,7 @@ Produce a **deployable CloudFormation YAML template** that:
 - Creates two **IAM Roles**:
   - `EC2ApplicationRole` that connects to S3 for reading application configuration files, writes logs to CloudWatch Logs, reads from DynamoDB tables, and retrieves parameters from SSM Parameter Store
   - `LambdaExecutionRole` that writes execution logs to CloudWatch Logs, performs read and write operations on DynamoDB tables, and uploads processed data to S3 buckets
-- Attaches **inline policies** with least privilege (no wildcards).
+- Attaches **inline policies** with least privilege without wildcards.
 - Applies the **permissions boundary** to both roles.
 - Includes tagging for audit visibility and environment tracking.
 - Outputs both role ARNs for downstream use.
@@ -60,10 +60,10 @@ Produce a **deployable CloudFormation YAML template** that:
 
 Return the solution in **4 sections**, in this order:
 
-1. **Security Architecture (ASCII)** - visualize IAM roles, boundaries, inline policies, and their relationships.
+1. **Security Architecture in ASCII** - visualize IAM roles, boundaries, inline policies, and their relationships.
 2. **Policy Design Rationale** - justify principle of least privilege for each service.
 3. **CloudFormation YAML Template** - fully functional, validated with `cfn-nag`.
-4. **Validation Guidance** - commands and expected results for confirming compliance (check for wildcard actions, `cfn-nag-scan` output).
+4. **Validation Guidance** - commands and expected results for confirming compliance, checking for wildcard actions and cfn-nag-scan output.
 
 ---
 
@@ -77,7 +77,7 @@ No placeholders - use production-safe resource naming with `!Sub` and tagging.
 ### **M - MODEL-SPECIFIC**
 
 - Use **CloudFormation YAML**, not JSON.
-- Follow AWS IAM best practices (no wildcard actions or resources).
+- Follow AWS IAM best practices without wildcard actions or resources.
 - Include **explicit denies**, **permission boundaries**, and **inline policy scoping**.
 - Ensure **cfn-nag** passes with 0 warnings/errors.
 
