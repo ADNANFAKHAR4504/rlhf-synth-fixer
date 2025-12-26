@@ -173,62 +173,59 @@ echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/wheel
 echo "Setup completed with SSM agent and security hardening" >> /var/log/user-data.log
 `;
 
-  // Create EC2 instance
-  const instance = new aws.ec2.Instance(
-    `ec2-${environment}`,
-    {
-      ami: amiId,
-      instanceType: instanceType,
-      iamInstanceProfile: instanceProfile.name,
-      subnetId: subnetId,
-      vpcSecurityGroupIds: [securityGroupId],
-
-      userData: userData,
-
-      // Enable detailed monitoring (disabled for LocalStack as it doesn't support MonitorInstances API)
-      monitoring: false,
-
-      // EBS optimization for better performance
-      ebsOptimized: true,
-
-      // Enforce IMDSv2 for better security
-      metadataOptions: {
-        httpEndpoint: 'enabled',
-        httpTokens: 'required', // Enforce IMDSv2
-        httpPutResponseHopLimit: 1,
-        instanceMetadataTags: 'enabled',
-      },
-
-      // Root block device configuration
-      rootBlockDevice: {
-        volumeType: 'gp3',
-        volumeSize: 30,
-        encrypted: true,
-        deleteOnTermination: true,
-        tags: {
-          Name: `ebs-root-${environment}`,
-          Environment: environment,
-          ManagedBy: 'Pulumi',
-        },
-      },
-
-      tags: {
-        Name: `ec2-${environment}`,
-        Environment: environment,
-        Purpose: 'WebServer',
-        ManagedBy: 'Pulumi',
-        Backup: 'Required',
-      },
-
-      // Enable termination protection for production
-      disableApiTermination: environment === 'prod',
+  // Create EC2 instance with conditional configuration for LocalStack
+  const instanceConfig: aws.ec2.InstanceArgs = {
+    ami: amiId,
+    instanceType: instanceType,
+    iamInstanceProfile: instanceProfile.name,
+    subnetId: subnetId,
+    vpcSecurityGroupIds: [securityGroupId],
+    userData: userData,
+    monitoring: false,
+    tags: {
+      Name: `ec2-${environment}`,
+      Environment: environment,
+      Purpose: 'WebServer',
+      ManagedBy: 'Pulumi',
+      Backup: 'Required',
     },
-    {
-      provider,
-      // Ensure instance is created after instance profile
-      dependsOn: [instanceProfile],
-    }
-  );
+  };
+
+  // Add AWS-specific advanced features only for real AWS deployments
+  if (!isLocalStack) {
+    instanceConfig.ebsOptimized = true;
+    instanceConfig.metadataOptions = {
+      httpEndpoint: 'enabled',
+      httpTokens: 'required', // Enforce IMDSv2
+      httpPutResponseHopLimit: 1,
+      instanceMetadataTags: 'enabled',
+    };
+    instanceConfig.rootBlockDevice = {
+      volumeType: 'gp3',
+      volumeSize: 30,
+      encrypted: true,
+      deleteOnTermination: true,
+      tags: {
+        Name: `ebs-root-${environment}`,
+        Environment: environment,
+        ManagedBy: 'Pulumi',
+      },
+    };
+    instanceConfig.disableApiTermination = environment === 'prod';
+  } else {
+    // Simplified configuration for LocalStack
+    instanceConfig.rootBlockDevice = {
+      volumeType: 'gp2',
+      volumeSize: 8,
+      deleteOnTermination: true,
+    };
+  }
+
+  const instance = new aws.ec2.Instance(`ec2-${environment}`, instanceConfig, {
+    provider,
+    // Ensure instance is created after instance profile
+    dependsOn: [instanceProfile],
+  });
 
   return instance;
 }
