@@ -23,5 +23,11 @@
     "po_id": "291889",
     "pr": "Pr888"
   },
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
