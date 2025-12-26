@@ -31,7 +31,6 @@
     "WAF",
     "SQS"
   ],
-  "background": "CI/CD Pipeline with ECS Fargate for Web Application with comprehensive security, monitoring, and compliance features",
   "provider": "localstack",
   "wave": "P1"
 }
