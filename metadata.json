@@ -26,5 +26,6 @@
     "StepFunctions"
   ],
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 8
 }
