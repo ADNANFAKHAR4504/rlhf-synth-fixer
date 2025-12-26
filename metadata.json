@@ -1,0 +1,20 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-229185",
+  "team": "synth-2",
+  "startedAt": "2025-07-24T07:51:17.475Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "S3",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "wave": "P0"
+}

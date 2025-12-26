@@ -1,0 +1,300 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TAP Stack - Task Assignment Platform Infrastructure (LocalStack Community Edition)\nSimplified storage and IAM infrastructure compatible with LocalStack Community Edition.\n\nNote: This is a LocalStack-compatible version. The original template used EC2 instances,\nVPC networking, and CloudWatch Alarms which are not available in LocalStack Community Edition.\n\nThis simplified version provides:\n- S3 bucket for application data storage\n- IAM roles and policies for service access\n- CloudWatch Logs for application logging\n- Basic monitoring capabilities\n",
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "Default": "Development",
+      "Description": "Environment designation for resource tagging",
+      "AllowedValues": ["Development", "Staging", "Production"]
+    },
+    "ApplicationName": {
+      "Type": "String",
+      "Default": "tap",
+      "Description": "Application name for resource naming",
+      "MinLength": 1,
+      "MaxLength": 20
+    }
+  },
+  "Resources": {
+    "ApplicationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "${ApplicationName}-${Environment}-AppRole"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": ["lambda.amazonaws.com", "ecs-tasks.amazonaws.com"]
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3DataAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {"Fn::Sub": "${DataBucket.Arn}/*"},
+                    {"Fn::GetAtt": ["DataBucket", "Arn"]}
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "LogsAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/${ApplicationName}/*"}
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "${ApplicationName}-${Environment}-AppRole"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "Environment"}
+          },
+          {
+            "Key": "Application",
+            "Value": {"Ref": "ApplicationName"}
+          }
+        ]
+      }
+    },
+    "DataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "${ApplicationName}-${Environment}-data-${AWS::AccountId}"},
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToIA",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 90,
+                  "StorageClass": "STANDARD_IA"
+                }
+              ]
+            },
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "${ApplicationName}-${Environment}-DataBucket"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "Environment"}
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Application Data Storage"
+          }
+        ]
+      }
+    },
+    "LogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "${ApplicationName}-${Environment}-logs-${AWS::AccountId}"},
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldLogs",
+              "Status": "Enabled",
+              "ExpirationInDays": 90
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "${ApplicationName}-${Environment}-LogsBucket"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "Environment"}
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Application Logs Storage"
+          }
+        ]
+      }
+    },
+    "ApplicationLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {"Fn::Sub": "/aws/${ApplicationName}/${Environment}/application"},
+        "RetentionInDays": 14,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "${ApplicationName}-${Environment}-AppLogGroup"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "Environment"}
+          }
+        ]
+      }
+    },
+    "AccessLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {"Fn::Sub": "/aws/${ApplicationName}/${Environment}/access"},
+        "RetentionInDays": 7,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "${ApplicationName}-${Environment}-AccessLogGroup"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "Environment"}
+          }
+        ]
+      }
+    },
+    "ErrorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {"Fn::Sub": "/aws/${ApplicationName}/${Environment}/error"},
+        "RetentionInDays": 30,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "${ApplicationName}-${Environment}-ErrorLogGroup"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "Environment"}
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "DataBucketName": {
+      "Description": "Name of the primary data S3 bucket",
+      "Value": {"Ref": "DataBucket"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-DataBucket"}
+      }
+    },
+    "DataBucketArn": {
+      "Description": "ARN of the primary data S3 bucket",
+      "Value": {"Fn::GetAtt": ["DataBucket", "Arn"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-DataBucket-Arn"}
+      }
+    },
+    "LogsBucketName": {
+      "Description": "Name of the logs S3 bucket",
+      "Value": {"Ref": "LogsBucket"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-LogsBucket"}
+      }
+    },
+    "ApplicationRoleName": {
+      "Description": "Name of the application IAM role",
+      "Value": {"Ref": "ApplicationRole"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-ApplicationRole"}
+      }
+    },
+    "ApplicationRoleArn": {
+      "Description": "ARN of the application IAM role",
+      "Value": {"Fn::GetAtt": ["ApplicationRole", "Arn"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-ApplicationRole-Arn"}
+      }
+    },
+    "ApplicationLogGroupName": {
+      "Description": "Name of the application CloudWatch log group",
+      "Value": {"Ref": "ApplicationLogGroup"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-ApplicationLogGroup"}
+      }
+    },
+    "AccessLogGroupName": {
+      "Description": "Name of the access CloudWatch log group",
+      "Value": {"Ref": "AccessLogGroup"}
+    },
+    "ErrorLogGroupName": {
+      "Description": "Name of the error CloudWatch log group",
+      "Value": {"Ref": "ErrorLogGroup"}
+    }
+  }
+}
