@@ -471,24 +471,24 @@ Outputs:
 
 ## Key Security Features Implemented:
 
-### 🔒 **Network Security**
+###  **Network Security**
 - **VPC with proper CIDR segmentation** (10.0.0.0/16)
 - **Public/Private subnet architecture** across 2 AZs
 - **NAT Gateway** for secure outbound internet access from private subnets
 - **VPC Flow Logs** for network traffic monitoring
 
-### 🛡️ **Access Control**
+### ️ **Access Control**
 - **Restrictive Security Groups** with parameterized CIDR blocks
 - **IAM roles with minimal permissions** (principle of least privilege)
 - **No hardcoded credentials** - everything uses IAM roles and Secrets Manager
 
-### 📊 **Monitoring & Logging**
+###  **Monitoring & Logging**
 - **CloudWatch Agent** for detailed EC2 metrics
 - **VPC Flow Logs** for network monitoring
 - **CloudWatch Log Groups** with retention policies
 - **Custom metrics** for CPU, memory, and disk usage
 
-### 🔐 **Secrets Management**
+###  **Secrets Management**
 - **AWS Secrets Manager** for secure credential storage
 - **Automatic password generation** with complexity requirements
 - **Proper IAM permissions** for secret access
