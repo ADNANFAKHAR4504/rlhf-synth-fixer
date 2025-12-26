@@ -22,7 +22,7 @@ The infrastructure needs to have proper service connectivity between components:
 
 The EC2 instance needs to integrate with CloudWatch for monitoring and logging. I want instance logs automatically streamed to a CloudWatch Log Group so our ops team can monitor everything from a central location without SSH access.
 
-For storage, the EC2 instance should have access to an S3 bucket where it can upload and download files. The IAM role attached to the instance should grant appropriate S3 permissions so applications can use the bucket without hardcoded credentials.
+For storage, the EC2 instance should have access to an S3 bucket where it can upload and download files. The IAM role attached to the instance should grant specific S3 permissions like GetObject, PutObject, and ListBucket on the designated bucket so applications can use the bucket without hardcoded credentials.
 
 I also need Systems Manager integration so our team can manage the instance remotely without dealing with SSH keys. The IAM role should include the AWS managed SSM policy to enable this.
 
