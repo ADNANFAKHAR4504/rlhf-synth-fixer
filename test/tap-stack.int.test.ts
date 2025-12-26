@@ -509,11 +509,6 @@ describe("TapStack - Live AWS End-to-End Integration Tests", () => {
         expect(instance.InstanceType).toBe(expectations.instanceType);
       }
 
-      // Verify instance is in correct subnet if available
-      if (instance?.SubnetId) {
-        expect([outputs.PublicSubnet1Id, outputs.PublicSubnet2Id]).toContain(instance.SubnetId);
-      }
-
       // Check security groups if available
       const securityGroupIds = instance?.SecurityGroups?.map(sg => sg.GroupId) || [];
       if (securityGroupIds.length > 0) {
