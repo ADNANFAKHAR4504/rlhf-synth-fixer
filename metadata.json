@@ -9,7 +9,7 @@
   "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Static Web Application Hosting"
   ],
   "aws_services": [
     "S3",
