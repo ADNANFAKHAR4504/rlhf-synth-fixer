@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-trainr953",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T12:32:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "CloudWatch Logs",
+    "GuardDuty",
+    "DynamoDB"
+  ],
+  "wave": "P0"
+}
