@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "301",
+  "team": "synth-2",
+  "startedAt": "2025-08-06T15:31:33-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "S3",
+    "RDS",
+    "CloudWatch",
+    "Secrets Manager",
+    "Systems Manager",
+    "GuardDuty",
+    "Security Groups"
+  ],
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

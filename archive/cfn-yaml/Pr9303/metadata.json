@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr937",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudWatch Logs",
+    "VPC",
+    "EventBridge",
+    "IAM"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

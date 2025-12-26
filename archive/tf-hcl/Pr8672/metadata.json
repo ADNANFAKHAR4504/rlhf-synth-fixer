@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291884",
+  "team": "5",
+  "startedAt": "2025-12-22T07:24:47.869Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "IAM",
+    "AWS Config",
+    "KMS",
+    "CloudWatch Logs",
+    "CloudTrail",
+    "VPC",
+    "EC2",
+    "RDS",
+    "EBS",
+    "Security Groups",
+    "CloudWatch",
+    "SNS"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cross-account IAM role for CodePipeline deployments (deploy in staging/production accounts)
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Suffix for resource naming to ensure uniqueness
+
+  PipelineAccountId:
+    Type: String
+    Description: AWS Account ID where the pipeline is running
+
+  ArtifactBucketName:
+    Type: String
+    Description: Name of the S3 bucket containing pipeline artifacts
+
+  KMSKeyArn:
+    Type: String
+    Description: ARN of the KMS key used for artifact encryption
+
+Resources:
+  CrossAccountDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub cross-account-deploy-role-${EnvironmentSuffix}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${PipelineAccountId}:root
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/PowerUserAccess
+      Policies:
+        - PolicyName: CrossAccountDeploymentAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${ArtifactBucketName}
+                  - !Sub arn:aws:s3:::${ArtifactBucketName}/*
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource: !Ref KMSKeyArn
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResources
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: cloudformation.amazonaws.com
+
+Outputs:
+  CrossAccountRoleArn:
+    Description: ARN of the cross-account deployment role
+    Value: !GetAtt CrossAccountDeployRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-CrossAccountRole

@@ -1,0 +1,27 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291159",
+  "team": "synth-2",
+  "startedAt": "2025-08-06T07:40:04.324Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "wave": "P0",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "s3",
+    "lambda",
+    "cloudwatch"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}

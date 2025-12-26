@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-ls-321",
+  "team": "synth-2",
+  "startedAt": "2025-08-07T00:22:45-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "ec2",
+    "vpc",
+    "rds",
+    "s3",
+    "iam",
+    "secretsmanager"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "ls-321",
+    "pr": "Pr660"
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

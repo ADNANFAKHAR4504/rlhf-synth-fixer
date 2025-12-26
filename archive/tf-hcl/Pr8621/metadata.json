@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-12T00:13:29+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "101000913",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NATGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "EIP"
+  ],
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

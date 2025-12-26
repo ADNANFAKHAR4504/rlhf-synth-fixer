@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291390",
+  "team": "synth-2",
+  "startedAt": "2025-08-14T11:11:30.754Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "wave": "P0",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "ELB",
+    "AutoScaling",
+    "SecretsManager",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}

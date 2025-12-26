@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291816",
+  "startedAt": "2025-08-04T11:47:33.817Z",
+  "team": "synth-2",
+  "provider": "localstack",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "IAM",
+    "EC2",
+    "VPC",
+    "ELB",
+    "Route53",
+    "Auto Scaling",
+    "AWS Backup",
+    "SNS",
+    "CloudWatch",
+    "ACM"
+  ],
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}

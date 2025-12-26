@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-trainr135",
+  "team": "synth-2",
+  "startedAt": "2025-08-15T14:21:21+05:30",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "RDS",
+    "Lambda",
+    "IAM",
+    "VPC",
+    "CloudWatch",
+    "Systems Manager Parameter Store",
+    "EventBridge"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

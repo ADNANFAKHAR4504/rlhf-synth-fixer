@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912358",
+  "team": "synth",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "startedAt": "2025-11-18T08:12:58+00:00",
+  "aws_services": [
+    "ECS",
+    "S3",
+    "DynamoDB",
+    "VPC",
+    "IAM",
+    "Security Groups"
+  ],
+  "provider": "localstack",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

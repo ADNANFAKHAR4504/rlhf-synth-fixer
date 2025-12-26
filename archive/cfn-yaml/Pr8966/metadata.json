@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-274779",
+  "team": "synth-2",
+  "startedAt": "2025-07-29T14:20:56.982Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "wave": "P0",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "abubakarTuring",
+  "dockerS3Location": ""
+}

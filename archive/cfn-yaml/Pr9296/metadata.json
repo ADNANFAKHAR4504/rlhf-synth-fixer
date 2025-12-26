@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291428",
+  "team": "synth-2",
+  "startedAt": "2025-08-05T18:34:35.985Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ELB",
+    "AutoScaling",
+    "CloudWatch",
+    "IAM"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291428",
+    "pr": "Pr635"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

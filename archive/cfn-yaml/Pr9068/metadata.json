@@ -1,0 +1,38 @@
+{
+  "po_id": "trainr914",
+  "platform": "cfn",
+  "language": "yaml",
+  "team": "synth-2",
+  "startedAt": "2025-08-20T00:00:00.000Z",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "KMS",
+    "CloudTrail",
+    "SecurityHub",
+    "AccessAnalyzer",
+    "DynamoDB",
+    "S3",
+    "VPC",
+    "EC2",
+    "Lambda"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr1826"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

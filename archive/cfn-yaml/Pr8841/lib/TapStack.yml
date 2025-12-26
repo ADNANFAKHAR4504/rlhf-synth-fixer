@@ -1,0 +1,912 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+          - TeamName
+          - Owner
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W1020  # Fn::Sub used with Fn::Base64 for UserData (required for proper YAML formatting)
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  TeamName:
+    Type: String
+    Default: 'security'
+    Description: 'Team name for resource naming convention'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+
+  Owner:
+    Type: String
+    Default: 'infrastructure-team'
+    Description: 'Resource owner for mandatory tagging'
+
+Resources:
+  # ===== KMS KEY FOR ENCRYPTION =====
+  SecurityKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub '${TeamName}-${EnvironmentSuffix} KMS key for encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudTrail Encryption
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:CreateGrant
+            Resource: '*'
+          - Sid: Allow Lambda Environment Variable Encryption
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+            Resource: '*'
+      EnableKeyRotation: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'KMS-${TeamName}-${EnvironmentSuffix}-SecurityKey'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  SecurityKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${TeamName}-${EnvironmentSuffix}-security-key'
+      TargetKeyId: !Ref SecurityKMSKey
+
+  # ===== S3 BUCKETS WITH AES-256 ENCRYPTION =====
+  SecureS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Name
+          Value: !Sub 'S3-${TeamName}-SecureBucket-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ALBLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Name
+          Value: !Sub 'S3-${TeamName}-ALBLogs-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  CloudTrailLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecurityKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub 'S3-${TeamName}-CloudTrail-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== S3 BUCKET POLICIES =====
+  SecureS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+  ALBLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ALBLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${ALBLogsBucket}'
+              - !Sub 'arn:aws:s3:::${ALBLogsBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Sid: AllowALBLogging
+            Effect: Allow
+            Principal:
+              Service: 'logdelivery.elasticloadbalancing.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${ALBLogsBucket}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  CloudTrailLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}'
+              - !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/CloudTrail-${TeamName}-${EnvironmentSuffix}'
+          - Sid: AWSCloudTrailGetBucketLocation
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketLocation
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/CloudTrail-${TeamName}-${EnvironmentSuffix}'
+          - Sid: AWSCloudTrailListBucket
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/CloudTrail-${TeamName}-${EnvironmentSuffix}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+                's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt SecurityKMSKey.Arn
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/CloudTrail-${TeamName}-${EnvironmentSuffix}'
+
+  # ===== DYNAMODB TABLE =====
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'DynamoDB-${TeamName}-TurnAroundPrompt-${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'DynamoDB-${TeamName}-TurnAroundPrompt-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== IAM ROLES =====
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource: !GetAtt SecurityKMSKey.Arn
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt TurnAroundPromptTable.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'Role-${TeamName}-Lambda-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== LAMBDA FUNCTION =====
+  SecureLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'Lambda-${TeamName}-SecureFunction-${EnvironmentSuffix}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Hello from secure Lambda!')
+              }
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref EnvironmentSuffix
+          TEAM_NAME: !Ref TeamName
+      KmsKeyArn: !GetAtt SecurityKMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'Lambda-${TeamName}-SecureFunction-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== VPC =====
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'VPC-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'Subnet-${TeamName}-Public1-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'Subnet-${TeamName}-Public2-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub 'Subnet-${TeamName}-Private1-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.4.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub 'Subnet-${TeamName}-Private2-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'IGW-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'RT-${TeamName}-Public-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # ===== SECURITY GROUPS =====
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'SG-${TeamName}-WebServer-${EnvironmentSuffix}'
+      GroupDescription: Security group for web servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTP from internet
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS from internet
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub 'SG-${TeamName}-WebServer-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'SG-${TeamName}-Database-${EnvironmentSuffix}'
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: Allow MySQL from web servers
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub 'SG-${TeamName}-Database-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== IAM ROLES FOR EC2 =====
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: S3ReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt SecureS3Bucket.Arn
+                  - !Sub '${SecureS3Bucket.Arn}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'Role-${TeamName}-EC2-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+      InstanceProfileName: !Sub 'Profile-${TeamName}-EC2-${EnvironmentSuffix}'
+
+  # ===== EC2 INSTANCE =====
+  # Note: LocalStack has a known bug that wraps ImageId in double brackets
+  # This affects all formats (hardcoded, parameter, SSM). Temporarily commented out.
+  # WebServerInstance:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     ImageId: ami-12345678
+  #     InstanceType: t3.micro
+  #     IamInstanceProfile: !Ref EC2InstanceProfile
+  #     SubnetId: !Ref PublicSubnet1
+  #     SecurityGroupIds:
+  #       - !Ref WebServerSecurityGroup
+  #     UserData:
+  #       Fn::Base64: !Sub |
+  #         #!/bin/bash
+  #         yum update -y
+  #         yum install -y httpd
+  #         systemctl start httpd
+  #         systemctl enable httpd
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'EC2-${TeamName}-WebServer-${EnvironmentSuffix}'
+  #       - Key: Owner
+  #         Value: !Ref Owner
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+
+  # ===== RDS DATABASE =====
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'DBSubnetGroup-${TeamName}-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'DBSubnetGroup-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'RDS-${TeamName}-Database-${EnvironmentSuffix}'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.44'
+      MasterUsername: admin
+      MasterUserPassword: !Sub '${TeamName}-${EnvironmentSuffix}-${AWS::AccountId}-Secure123!'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId: !GetAtt SecurityKMSKey.Arn
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      MultiAZ: true
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      EnablePerformanceInsights: true
+      PerformanceInsightsKMSKeyId: !GetAtt SecurityKMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'RDS-${TeamName}-Database-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== APPLICATION LOAD BALANCER =====
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub 'ALB-${TeamName}-${EnvironmentSuffix}'
+      Type: application
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref ALBLogsBucket
+        - Key: access_logs.s3.prefix
+          Value: 'alb-logs'
+      Tags:
+        - Key: Name
+          Value: !Sub 'ALB-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ALBTargetGroup commented out due to dependency on WebServerInstance
+  # which is disabled due to LocalStack ImageId double-bracket bug
+  # ALBTargetGroup:
+  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  #   Properties:
+  #     Name: !Sub 'TG-${TeamName}-${EnvironmentSuffix}'
+  #     Port: 80
+  #     Protocol: HTTP
+  #     VpcId: !Ref VPC
+  #     HealthCheckPath: /
+  #     HealthCheckIntervalSeconds: 30
+  #     HealthCheckTimeoutSeconds: 5
+  #     HealthyThresholdCount: 2
+  #     UnhealthyThresholdCount: 3
+  #     TargetType: instance
+  #     Targets:
+  #       - Id: !Ref WebServerInstance
+  #         Port: 80
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'TG-${TeamName}-${EnvironmentSuffix}'
+  #       - Key: Owner
+  #         Value: !Ref Owner
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+
+  # ALBListener commented out due to dependency on ALBTargetGroup
+  # ALBListener:
+  #   Type: AWS::ElasticLoadBalancingV2::Listener
+  #   Properties:
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn: !Ref ALBTargetGroup
+  #     LoadBalancerArn: !Ref ApplicationLoadBalancer
+  #     Port: 80
+  #     Protocol: HTTP
+
+
+  # ===== CLOUDTRAIL =====
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub 'CloudTrail-${TeamName}-${EnvironmentSuffix}'
+      S3BucketName: !Ref CloudTrailLogsBucket
+      S3KeyPrefix: 'cloudtrail-logs'
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'CloudTrail-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== CLOUDWATCH ALARMS =====
+  # HighCPUAlarm commented out due to dependency on WebServerInstance
+  # which is disabled due to LocalStack ImageId double-bracket bug
+  # HighCPUAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: !Sub 'Alarm-${TeamName}-HighCPU-${EnvironmentSuffix}'
+  #     AlarmDescription: Alarm when CPU exceeds 80%
+  #     MetricName: CPUUtilization
+  #     Namespace: AWS/EC2
+  #     Statistic: Average
+  #     Period: 300
+  #     EvaluationPeriods: 2
+  #     Threshold: 80
+  #     ComparisonOperator: GreaterThanThreshold
+  #     Dimensions:
+  #       - Name: InstanceId
+  #         Value: !Ref WebServerInstance
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'Alarm-${TeamName}-HighCPU-${EnvironmentSuffix}'
+  #       - Key: Owner
+  #         Value: !Ref Owner
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+
+  DatabaseConnectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'Alarm-${TeamName}-DatabaseConnections-${EnvironmentSuffix}'
+      AlarmDescription: Alarm when database connections exceed threshold
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DatabaseInstance
+      Tags:
+        - Key: Name
+          Value: !Sub 'Alarm-${TeamName}-DatabaseConnections-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== GUARDDUTY =====
+  GuardDuty:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+      Tags:
+        - Key: Name
+          Value: !Sub 'GuardDuty-${TeamName}-${EnvironmentSuffix}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+Outputs:
+  TurnAroundPromptTableName:
+    Description: 'Name of the DynamoDB table'
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
+
+  TurnAroundPromptTableArn:
+    Description: 'ARN of the DynamoDB table'
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
+
+  SecurityKMSKeyId:
+    Description: 'KMS Key ID for encryption'
+    Value: !Ref SecurityKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
+
+  SecurityKMSKeyArn:
+    Description: 'KMS Key ARN for encryption'
+    Value: !GetAtt SecurityKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyArn'
+
+  SecureS3BucketName:
+    Description: 'Secure S3 Bucket Name'
+    Value: !Ref SecureS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketName'
+
+  ALBLogsBucketName:
+    Description: 'ALB Logs S3 Bucket Name'
+    Value: !Ref ALBLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBLogsBucketName'
+
+  CloudTrailLogsBucketName:
+    Description: 'CloudTrail Logs S3 Bucket Name'
+    Value: !Ref CloudTrailLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailLogsBucketName'
+
+  LambdaFunctionArn:
+    Description: 'Lambda Function ARN'
+    Value: !GetAtt SecureLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
+
+  GuardDutyDetectorId:
+    Description: 'GuardDuty Detector ID'
+    Value: !Ref GuardDuty
+    Export:
+      Name: !Sub '${AWS::StackName}-GuardDutyDetectorId'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  # EC2InstanceId output commented out - WebServerInstance disabled due to LocalStack bug
+  # EC2InstanceId:
+  #   Description: 'EC2 Instance ID'
+  #   Value: !Ref WebServerInstance
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-EC2InstanceId'
+
+  DatabaseEndpoint:
+    Description: 'RDS Database Endpoint'
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
+
+  ALBDNSName:
+    Description: 'Application Load Balancer DNS Name'
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBDNSName'
+
+  CloudTrailArn:
+    Description: 'CloudTrail Trail ARN'
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailArn'

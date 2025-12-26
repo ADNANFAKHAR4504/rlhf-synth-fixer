@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "trainr956",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "EIP",
+    "SecurityGroup",
+    "RouteTable",
+    "InternetGateway",
+    "IAM",
+    "SSM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

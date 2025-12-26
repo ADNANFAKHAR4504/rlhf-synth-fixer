@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "229158",
+  "team": "synth-2",
+  "startedAt": "2025-08-27T09:11:47.632Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Elastic Load Balancing",
+    "IAM",
+    "CloudFormation"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}

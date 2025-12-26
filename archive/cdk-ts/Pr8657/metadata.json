@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291940",
+  "team": "synth-2",
+  "startedAt": "2025-08-20T10:30:13.957Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "S3",
+    "IAM",
+    "API Gateway",
+    "CloudWatch Logs",
+    "GuardDuty",
+    "Lambda",
+    "KMS",
+    "SSM",
+    "EC2"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

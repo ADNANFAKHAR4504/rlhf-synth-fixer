@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "267506",
+  "team": "synth-2",
+  "startedAt": "2025-07-26T11:52:43.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudTrail",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "EventBridge"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
+}

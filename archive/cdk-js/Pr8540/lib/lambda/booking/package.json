@@ -1,0 +1,9 @@
+{
+  "name": "booking-function",
+  "version": "1.0.0",
+  "description": "Booking Lambda function with Redis cache invalidation",
+  "main": "index.js",
+  "dependencies": {
+    "redis": "^4.6.7"
+  }
+}

@@ -1,0 +1,382 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless infrastructure with Lambda, API Gateway, S3, and CloudWatch monitoring",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "prod",
+            "Description": "Environment name for resource naming",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ]
+        }
+    },
+    "Resources": {
+        "S3EncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for S3 bucket encryption",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "S3EncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${AWS::StackName}-s3-encryption-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "S3EncryptionKey"
+                }
+            }
+        },
+        "ProcessedDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "S3EncryptionKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                }
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${AWS::StackName}-processor-function"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-lambda-execution-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-processor-function:*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "S3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ProcessedDataBucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ProcessedDataBucket}"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "KMSAccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "S3EncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DependsOn": "LambdaLogGroup",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-processor-function"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "S3_BUCKET_NAME": {
+                            "Ref": "ProcessedDataBucket"
+                        },
+                        "KMS_KEY_ID": {
+                            "Ref": "S3EncryptionKey"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport uuid\nfrom datetime import datetime\n\ndef lambda_handler(event, context):\n    print(f\"Received event: {json.dumps(event)}\")\n    \n    # Initialize S3 client\n    s3_client = boto3.client('s3')\n    bucket_name = os.environ['S3_BUCKET_NAME']\n    \n    try:\n        # Extract request data\n        http_method = event.get('httpMethod', 'UNKNOWN')\n        path = event.get('path', '/')\n        query_params = event.get('queryStringParameters') or {}\n        body = event.get('body', '')\n        \n        # Process the request (example: store request data in S3)\n        request_id = str(uuid.uuid4())\n        timestamp = datetime.utcnow().isoformat()\n        \n        processed_data = {\n            'request_id': request_id,\n            'timestamp': timestamp,\n            'method': http_method,\n            'path': path,\n            'query_params': query_params,\n            'body': body,\n            'status': 'processed'\n        }\n        \n        # Store processed data in S3\n        s3_key = f\"processed/{timestamp[:10]}/{request_id}.json\"\n        s3_client.put_object(\n            Bucket=bucket_name,\n            Key=s3_key,\n            Body=json.dumps(processed_data),\n            ContentType='application/json'\n        )\n        \n        response_body = {\n            'message': 'Request processed successfully',\n            'request_id': request_id,\n            's3_location': f\"s3://{bucket_name}/{s3_key}\",\n            'timestamp': timestamp\n        }\n        \n        print(f\"Response: {json.dumps(response_body)}\")\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(response_body)\n        }\n        \n    except Exception as e:\n        error_message = f\"Error processing request: {str(e)}\"\n        print(f\"Error: {error_message}\")\n        \n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': error_message,\n                'request_id': str(uuid.uuid4())\n            })\n        }\n"
+                }
+            }
+        },
+        "ApiGateway": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-api"
+                },
+                "Description": "REST API for Lambda function",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "ApiGatewayResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "{proxy+}"
+            }
+        },
+        "ApiGatewayMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "ApiGatewayResource"
+                },
+                "HttpMethod": "ANY",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "ApiGatewayRootMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ResourceId": {
+                    "Fn::GetAtt": [
+                        "ApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "HttpMethod": "ANY",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "ApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "ApiGatewayMethod",
+                "ApiGatewayRootMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                }
+            }
+        },
+        "LambdaApiGatewayPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "LambdaFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/${Environment}/ANY/*"
+                }
+            }
+        },
+        "LambdaApiGatewayRootPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "LambdaFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/${Environment}/ANY"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ApiGatewayUrl": {
+            "Description": "API Gateway invocation URL for testing and consuming the API",
+            "Value": {
+                "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-api-url"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Lambda function Amazon Resource Name (ARN)",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-lambda-arn"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "S3 bucket name for processed data",
+            "Value": {
+                "Ref": "ProcessedDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-s3-bucket"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS key ID used for S3 encryption",
+            "Value": {
+                "Ref": "S3EncryptionKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-kms-key"
+                }
+            }
+        },
+        "KMSKeyAlias": {
+            "Description": "KMS key alias for easier reference",
+            "Value": {
+                "Ref": "S3EncryptionKeyAlias"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-kms-alias"
+                }
+            }
+        }
+    }
+}

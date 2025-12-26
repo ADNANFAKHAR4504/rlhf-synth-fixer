@@ -1,0 +1,1335 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack — Multi-AZ VPC + EC2 (ASG) + optional RDS + CloudWatch Logs/Alarms with least-privilege IAM. Includes LocalStack-safe mode via DeployTarget.\n",
+    "Parameters": {
+        "ProjectName": {
+            "Type": "String",
+            "Default": "tapstack",
+            "AllowedPattern": "^[a-z0-9-]{3,32}$",
+            "ConstraintDescription": "must be 3–32 chars, lowercase letters, numbers, and hyphens only.",
+            "Description": "Logical project name used as a prefix in resource names."
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev-us",
+            "AllowedPattern": "^[a-z0-9-]{3,32}$",
+            "ConstraintDescription": "must be 3–32 chars, lowercase letters, numbers, and hyphens only.",
+            "Description": "Suffix appended to all resource names for collision avoidance."
+        },
+        "DeployTarget": {
+            "Type": "String",
+            "Default": "localstack",
+            "AllowedValues": [
+                "aws",
+                "localstack"
+            ],
+            "Description": "Use 'localstack' to skip services commonly unsupported by LocalStack."
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$",
+            "Description": "Primary VPC CIDR block."
+        },
+        "PublicSubnetCidrs": {
+            "Type": "CommaDelimitedList",
+            "Default": "10.0.0.0/20,10.0.16.0/20",
+            "Description": "Two non-overlapping public subnet CIDRs (A,B)."
+        },
+        "PrivateSubnetCidrs": {
+            "Type": "CommaDelimitedList",
+            "Default": "10.0.32.0/20,10.0.48.0/20",
+            "Description": "Two non-overlapping private subnet CIDRs (A,B)."
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Default": "t3.micro",
+            "AllowedPattern": "^[a-z0-9.]+$",
+            "Description": "EC2 instance type for application nodes."
+        },
+        "DesiredCapacity": {
+            "Type": "Number",
+            "Default": 2,
+            "MinValue": 1,
+            "MaxValue": 10,
+            "Description": "Desired number of EC2 instances in ASG."
+        },
+        "MaxSize": {
+            "Type": "Number",
+            "Default": 4,
+            "MinValue": 1,
+            "MaxValue": 20,
+            "Description": "Maximum number of EC2 instances in ASG."
+        },
+        "KeyPairName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional EC2 KeyPair name. Leave empty to disable SSH key association."
+        },
+        "AllowedSshCidr": {
+            "Type": "String",
+            "Default": "0.0.0.0/0",
+            "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$",
+            "Description": "CIDR allowed to SSH (tcp/22) to EC2 security group."
+        },
+        "EnableSnsForAlarms": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If 'true', creates SNS topic and subscribes provided email (AWS only recommended)."
+        },
+        "AlarmEmail": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Email address to subscribe for alarms when EnableSnsForAlarms=true."
+        },
+        "AmiId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "AMI ID to use for EC2 instances. Required for LocalStack. Optional for AWS (can be auto-resolved via SSM externally).\n"
+        },
+        "RdsEngine": {
+            "Type": "String",
+            "Default": "postgres",
+            "AllowedValues": [
+                "postgres",
+                "mysql"
+            ],
+            "Description": "Database engine (AWS mode)."
+        },
+        "RdsEngineVersionPostgres": {
+            "Type": "String",
+            "Default": "16.4",
+            "Description": "Postgres engine version (AWS mode)."
+        },
+        "RdsEngineVersionMySql": {
+            "Type": "String",
+            "Default": "8.0.35",
+            "Description": "MySQL engine version (AWS mode)."
+        },
+        "RdsInstanceClass": {
+            "Type": "String",
+            "Default": "db.t4g.micro",
+            "AllowedPattern": "^db\\.[a-z0-9]+\\.[a-z0-9]+$",
+            "Description": "RDS instance class (AWS mode)."
+        },
+        "RdsAllocatedStorage": {
+            "Type": "Number",
+            "Default": 20,
+            "MinValue": 20,
+            "MaxValue": 16384,
+            "Description": "Allocated storage in GiB (AWS mode)."
+        },
+        "DBName": {
+            "Type": "String",
+            "Default": "appdb",
+            "AllowedPattern": "^[a-zA-Z0-9_]{1,63}$",
+            "Description": "Initial database name (AWS mode)."
+        },
+        "DbMasterUsername": {
+            "Type": "String",
+            "Default": "masteruser",
+            "AllowedPattern": "^[a-zA-Z0-9_]{1,16}$",
+            "Description": "Master username stored in Secrets Manager (AWS mode)."
+        },
+        "RetainDbSnapshotOnDelete": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If 'true', deletion protection is enabled and snapshots retained on replacement (AWS mode)."
+        }
+    },
+    "Mappings": {
+        "CW": {
+            "Defaults": {
+                "Interval": 60,
+                "CpuHighThreshold": 80,
+                "MemHighThreshold": 80,
+                "RdsCpuHighThreshold": 80,
+                "PeriodSecs": 300,
+                "EvalPeriods": 1
+            }
+        }
+    },
+    "Conditions": {
+        "IsLocalStack": {
+            "Fn::Equals": [
+                {
+                    "Ref": "DeployTarget"
+                },
+                "localstack"
+            ]
+        },
+        "IsAws": {
+            "Fn::Equals": [
+                {
+                    "Ref": "DeployTarget"
+                },
+                "aws"
+            ]
+        },
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "EnableSns": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableSnsForAlarms"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Condition": "IsAws"
+                }
+            ]
+        },
+        "HasAlarmEmail": {
+            "Fn::And": [
+                {
+                    "Condition": "EnableSns"
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "AlarmEmail"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "EngineIsPg": {
+            "Fn::Equals": [
+                {
+                    "Ref": "RdsEngine"
+                },
+                "postgres"
+            ]
+        },
+        "RetainDbSnapshot": {
+            "Fn::Equals": [
+                {
+                    "Ref": "RetainDbSnapshotOnDelete"
+                },
+                "true"
+            ]
+        },
+        "HasAmiId": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AmiId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-vpc"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-igw"
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rtb-public"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableA": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rtb-private-a"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableB": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rtb-private-b"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            },
+            "DependsOn": "VPCGatewayAttachment"
+        },
+        "PublicSubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Ref": "PublicSubnetCidrs"
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-subnet-public-a"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Ref": "PublicSubnetCidrs"
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-subnet-public-b"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Ref": "PrivateSubnetCidrs"
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-subnet-private-a"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Ref": "PrivateSubnetCidrs"
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-subnet-private-b"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatEipA": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "IsAws",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-eip-nat-a"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatEipB": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "IsAws",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-eip-nat-b"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGatewayA": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "IsAws",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEipA",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetA"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-nat-a"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGatewayB": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "IsAws",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEipB",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetB"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-nat-b"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnetARouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnetBRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateSubnetARouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableA"
+                }
+            }
+        },
+        "PrivateSubnetBRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableB"
+                }
+            }
+        },
+        "PrivateRouteA": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "IsAws",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableA"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayA"
+                }
+            }
+        },
+        "PrivateRouteB": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "IsAws",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableB"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayB"
+                }
+            }
+        },
+        "InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ec2-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ec2-s3-readonly"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:Get*",
+                                        "s3:List*"
+                                    ],
+                                    "Resource": [
+                                        "*"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ec2-role"
+                        }
+                    }
+                ]
+            }
+        },
+        "InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ec2-profile"
+                },
+                "Roles": [
+                    {
+                        "Ref": "InstanceRole"
+                    }
+                ],
+                "Path": "/"
+            }
+        },
+        "SecurityGroupEc2": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "EC2 access SG",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "AllowedSshCidr"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-sg-ec2"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecurityGroupRds": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Condition": "IsAws",
+            "Properties": {
+                "GroupDescription": "RDS private access SG",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": {
+                            "Fn::If": [
+                                "EngineIsPg",
+                                5432,
+                                3306
+                            ]
+                        },
+                        "ToPort": {
+                            "Fn::If": [
+                                "EngineIsPg",
+                                5432,
+                                3306
+                            ]
+                        },
+                        "SourceSecurityGroupId": {
+                            "Ref": "SecurityGroupEc2"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-sg-rds"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudWatchLogGroupEC2": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/${ProjectName}/${EnvironmentSuffix}/ec2"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "CloudWatchLogGroupApp": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/${ProjectName}/${EnvironmentSuffix}/app"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-lt"
+                },
+                "LaunchTemplateData": {
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "ImageId": {
+                        "Fn::If": [
+                            "HasAmiId",
+                            {
+                                "Ref": "AmiId"
+                            },
+                            "ami-1234567890abcdef0"
+                        ]
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "KeyName": {
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "SecurityGroupEc2"
+                        }
+                    ],
+                    "MetadataOptions": {
+                        "HttpTokens": "required",
+                        "HttpEndpoint": "enabled"
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ec2"
+                                    }
+                                },
+                                {
+                                    "Key": "Project",
+                                    "Value": {
+                                        "Ref": "ProjectName"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "ResourceType": "volume",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ec2"
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": [
+                                "#!/bin/bash\nset -xe\n\ndnf update -y || yum update -y\ndnf install -y amazon-cloudwatch-agent httpd || yum install -y amazon-cloudwatch-agent httpd\n\nsystemctl enable httpd || true\nsystemctl start httpd || true\n\nmkdir -p /opt/aws/amazon-cloudwatch-agent/etc\n\ncat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CFG\n{\n  \"agent\": {\n    \"metrics_collection_interval\": ${CWInterval}\n  },\n  \"metrics\": {\n    \"namespace\": \"CWAgent\",\n    \"append_dimensions\": {\n      \"InstanceId\": \"{instance_id}\"\n    },\n    \"metrics_collected\": {\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\"],\n        \"metrics_collection_interval\": 60\n      },\n      \"cpu\": {\n        \"measurement\": [\n          \"cpu_usage_idle\",\n          \"cpu_usage_user\",\n          \"cpu_usage_system\"\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"${CloudWatchLogGroupEC2}\",\n            \"log_stream_name\": \"{instance_id}/messages\"\n          },\n          {\n            \"file_path\": \"/var/log/cloud-init.log\",\n            \"log_group_name\": \"${CloudWatchLogGroupEC2}\",\n            \"log_stream_name\": \"{instance_id}/cloud-init.log\"\n          }\n        ]\n      }\n    }\n  }\n}\nCFG\n\nsystemctl enable amazon-cloudwatch-agent || true\nsystemctl restart amazon-cloudwatch-agent || true\n\necho \"hello from $(hostname) in ${AWS::Region}\" > /var/www/html/index.html || true\n",
+                                {
+                                    "CWInterval": {
+                                        "Fn::FindInMap": [
+                                            "CW",
+                                            "Defaults",
+                                            "Interval"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-asg"
+                },
+                "VPCZoneIdentifier": {
+                    "Fn::If": [
+                        "IsLocalStack",
+                        [
+                            {
+                                "Ref": "PublicSubnetA"
+                            },
+                            {
+                                "Ref": "PublicSubnetB"
+                            }
+                        ],
+                        [
+                            {
+                                "Ref": "PrivateSubnetA"
+                            },
+                            {
+                                "Ref": "PrivateSubnetB"
+                            }
+                        ]
+                    ]
+                },
+                "MinSize": "1",
+                "DesiredCapacity": {
+                    "Ref": "DesiredCapacity"
+                },
+                "MaxSize": {
+                    "Ref": "MaxSize"
+                },
+                "HealthCheckType": "EC2",
+                "HealthCheckGracePeriod": 120,
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": "$Latest"
+                },
+                "MetricsCollection": [
+                    {
+                        "Granularity": "1Minute"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ec2"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "SNSTopicAlarms": {
+            "Type": "AWS::SNS::Topic",
+            "Condition": "EnableSns",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-alarms"
+                }
+            }
+        },
+        "SNSSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Condition": "HasAlarmEmail",
+            "Properties": {
+                "Protocol": "email",
+                "Endpoint": {
+                    "Ref": "AlarmEmail"
+                },
+                "TopicArn": {
+                    "Ref": "SNSTopicAlarms"
+                }
+            }
+        },
+        "AlarmEc2CpuHigh": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ec2-cpu-high"
+                },
+                "Namespace": "AWS/EC2",
+                "MetricName": "CPUUtilization",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": {
+                    "Fn::FindInMap": [
+                        "CW",
+                        "Defaults",
+                        "PeriodSecs"
+                    ]
+                },
+                "EvaluationPeriods": {
+                    "Fn::FindInMap": [
+                        "CW",
+                        "Defaults",
+                        "EvalPeriods"
+                    ]
+                },
+                "Threshold": {
+                    "Fn::FindInMap": [
+                        "CW",
+                        "Defaults",
+                        "CpuHighThreshold"
+                    ]
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching",
+                "AlarmActions": {
+                    "Fn::If": [
+                        "EnableSns",
+                        [
+                            {
+                                "Ref": "SNSTopicAlarms"
+                            }
+                        ],
+                        []
+                    ]
+                }
+            }
+        },
+        "AlarmEc2MemoryHigh": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ec2-mem-high"
+                },
+                "Namespace": "CWAgent",
+                "MetricName": "mem_used_percent",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching",
+                "AlarmActions": {
+                    "Fn::If": [
+                        "EnableSns",
+                        [
+                            {
+                                "Ref": "SNSTopicAlarms"
+                            }
+                        ],
+                        []
+                    ]
+                }
+            }
+        },
+        "DbSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Condition": "IsAws",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-db-secret"
+                },
+                "Description": {
+                    "Fn::Sub": "Auto-generated credentials for ${ProjectName}-${EnvironmentSuffix} RDS"
+                },
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\":\"${DbMasterUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 20,
+                    "ExcludePunctuation": true
+                }
+            }
+        },
+        "RDSSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Condition": "IsAws",
+            "Properties": {
+                "DBSubnetGroupDescription": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds-subnet-group"
+                },
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds-subnets"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnetA"
+                    },
+                    {
+                        "Ref": "PrivateSubnetB"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds-subnet-group"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSParameterGroup": {
+            "Type": "AWS::RDS::DBParameterGroup",
+            "Condition": "IsAws",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds-params"
+                },
+                "Family": {
+                    "Fn::If": [
+                        "EngineIsPg",
+                        "postgres16",
+                        "mysql8.0"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds-params"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSInstanceAws": {
+            "Type": "AWS::RDS::DBInstance",
+            "Condition": "IsAws",
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds"
+                },
+                "Engine": {
+                    "Ref": "RdsEngine"
+                },
+                "EngineVersion": {
+                    "Fn::If": [
+                        "EngineIsPg",
+                        {
+                            "Ref": "RdsEngineVersionPostgres"
+                        },
+                        {
+                            "Ref": "RdsEngineVersionMySql"
+                        }
+                    ]
+                },
+                "DBInstanceClass": {
+                    "Ref": "RdsInstanceClass"
+                },
+                "AllocatedStorage": {
+                    "Ref": "RdsAllocatedStorage"
+                },
+                "StorageEncrypted": true,
+                "PubliclyAccessible": false,
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "SecurityGroupRds"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "RDSSubnetGroup"
+                },
+                "DBParameterGroupName": {
+                    "Ref": "RDSParameterGroup"
+                },
+                "DeletionProtection": {
+                    "Fn::If": [
+                        "RetainDbSnapshot",
+                        true,
+                        false
+                    ]
+                },
+                "MasterUsername": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DbSecret}::username}}"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DbSecret}::password}}"
+                },
+                "DBName": {
+                    "Ref": "DBName"
+                },
+                "BackupRetentionPeriod": 7,
+                "MultiAZ": false,
+                "AutoMinorVersionUpgrade": true,
+                "EnableCloudwatchLogsExports": {
+                    "Fn::If": [
+                        "EngineIsPg",
+                        [
+                            "postgresql"
+                        ],
+                        [
+                            "error"
+                        ]
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSInstanceLocal": {
+            "Type": "AWS::RDS::DBInstance",
+            "Condition": "IsLocalStack",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds"
+                },
+                "Engine": "postgres",
+                "DBInstanceClass": "db.t3.micro",
+                "AllocatedStorage": 20,
+                "PubliclyAccessible": false,
+                "MasterUsername": "masteruser",
+                "MasterUserPassword": {
+                    "Ref": "AWS::NoValue"
+                }
+            }
+        },
+        "AlarmRdsCpuHigh": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "IsAws",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds-cpu-high"
+                },
+                "Namespace": "AWS/RDS",
+                "MetricName": "CPUUtilization",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "RDSInstanceAws"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching",
+                "AlarmActions": {
+                    "Fn::If": [
+                        "EnableSns",
+                        [
+                            {
+                                "Ref": "SNSTopicAlarms"
+                            }
+                        ],
+                        []
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VpcId": {
+            "Description": "VPC Id",
+            "Value": {
+                "Ref": "VPC"
+            }
+        },
+        "PublicSubnetIds": {
+            "Description": "Comma-separated public subnet IDs",
+            "Value": {
+                "Fn::Sub": "${PublicSubnetA},${PublicSubnetB}"
+            }
+        },
+        "PrivateSubnetIds": {
+            "Description": "Comma-separated private subnet IDs",
+            "Value": {
+                "Fn::Sub": "${PrivateSubnetA},${PrivateSubnetB}"
+            }
+        },
+        "AsgName": {
+            "Description": "Auto Scaling Group name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "Launch Template ID",
+            "Value": {
+                "Ref": "LaunchTemplate"
+            }
+        },
+        "InstanceProfileArn": {
+            "Description": "Instance profile ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "InstanceProfile",
+                    "Arn"
+                ]
+            }
+        },
+        "InstanceRoleArn": {
+            "Description": "Instance role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "InstanceRole",
+                    "Arn"
+                ]
+            }
+        },
+        "CloudWatchEC2LogGroup": {
+            "Description": "EC2 log group",
+            "Value": {
+                "Ref": "CloudWatchLogGroupEC2"
+            }
+        },
+        "CloudWatchAppLogGroup": {
+            "Description": "App log group",
+            "Value": {
+                "Ref": "CloudWatchLogGroupApp"
+            }
+        },
+        "AlarmCpuName": {
+            "Description": "EC2 CPU alarm name",
+            "Value": {
+                "Ref": "AlarmEc2CpuHigh"
+            }
+        },
+        "AlarmMemName": {
+            "Description": "EC2 memory alarm name",
+            "Value": {
+                "Ref": "AlarmEc2MemoryHigh"
+            }
+        },
+        "RdsEndpoint": {
+            "Condition": "IsAws",
+            "Description": "RDS endpoint address",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSInstanceAws",
+                    "Endpoint.Address"
+                ]
+            }
+        },
+        "DbSecretArn": {
+            "Condition": "IsAws",
+            "Description": "DB secret ARN",
+            "Value": {
+                "Ref": "DbSecret"
+            }
+        }
+    }
+}

@@ -1,0 +1,32 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "y4t4w0m6",
+  "team": "synth",
+  "startedAt": "2025-12-03T18:10:45-00:00",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "IAM",
+    "EventBridge",
+    "CloudWatch",
+    "EC2",
+    "SSM",
+    "VPC"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

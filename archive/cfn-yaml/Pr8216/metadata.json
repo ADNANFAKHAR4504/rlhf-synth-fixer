@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-229155",
+  "team": "synth-2",
+  "startedAt": "2025-07-29T15:12:43.000Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "CloudFront",
+    "CloudTrail",
+    "DynamoDB",
+    "SNS",
+    "ALB",
+    "Auto Scaling",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "michael-adeteye",
+  "dockerS3Location": ""
+}

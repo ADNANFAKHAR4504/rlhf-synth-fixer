@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291391",
+  "team": "synth-2",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "S3",
+    "RDS",
+    "KMS",
+    "CloudWatch Logs",
+    "CloudTrail",
+    "Secrets Manager"
+  ],
+  "startedAt": "2025-08-13T13:21:33.214Z",
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}

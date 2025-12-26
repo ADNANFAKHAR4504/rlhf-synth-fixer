@@ -1,0 +1,35 @@
+{
+  "platform": "cicd",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291969",
+  "team": "synth-2",
+  "startedAt": "2025-08-18T18:25:09.850Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "AWS CodePipeline",
+    "AWS CodeBuild",
+    "AWS CodeDeploy",
+    "Amazon S3",
+    "Amazon VPC",
+    "Amazon EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "Amazon SNS",
+    "Amazon EventBridge"
+  ],
+  "provider": "localstack",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

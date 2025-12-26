@@ -1,0 +1,113 @@
+version: 0.2
+
+# BuildSpec for Docker Image Build
+# This buildspec builds and pushes Docker images to ECR
+
+env:
+  variables:
+    IMAGE_REPO_NAME: payment-service
+    IMAGE_TAG: latest
+
+phases:
+  pre_build:
+    commands:
+      - echo "Fetching Docker registry credentials from Secrets Manager..."
+      - |
+        DOCKER_CREDS=$(aws secretsmanager get-secret-value \
+          --secret-id docker-registry-credentials-${ENVIRONMENT_SUFFIX} \
+          --query SecretString --output text)
+      - export DOCKER_USERNAME=$(echo $DOCKER_CREDS | jq -r '.username')
+      - export DOCKER_PASSWORD=$(echo $DOCKER_CREDS | jq -r '.password')
+      - export DOCKER_REGISTRY=$(echo $DOCKER_CREDS | jq -r '.registry // "'"$AWS_ACCOUNT_ID"'.dkr.ecr.'"$AWS_DEFAULT_REGION"'.amazonaws.com"')
+
+      - echo "Logging in to Docker registry..."
+      - |
+        if [[ $DOCKER_REGISTRY == *"ecr"* ]]; then
+          aws ecr get-login-password --region $AWS_DEFAULT_REGION | \
+            docker login --username AWS --password-stdin $DOCKER_REGISTRY
+        else
+          echo $DOCKER_PASSWORD | docker login $DOCKER_REGISTRY -u $DOCKER_USERNAME --password-stdin
+        fi
+
+      - echo "Setting image tag..."
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:-latest}
+      - echo "Image tag set to $IMAGE_TAG"
+
+  build:
+    commands:
+      - echo "Building Docker image..."
+      - docker build -t $DOCKER_REGISTRY/$IMAGE_REPO_NAME:$IMAGE_TAG .
+      - docker tag $DOCKER_REGISTRY/$IMAGE_REPO_NAME:$IMAGE_TAG $DOCKER_REGISTRY/$IMAGE_REPO_NAME:latest
+      - echo "Docker image built successfully"
+
+  post_build:
+    commands:
+      - echo "Pushing Docker image to registry..."
+      - docker push $DOCKER_REGISTRY/$IMAGE_REPO_NAME:$IMAGE_TAG
+      - docker push $DOCKER_REGISTRY/$IMAGE_REPO_NAME:latest
+      - echo "Docker image pushed successfully"
+
+      - echo "Creating imagedefinitions.json for ECS deployment..."
+      - |
+        printf '[{"name":"%s","imageUri":"%s"}]' \
+          "$IMAGE_REPO_NAME" \
+          "$DOCKER_REGISTRY/$IMAGE_REPO_NAME:$IMAGE_TAG" \
+          > imagedefinitions.json
+
+      - echo "Creating taskdef.json template for CodeDeploy..."
+      - |
+        cat > taskdef.json <<EOF
+        {
+          "family": "payment-service-${ENVIRONMENT_SUFFIX}",
+          "networkMode": "awsvpc",
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512",
+          "containerDefinitions": [
+            {
+              "name": "payment-service",
+              "image": "<IMAGE1_NAME>",
+              "essential": true,
+              "portMappings": [
+                {
+                  "containerPort": 8080,
+                  "protocol": "tcp"
+                }
+              ],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/payment-service-${ENVIRONMENT_SUFFIX}",
+                  "awslogs-region": "${AWS_DEFAULT_REGION}",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            }
+          ]
+        }
+        EOF
+
+      - echo "Creating appspec.yaml for CodeDeploy..."
+      - |
+        cat > appspec.yaml <<EOF
+        version: 0.0
+        Resources:
+          - TargetService:
+              Type: AWS::ECS::Service
+              Properties:
+                TaskDefinition: <TASK_DEFINITION>
+                LoadBalancerInfo:
+                  ContainerName: "payment-service"
+                  ContainerPort: 8080
+                PlatformVersion: "LATEST"
+        EOF
+
+      - echo "Build artifacts created successfully"
+
+artifacts:
+  files:
+    - imagedefinitions.json
+    - appspec.yaml
+    - taskdef.json
+  name: docker-build-artifact

@@ -1,0 +1,1258 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CI/CD Pipeline for Containerized Payment Service with Security Controls'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: Environment suffix for tagging and resource naming (e.g., pr6296, dev, staging)
+    AllowedPattern: ^[a-z0-9][a-z0-9-]*$
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
+  TeamName:
+    Type: String
+    Default: 'payment-team'
+    Description: Team responsible for this service
+    AllowedPattern: ^[a-z][a-z0-9-]*$
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
+  CostCenter:
+    Type: String
+    Default: 'finance-123'
+    Description: Cost center for billing purposes
+
+  VpcCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: CIDR block for VPC
+    AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$
+
+  CreateVpcEndpoints:
+    Type: String
+    Default: 'false'
+    Description: Create VPC endpoints for ECR, S3, CloudWatch (required for private subnet connectivity). Disabled by default for LocalStack compatibility.
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  EcsClusterName:
+    Type: String
+    Description: Target ECS Cluster for deployment
+    Default: 'default'
+
+  EcsServiceName:
+    Type: String
+    Description: Target ECS Service for deployment
+    Default: 'payment-service'
+
+  SlackWebhookUrl:
+    Type: String
+    Description: Webhook URL for Slack notifications (leave empty to disable notifications)
+    Default: ''
+    NoEcho: true
+
+Conditions:
+  HasSlackWebhook: !Not
+    - !Equals
+      - !Ref SlackWebhookUrl
+      - ''
+  ShouldCreateVpcEndpoints: !Equals
+    - !Ref CreateVpcEndpoints
+    - 'true'
+
+Resources:
+  # VPC for isolated CodeBuild
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-payment-service-vpc'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Private Subnets for CodeBuild
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-payment-service-private-subnet-1'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-payment-service-private-subnet-2'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Internet Gateway for public internet access
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-payment-service-igw'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Route Table for Private Subnets (with internet route)
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-payment-service-private-rt'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # KMS Key for encryption
+  ArtifactsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting pipeline artifacts
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-policy-1
+        Statement:
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key by pipeline services
+            Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+                - codepipeline.amazonaws.com
+                - codedeploy.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  ArtifactsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/payment-service-${EnvironmentSuffix}'
+      TargetKeyId: !Ref ArtifactsKey
+
+  # S3 Bucket for Pipeline Artifacts
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'payment-service-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt ArtifactsKey.Arn
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 90
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  ArtifactsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${ArtifactsBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub '${ArtifactsBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+  # Security Group for CodeBuild and ECS in VPC
+  CodeBuildSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for CodeBuild projects and ECS tasks
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS for AWS services, public ECR, and package downloads
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP for package repositories and mirrors
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS resolution
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS resolution over TCP
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # VPC Endpoints for CodeBuild without internet access
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateVpcEndpoints
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:ListBucket'
+            Resource:
+              - !GetAtt ArtifactsBucket.Arn
+              - !Sub '${ArtifactsBucket.Arn}/*'
+              - 'arn:aws:s3:::codebuild-*'
+              - 'arn:aws:s3:::aws-codedeploy-*'
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcId: !Ref VPC
+
+  EcrApiVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateVpcEndpoints
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref CodeBuildSecurityGroup
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+
+  EcrDkrVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateVpcEndpoints
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref CodeBuildSecurityGroup
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+
+  LogsVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateVpcEndpoints
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref CodeBuildSecurityGroup
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+
+  CodeBuildVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateVpcEndpoints
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref CodeBuildSecurityGroup
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.codebuild'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+
+  # IAM Role for CodeBuild
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CodeBuildServiceRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowS3Operations
+                Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:PutObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt ArtifactsBucket.Arn
+                  - !Sub '${ArtifactsBucket.Arn}/*'
+              - Sid: AllowKMSOperations
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                  - 'kms:Encrypt'
+                  - 'kms:GenerateDataKey*'
+                  - 'kms:ReEncrypt*'
+                Resource: !GetAtt ArtifactsKey.Arn
+              - Sid: AllowLogging
+                Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+              - Sid: AllowECROperations
+                Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                  - 'ecr:PutImage'
+                  - 'ecr:InitiateLayerUpload'
+                  - 'ecr:UploadLayerPart'
+                  - 'ecr:CompleteLayerUpload'
+                Resource: '*'
+              - Sid: AllowVPCOperations
+                Effect: Allow
+                Action:
+                  - 'ec2:CreateNetworkInterface'
+                  - 'ec2:DescribeDhcpOptions'
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DeleteNetworkInterface'
+                  - 'ec2:DescribeSubnets'
+                  - 'ec2:DescribeSecurityGroups'
+                  - 'ec2:DescribeVpcs'
+                Resource: '*'
+              - Sid: DenyProductionAccess
+                Effect: Deny
+                Action:
+                  - 'rds:*'
+                  - 'dynamodb:*'
+                  - 's3:*'
+                Resource:
+                  - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:prod-*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/prod-*'
+                  - 'arn:aws:s3:::prod-*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # IAM Role for CodePipeline
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CodePipelineServiceRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowS3Operations
+                Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:PutObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt ArtifactsBucket.Arn
+                  - !Sub '${ArtifactsBucket.Arn}/*'
+              - Sid: AllowCodeCommitOperations
+                Effect: Allow
+                Action:
+                  - 'codecommit:GetBranch'
+                  - 'codecommit:GetCommit'
+                  - 'codecommit:UploadArchive'
+                  - 'codecommit:GetUploadArchiveStatus'
+                  - 'codecommit:CancelUploadArchive'
+                Resource: !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:payment-service'
+              - Sid: AllowCodeBuildOperations
+                Effect: Allow
+                Action:
+                  - 'codebuild:BatchGetBuilds'
+                  - 'codebuild:StartBuild'
+                Resource:
+                  - !GetAtt BuildProject.Arn
+                  - !GetAtt TestProject.Arn
+              - Sid: AllowECSOperations
+                Effect: Allow
+                Action:
+                  - 'ecs:DescribeServices'
+                  - 'ecs:DescribeTaskDefinition'
+                  - 'ecs:DescribeTasks'
+                  - 'ecs:ListTasks'
+                  - 'ecs:RegisterTaskDefinition'
+                  - 'ecs:UpdateService'
+                Resource: '*'
+              - Sid: AllowKMSOperations
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                  - 'kms:Encrypt'
+                  - 'kms:GenerateDataKey*'
+                  - 'kms:ReEncrypt*'
+                Resource: !GetAtt ArtifactsKey.Arn
+              - Sid: DenyProductionAccess
+                Effect: Deny
+                Action:
+                  - 'rds:*'
+                  - 'dynamodb:*'
+                  - 's3:*'
+                Resource:
+                  - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:prod-*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/prod-*'
+                  - 'arn:aws:s3:::prod-*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Build Project for Build Stage
+  # CloudWatch Logs Group for Build Project
+  BuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/payment-service-build-${EnvironmentSuffix}'
+      RetentionInDays: 30
+
+  # CloudWatch Logs Group for Test Project
+  TestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/payment-service-test-${EnvironmentSuffix}'
+      RetentionInDays: 30
+
+  BuildProject:
+    Type: AWS::CodeBuild::Project
+    DependsOn: BuildLogGroup
+    Properties:
+      Name: !Sub 'payment-service-build-${EnvironmentSuffix}'
+      Description: 'Build and security scan for payment service'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+      VpcConfig:
+        VpcId: !Ref VPC
+        Subnets:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        SecurityGroupIds:
+          - !Ref CodeBuildSecurityGroup
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec.yml
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Sub '/aws/codebuild/payment-service-build-${EnvironmentSuffix}'
+          Status: ENABLED
+      TimeoutInMinutes: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Build Project for Test Stage
+  TestProject:
+    Type: AWS::CodeBuild::Project
+    DependsOn: TestLogGroup
+    Properties:
+      Name: !Sub 'payment-service-test-${EnvironmentSuffix}'
+      Description: 'Integration tests for payment service'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+      VpcConfig:
+        VpcId: !Ref VPC
+        Subnets:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        SecurityGroupIds:
+          - !Ref CodeBuildSecurityGroup
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: testspec.yml
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Sub '/aws/codebuild/payment-service-test-${EnvironmentSuffix}'
+          Status: ENABLED
+      TimeoutInMinutes: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # ECS Cluster
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref EcsClusterName
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+          Base: 1
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # ECS Task Execution Role (must be created before Task Definition)
+  EcsTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+
+  # CloudWatch Logs Group for ECS
+  EcsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${EcsServiceName}'
+      RetentionInDays: 30
+
+  # ECS Task Definition
+  EcsTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EcsServiceName}-family'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub '${EcsServiceName}-container'
+          Image: public.ecr.aws/docker/library/nginx:latest
+          Essential: true
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref EcsLogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: ecs
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # ECS Service
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref EcsServiceName
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref EcsTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+          SecurityGroups:
+            - !Ref CodeBuildSecurityGroup
+          AssignPublicIp: ENABLED
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # CodePipeline
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub 'payment-service-${EnvironmentSuffix}-pipeline'
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactsBucket
+        EncryptionKey:
+          Id: !GetAtt ArtifactsKey.Arn
+          Type: KMS
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+              Configuration:
+                RepositoryName: payment-service
+                BranchName: main
+              OutputArtifacts:
+                - Name: SourceCode
+        - Name: Build
+          Actions:
+            - Name: Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref BuildProject
+              InputArtifacts:
+                - Name: SourceCode
+              OutputArtifacts:
+                - Name: BuildOutput
+        - Name: Test
+          Actions:
+            - Name: IntegrationTest
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref TestProject
+              InputArtifacts:
+                - Name: BuildOutput
+              OutputArtifacts:
+                - Name: TestOutput
+        - Name: Deploy
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: ECS
+                Version: '1'
+              Configuration:
+                ClusterName: !Ref EcsCluster
+                ServiceName: !Ref EcsService
+                FileName: imagedefinitions.json
+              InputArtifacts:
+                - Name: BuildOutput
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # EventBridge Rule for Pipeline State Change
+  PipelineStateChangeRule:
+    Type: AWS::Events::Rule
+    Condition: HasSlackWebhook
+    Properties:
+      Description: "Rule for monitoring CodePipeline state changes"
+      EventPattern:
+        source:
+          - "aws.codepipeline"
+        detail-type:
+          - "CodePipeline Pipeline Execution State Change"
+        detail:
+          state:
+            - "FAILED"
+            - "SUCCEEDED"
+          pipeline:
+            - !Ref Pipeline
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SlackNotificationFunction.Arn
+          Id: SlackNotificationTarget
+          InputTransformer:
+            InputPathsMap:
+              pipeline: "$.detail.pipeline"
+              state: "$.detail.state"
+              executionId: "$.detail.execution-id"
+              time: "$.time"
+            InputTemplate: !Sub |
+              {
+                "pipeline": <pipeline>,
+                "state": <state>,
+                "executionId": <executionId>,
+                "time": <time>,
+                "webhookUrl": "${SlackWebhookUrl}"
+              }
+
+  # Lambda function for Slack notifications
+  SlackNotificationFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasSlackWebhook
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt SlackNotificationFunctionRole.Arn
+      Code:
+        ZipFile: |
+          const https = require('https');
+          const url = require('url');
+
+          exports.handler = async (event) => {
+              console.log('Event:', JSON.stringify(event, null, 2));
+
+              const pipeline = event.pipeline;
+              const state = event.state;
+              const executionId = event.executionId;
+              const time = event.time;
+              const webhookUrl = event.webhookUrl;
+
+              const emoji = state === 'FAILED' ? ':x:' : ':white_check_mark:';
+              const color = state === 'FAILED' ? '#FF0000' : '#00FF00';
+
+              const message = {
+                  attachments: [
+                      {
+                          fallback: `Pipeline ${pipeline} ${state}`,
+                          color: color,
+                          title: `Pipeline State Change: ${pipeline}`,
+                          fields: [
+                              {
+                                  title: 'Status',
+                                  value: `${emoji} ${state}`,
+                                  short: true
+                              },
+                              {
+                                  title: 'Execution ID',
+                                  value: executionId,
+                                  short: true
+                              },
+                              {
+                                  title: 'Time',
+                                  value: time,
+                                  short: false
+                              }
+                          ],
+                          footer: 'AWS CodePipeline',
+                          ts: Math.floor(Date.now() / 1000)
+                      }
+                  ]
+              };
+
+              try {
+                  const parsedUrl = url.parse(webhookUrl);
+                  const options = {
+                      hostname: parsedUrl.host,
+                      path: parsedUrl.path,
+                      method: 'POST',
+                      headers: {
+                          'Content-Type': 'application/json',
+                      }
+                  };
+
+                  await new Promise((resolve, reject) => {
+                      const req = https.request(options, (res) => {
+                          let data = '';
+                          res.on('data', (chunk) => {
+                              data += chunk;
+                          });
+                          res.on('end', () => {
+                              resolve(data);
+                          });
+                      });
+
+                      req.on('error', (e) => {
+                          reject(e);
+                      });
+
+                      req.write(JSON.stringify(message));
+                      req.end();
+                  });
+
+                  return { statusCode: 200, body: 'Notification sent' };
+              } catch (error) {
+                  console.error('Error:', error);
+                  return { statusCode: 500, body: 'Error sending notification' };
+              }
+          };
+      Runtime: nodejs20.x
+      Timeout: 30
+      MemorySize: 128
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # IAM Role for Lambda function
+  SlackNotificationFunctionRole:
+    Type: AWS::IAM::Role
+    Condition: HasSlackWebhook
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Lambda Permission for EventBridge
+  SlackNotificationPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasSlackWebhook
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref SlackNotificationFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PipelineStateChangeRule.Arn
+
+Outputs:
+  # Pipeline Outputs
+  PipelineUrl:
+    Description: URL to the CodePipeline console
+    Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${Pipeline}
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineUrl'
+
+  PipelineName:
+    Description: CodePipeline name
+    Value: !Ref Pipeline
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineName'
+
+  PipelineArn:
+    Description: CodePipeline ARN
+    Value: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}'
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineArn'
+
+  # S3 Outputs
+  ArtifactsBucketName:
+    Description: S3 Bucket for pipeline artifacts
+    Value: !Ref ArtifactsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactsBucketName'
+
+  ArtifactsBucketArn:
+    Description: ARN of the S3 Bucket for pipeline artifacts
+    Value: !GetAtt ArtifactsBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactsBucketArn'
+
+  # KMS Outputs
+  KmsKeyId:
+    Description: KMS Key for artifact encryption
+    Value: !Ref ArtifactsKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KmsKeyId'
+
+  KmsKeyArn:
+    Description: KMS Key ARN for artifact encryption
+    Value: !GetAtt ArtifactsKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KmsKeyArn'
+
+  KmsKeyAliasName:
+    Description: KMS Key Alias Name
+    Value: !Ref ArtifactsKeyAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-KmsKeyAliasName'
+
+  # VPC Outputs
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  VPCCidr:
+    Description: VPC CIDR block
+    Value: !GetAtt VPC.CidrBlock
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCCidr'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1Id'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2Id'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGatewayId'
+
+  PrivateRouteTableId:
+    Description: Private Route Table ID
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateRouteTableId'
+
+  # Security Group Outputs
+  CodeBuildSecurityGroupId:
+    Description: Security Group for CodeBuild and ECS
+    Value: !Ref CodeBuildSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildSecurityGroupId'
+
+  # CodeBuild Outputs
+  BuildProjectName:
+    Description: CodeBuild Build Project Name
+    Value: !Ref BuildProject
+    Export:
+      Name: !Sub '${AWS::StackName}-BuildProjectName'
+
+  BuildProjectArn:
+    Description: CodeBuild Build Project ARN
+    Value: !GetAtt BuildProject.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-BuildProjectArn'
+
+  TestProjectName:
+    Description: CodeBuild Test Project Name
+    Value: !Ref TestProject
+    Export:
+      Name: !Sub '${AWS::StackName}-TestProjectName'
+
+  TestProjectArn:
+    Description: CodeBuild Test Project ARN
+    Value: !GetAtt TestProject.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TestProjectArn'
+
+  # IAM Role Outputs
+  CodeBuildServiceRoleArn:
+    Description: CodeBuild Service Role ARN
+    Value: !GetAtt CodeBuildServiceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildServiceRoleArn'
+
+  CodePipelineServiceRoleArn:
+    Description: CodePipeline Service Role ARN
+    Value: !GetAtt CodePipelineServiceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CodePipelineServiceRoleArn'
+
+  EcsTaskExecutionRoleArn:
+    Description: ECS Task Execution Role ARN
+    Value: !GetAtt EcsTaskExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsTaskExecutionRoleArn'
+
+  # ECS Outputs
+  EcsClusterName:
+    Description: ECS Cluster name
+    Value: !Ref EcsCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsClusterName'
+
+  EcsClusterArn:
+    Description: ECS Cluster ARN
+    Value: !GetAtt EcsCluster.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsClusterArn'
+
+  EcsServiceName:
+    Description: ECS Service name
+    Value: !GetAtt EcsService.Name
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsServiceName'
+
+  EcsServiceArn:
+    Description: ECS Service ARN
+    Value: !Ref EcsService
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsServiceArn'
+
+  EcsTaskDefinitionArn:
+    Description: ECS Task Definition ARN
+    Value: !Ref EcsTaskDefinition
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsTaskDefinitionArn'
+
+  # CloudWatch Logs Outputs
+  EcsLogGroupName:
+    Description: ECS Log Group Name
+    Value: !Ref EcsLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsLogGroupName'
+
+  BuildLogGroupName:
+    Description: CodeBuild Build Log Group Name
+    Value: !Ref BuildLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-BuildLogGroupName'
+
+  TestLogGroupName:
+    Description: CodeBuild Test Log Group Name
+    Value: !Ref TestLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-TestLogGroupName'
+
+  # Lambda Outputs (conditional)
+  SlackNotificationFunctionArn:
+    Condition: HasSlackWebhook
+    Description: Slack Notification Lambda Function ARN
+    Value: !GetAtt SlackNotificationFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SlackNotificationFunctionArn'
+
+  SlackNotificationFunctionName:
+    Condition: HasSlackWebhook
+    Description: Slack Notification Lambda Function Name
+    Value: !Ref SlackNotificationFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-SlackNotificationFunctionName'
+
+  # EventBridge Outputs
+  PipelineStateChangeRuleArn:
+    Condition: HasSlackWebhook
+    Description: EventBridge Rule ARN for Pipeline State Changes
+    Value: !GetAtt PipelineStateChangeRule.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineStateChangeRuleArn'
+
+  # VPC Endpoint Outputs (conditional)
+  S3VpcEndpointId:
+    Condition: ShouldCreateVpcEndpoints
+    Description: S3 VPC Endpoint ID
+    Value: !Ref S3VpcEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-S3VpcEndpointId'
+
+  EcrApiVpcEndpointId:
+    Condition: ShouldCreateVpcEndpoints
+    Description: ECR API VPC Endpoint ID
+    Value: !Ref EcrApiVpcEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-EcrApiVpcEndpointId'
+
+  EcrDkrVpcEndpointId:
+    Condition: ShouldCreateVpcEndpoints
+    Description: ECR DKR VPC Endpoint ID
+    Value: !Ref EcrDkrVpcEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-EcrDkrVpcEndpointId'
+
+  LogsVpcEndpointId:
+    Condition: ShouldCreateVpcEndpoints
+    Description: CloudWatch Logs VPC Endpoint ID
+    Value: !Ref LogsVpcEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-LogsVpcEndpointId'
+
+  CodeBuildVpcEndpointId:
+    Condition: ShouldCreateVpcEndpoints
+    Description: CodeBuild VPC Endpoint ID
+    Value: !Ref CodeBuildVpcEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildVpcEndpointId'
+
+  # Stack Metadata
+  StackName:
+    Description: Name of this CloudFormation stack
+    Value: !Ref 'AWS::StackName'
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: Environment name used for this deployment
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'

@@ -1,0 +1,1206 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-ready highly available web application infrastructure with security best practices",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-z0-9-]+$",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+        },
+        "ProjectName": {
+            "Type": "String",
+            "Default": "webapp",
+            "Description": "Project name used for resource naming",
+            "AllowedPattern": "^[a-z0-9-]+$",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+        }
+    },
+    "Mappings": {
+        "SubnetConfig": {
+            "VPC": {
+                "CIDR": "10.0.0.0/16"
+            },
+            "PublicSubnetA": {
+                "CIDR": "10.0.1.0/24"
+            },
+            "PublicSubnetB": {
+                "CIDR": "10.0.2.0/24"
+            },
+            "PrivateSubnetA": {
+                "CIDR": "10.0.10.0/24"
+            },
+            "PrivateSubnetB": {
+                "CIDR": "10.0.11.0/24"
+            }
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "VPC",
+                        "CIDR"
+                    ]
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnetA",
+                        "CIDR"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-subnet-public-a-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "PublicSubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnetB",
+                        "CIDR"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-subnet-public-b-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnetA",
+                        "CIDR"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-subnet-private-a-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnetB",
+                        "CIDR"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-subnet-private-b-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "NATGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-eip-nat-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "NATGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetA"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-natgw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-rt-public-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetARouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnetBRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-rt-private-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "PrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway"
+                }
+            }
+        },
+        "PrivateSubnetARouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnetBRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP traffic"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTPS traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-sg-alb-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "WebServerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for EC2 instances",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        },
+                        "Description": "Allow HTTP traffic from ALB"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-sg-ec2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-role-ec2-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DynamoDBTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "StaticAssetsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${StaticAssetsBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "ParameterStoreAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:GetParameter",
+                                        "ssm:GetParameters",
+                                        "ssm:GetParametersByPath"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/${EnvironmentSuffix}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-role-ec2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "DatabaseEndpointParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/${ProjectName}/${EnvironmentSuffix}/database/endpoint"
+                },
+                "Type": "String",
+                "Value": {
+                    "Fn::GetAtt": [
+                        "DynamoDBTable",
+                        "Arn"
+                    ]
+                },
+                "Description": "DynamoDB table ARN",
+                "Tags": {
+                    "project": "iac-rlhf-amazon",
+                    "team-number": 2
+                }
+            }
+        },
+        "AppConfigParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/${ProjectName}/${EnvironmentSuffix}/app/config"
+                },
+                "Type": "String",
+                "Value": {
+                    "Fn::Sub": "{\"environment\":\"${EnvironmentSuffix}\",\"project\":\"${ProjectName}\"}"
+                },
+                "Description": "Application configuration",
+                "Tags": {
+                    "project": "iac-rlhf-amazon",
+                    "team-number": 2
+                }
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-alb-${EnvironmentSuffix}"
+                },
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "IpAddressType": "ipv4",
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnetA"
+                    },
+                    {
+                        "Ref": "PublicSubnetB"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-alb-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-tg-${EnvironmentSuffix}"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "TargetType": "instance",
+                "HealthCheckEnabled": true,
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/health",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Matcher": {
+                    "HttpCode": "200-399"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-tg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "DynamoDBTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${ProjectName}-table-${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-dynamodb-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "StaticAssetsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-static-${AWS::AccountId}-${EnvironmentSuffix}"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-s3-static-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "LoggingBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-logs-${AWS::AccountId}-${EnvironmentSuffix}"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-s3-logs-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "UnHealthyHostAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-unhealthyhosts-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when we have unhealthy hosts",
+                "MetricName": "UnHealthyHostCount",
+                "Namespace": "AWS/ApplicationELB",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "LoadBalancer",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ApplicationLoadBalancer",
+                                "LoadBalancerFullName"
+                            ]
+                        }
+                    },
+                    {
+                        "Name": "TargetGroup",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ALBTargetGroup",
+                                "TargetGroupFullName"
+                            ]
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ]
+            }
+        },
+        "DynamoDBThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-dynamodb-throttle-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when DynamoDB requests are throttled",
+                "MetricName": "UserErrors",
+                "Namespace": "AWS/DynamoDB",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TableName",
+                        "Value": {
+                            "Ref": "DynamoDBTable"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ]
+            }
+        },
+        "SNSTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${ProjectName}-alerts-${EnvironmentSuffix}"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "${ProjectName} ${EnvironmentSuffix} Alerts"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-sns-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "ALBAccessLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/alb/${ProjectName}/${EnvironmentSuffix}/access"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-logs-alb-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "EC2LogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/${ProjectName}/${EnvironmentSuffix}/application"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-logs-ec2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    }
+                ]
+            }
+        },
+        "CloudWatchDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "${ProjectName}-dashboard-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/EC2\", \"CPUUtilization\", {\"stat\": \"Average\", \"label\": \"EC2 CPU\"}],\n          [\"AWS/ApplicationELB\", \"TargetResponseTime\", {\"stat\": \"Average\", \"label\": \"Response Time\"}],\n          [\"AWS/ApplicationELB\", \"RequestCount\", {\"stat\": \"Sum\", \"label\": \"Request Count\"}],\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\", \"label\": \"DynamoDB Read\"}],\n          [\"AWS/DynamoDB\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\", \"label\": \"DynamoDB Write\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Application Metrics - ${EnvironmentSuffix}\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-vpc-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PublicSubnetAId": {
+            "Description": "Public Subnet A ID",
+            "Value": {
+                "Ref": "PublicSubnetA"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-subnet-public-a-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PublicSubnetBId": {
+            "Description": "Public Subnet B ID",
+            "Value": {
+                "Ref": "PublicSubnetB"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-subnet-public-b-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PrivateSubnetAId": {
+            "Description": "Private Subnet A ID",
+            "Value": {
+                "Ref": "PrivateSubnetA"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-subnet-private-a-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PrivateSubnetBId": {
+            "Description": "Private Subnet B ID",
+            "Value": {
+                "Ref": "PrivateSubnetB"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-subnet-private-b-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ALBDNSName": {
+            "Description": "DNS name of the Application Load Balancer",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-alb-dns-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ALBArn": {
+            "Description": "ARN of the Application Load Balancer",
+            "Value": {
+                "Ref": "ApplicationLoadBalancer"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-alb-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "TargetGroupArn": {
+            "Description": "ARN of the Target Group",
+            "Value": {
+                "Ref": "ALBTargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-tg-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "StaticAssetsBucket": {
+            "Description": "S3 bucket for static assets",
+            "Value": {
+                "Ref": "StaticAssetsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-s3-static-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "LoggingBucket": {
+            "Description": "S3 bucket for logs",
+            "Value": {
+                "Ref": "LoggingBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-s3-logs-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB table name",
+            "Value": {
+                "Ref": "DynamoDBTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-dynamodb-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "DynamoDBTableArn": {
+            "Description": "DynamoDB table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DynamoDBTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-dynamodb-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "SNS Topic ARN for alerts",
+            "Value": {
+                "Ref": "SNSTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-sns-arn-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "ALBSecurityGroupId": {
+            "Description": "ALB Security Group ID",
+            "Value": {
+                "Ref": "ALBSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-sg-alb-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "WebServerSecurityGroupId": {
+            "Description": "Web Server Security Group ID",
+            "Value": {
+                "Ref": "WebServerSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-sg-ec2-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "DashboardURL": {
+            "Description": "CloudWatch Dashboard URL",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-dashboard-${EnvironmentSuffix}"
+            }
+        }
+    }
+}

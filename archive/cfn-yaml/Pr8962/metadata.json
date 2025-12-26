@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-274773",
+  "team": "synth-2",
+  "startedAt": "2025-07-29T07:25:34.461Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "268",
+    "pr": "Pr268"
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "abubakarTuring",
+  "dockerS3Location": ""
+}

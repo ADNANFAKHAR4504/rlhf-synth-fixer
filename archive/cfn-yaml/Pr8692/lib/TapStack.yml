@@ -1,0 +1,212 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  IaC - AWS Nova Model Breaking: This CloudFormation template establishes a foundational
+  security baseline. It creates an IAM group that enforces MFA and sets up AWS Config
+  with rules to monitor S3 bucket public access.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+          - ConfigBucketName
+          - SampleS3BucketName
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters and hyphens.'
+
+  ConfigBucketName:
+    Type: String
+    Description: >-
+      A unique base name for the S3 bucket where AWS Config will store configuration
+      history and snapshots. The final name will be suffixed with the environment, account ID, and region.
+    Default: 'aws-config-logs-novamodel'
+
+  SampleS3BucketName:
+    Type: String
+    Description: >-
+      A unique base name for the sample S3 bucket that will be monitored by AWS Config.
+      The final name will be suffixed with the environment, account ID, and region.
+    Default: 'sample-s3-bucket-novamodel'
+
+Resources:
+  # =================================================================
+  # == IAM MFA Enforcement Resources
+  # =================================================================
+
+  MfaEnforcedPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      Description: 'Enforces the use of Multi-Factor Authentication (MFA) for all IAM actions.'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'DenyAllActionsWithoutMFA'
+            Effect: 'Deny'
+            Action: '*'
+            Resource: '*'
+            Condition:
+              BoolIfExists:
+                'aws:MultiFactorAuthPresent': 'false'
+
+  MfaEnforcedUsersGroup:
+    Type: 'AWS::IAM::Group'
+    Properties:
+      ManagedPolicyArns:
+        - !Ref MfaEnforcedPolicy
+
+  # =================================================================
+  # == AWS Config Resources
+  # =================================================================
+
+  ConfigBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub '${ConfigBucketName}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  ConfigBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'AWSConfigBucketPermissionsCheck'
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'config.amazonaws.com'
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: 'AWSConfigBucketDelivery'
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'config.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub '${ConfigBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  ConfigRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'config.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+
+  ConfigurationRecorder:
+    Type: 'AWS::Config::ConfigurationRecorder'
+    Properties:
+      Name: !Sub 'DefaultConfigurationRecorder-${EnvironmentSuffix}'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  DeliveryChannel:
+    Type: 'AWS::Config::DeliveryChannel'
+    Properties:
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: 'TwentyFour_Hours'
+      S3BucketName: !Ref ConfigBucket
+
+  # =================================================================
+  # == AWS Config Rules for S3 Security
+  # =================================================================
+
+  S3PublicReadProhibitedRule:
+    Type: 'AWS::Config::ConfigRule'
+    Properties:
+      ConfigRuleName: !Sub 's3-bucket-public-read-prohibited-${EnvironmentSuffix}'
+      Description: 'Checks that S3 buckets do not allow public read access.'
+      Source:
+        Owner: 'AWS'
+        SourceIdentifier: 'S3_BUCKET_PUBLIC_READ_PROHIBITED'
+    DependsOn:
+      - ConfigurationRecorder
+      - DeliveryChannel
+
+  S3PublicWriteProhibitedRule:
+    Type: 'AWS::Config::ConfigRule'
+    Properties:
+      ConfigRuleName: !Sub 's3-bucket-public-write-prohibited-${EnvironmentSuffix}'
+      Description: 'Checks that S3 buckets do not allow public write access.'
+      Source:
+        Owner: 'AWS'
+        SourceIdentifier: 'S3_BUCKET_PUBLIC_WRITE_PROHIBITED'
+    DependsOn:
+      - ConfigurationRecorder
+      - DeliveryChannel
+
+  # =================================================================
+  # == Demonstration Resources
+  # =================================================================
+
+  SampleS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub '${SampleS3BucketName}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+Outputs:
+  MfaPolicyArn:
+    Description: 'ARN of the MFA Enforcement Policy'
+    Value: !Ref MfaEnforcedPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-MfaPolicyArn'
+
+  MfaEnforcedUsersGroupName:
+    Description: 'Name of the IAM group for MFA-enforced users.'
+    Value: !Ref MfaEnforcedUsersGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-MfaEnforcedUsersGroupName'
+
+  ConfigBucketNameOutput:
+    Description: 'Name of the S3 bucket used for AWS Config logs.'
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigBucketNameOutput'
+
+  SampleS3BucketNameOutput:
+    Description: 'Name of the sample S3 bucket created for demonstration.'
+    Value: !Ref SampleS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-SampleS3BucketNameOutput'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'

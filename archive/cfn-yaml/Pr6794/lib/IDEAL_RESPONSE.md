@@ -1,0 +1,987 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-ready multi-tier web application infrastructure in us-west-2'
+
+# Template Parameters
+Parameters:
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI ID (auto-updated via SSM)
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+  KeyName:
+    Description: (Optional) EC2 Key Pair for SSH access - leave empty to disable SSH key
+    Type: String
+    Default: ''
+
+  DBUsername:
+    Description: Database master username
+    Type: String
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
+    Default: dbadmin
+
+  CreateNATGateways:
+    Description: Create NAT Gateways for private subnet internet access (requires 2 EIPs - AWS limit is 5 per region)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyName, '']]
+  ShouldCreateNATGateways: !Equals [!Ref CreateNATGateways, 'true']
+
+Resources:
+  # ==========================================
+  # KMS Keys for Encryption
+  # ==========================================
+
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for EBS and S3 encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow services to use the key
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - s3.amazonaws.com
+                - rds.amazonaws.com
+                - cloudwatch.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/production-encryption-key
+      TargetKeyId: !Ref KMSKey
+
+  # ==========================================
+  # Secrets Manager for Database Password
+  # ==========================================
+
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: production-db-password
+      Description: Master password for RDS MySQL database
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      KmsKeyId: !Ref KMSKey
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  # ==========================================
+  # VPC and Networking
+  # ==========================================
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: Production-VPC
+        - Key: Environment
+          Value: Production
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Production-IGW
+        - Key: Environment
+          Value: Production
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public-Subnet-AZ1
+        - Key: Environment
+          Value: Production
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public-Subnet-AZ2
+        - Key: Environment
+          Value: Production
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: Private-Subnet-AZ1
+        - Key: Environment
+          Value: Production
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.20.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: Private-Subnet-AZ2
+        - Key: Environment
+          Value: Production
+
+  # NAT Gateways (Optional - controlled by CreateNATGateways parameter)
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
+    Properties:
+      AllocationId: !GetAtt NATGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public-RouteTable
+        - Key: Environment
+          Value: Production
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private-RouteTable-AZ1
+        - Key: Environment
+          Value: Production
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private-RouteTable-AZ2
+        - Key: Environment
+          Value: Production
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway2
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # ==========================================
+  # Security Groups
+  # ==========================================
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: ALB-SecurityGroup
+        - Key: Environment
+          Value: Production
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for web servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: WebServer-SecurityGroup
+        - Key: Environment
+          Value: Production
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: Database-SecurityGroup
+        - Key: Environment
+          Value: Production
+
+  # ==========================================
+  # IAM Roles and Policies
+  # ==========================================
+
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource:
+                  - !Sub '${LogsBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt LogsBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource:
+                  - !GetAtt KMSKey.Arn
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # ==========================================
+  # S3 Buckets
+  # ==========================================
+
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'production-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KMSKey
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+            NoncurrentVersionTransitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  ContentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'production-content-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  ContentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ContentBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
+            Action: 's3:GetObject'
+            Resource: !Sub '${ContentBucket.Arn}/*'
+
+  # ==========================================
+  # CloudFront Distribution
+  # ==========================================
+
+  CloudFrontOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: OAI for Production Content Distribution
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Production Content Distribution
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt ContentBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          DefaultTTL: 86400  # 24 hours
+          MinTTL: 0
+          MaxTTL: 31536000
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  # ==========================================
+  # RDS Database
+  # ==========================================
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  RDSDatabase:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: production-database
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.39'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      MultiAZ: true
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  # ==========================================
+  # Application Load Balancer
+  # ==========================================
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: Production-ALB
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: Production-TargetGroup
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # ==========================================
+  # Launch Template and Auto Scaling
+  # ==========================================
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: Production-LaunchTemplate
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t3.micro
+        KeyName: !If [HasKeyPair, !Ref KeyName, !Ref 'AWS::NoValue']
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd amazon-cloudwatch-agent
+
+            # Configure CloudWatch agent
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+            {
+              "metrics": {
+                "namespace": "Production/EC2",
+                "metrics_collected": {
+                  "cpu": {
+                    "measurement": [
+                      {"name": "cpu_usage_idle", "rename": "CPU_IDLE", "unit": "Percent"},
+                      {"name": "cpu_usage_iowait", "rename": "CPU_IOWAIT", "unit": "Percent"}
+                    ],
+                    "metrics_collection_interval": 60
+                  },
+                  "mem": {
+                    "measurement": [
+                      {"name": "mem_used_percent", "rename": "MEM_USED", "unit": "Percent"}
+                    ],
+                    "metrics_collection_interval": 60
+                  }
+                }
+              }
+            }
+            EOF
+
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+              -a fetch-config \
+              -m ec2 \
+              -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+              -s
+
+            # Start web server
+            systemctl start httpd
+            systemctl enable httpd
+
+            # Create health check endpoint
+            echo "OK" > /var/www/html/health
+
+            # Create sample index page
+            cat > /var/www/html/index.html <<EOF
+            <!DOCTYPE html>
+            <html>
+            <head><title>Production App</title></head>
+            <body><h1>Production Multi-Tier Application</h1></body>
+            </html>
+            EOF
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: Production-WebServer
+              - Key: Environment
+                Value: Production
+          - ResourceType: volume
+            Tags:
+              - Key: Environment
+                Value: Production
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: Production-ASG
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 6
+      DesiredCapacity: 2
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      Tags:
+        - Key: Name
+          Value: Production-Instance
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: Production
+          PropagateAtLaunch: true
+
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: 1
+
+  ScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: -1
+
+  # ==========================================
+  # CloudWatch Alarms
+  # ==========================================
+
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Production-HighCPU
+      AlarmDescription: Alert when average CPU exceeds 80%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      AlarmActions:
+        - !Ref ScaleUpPolicy
+
+  LowCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Production-LowCPU
+      AlarmDescription: Alert when average CPU is below 20%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 20
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      AlarmActions:
+        - !Ref ScaleDownPolicy
+
+  HighMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Production-HighMemory
+      AlarmDescription: Alert when memory usage exceeds 80%
+      MetricName: MEM_USED
+      Namespace: Production/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+
+  UnHealthyHostAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Production-UnhealthyHosts
+      AlarmDescription: Alert when unhealthy target count exceeds 0
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TargetGroup
+          Value: !GetAtt ALBTargetGroup.TargetGroupFullName
+        - Name: LoadBalancer
+          Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+
+# ==========================================
+# Outputs
+# ==========================================
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: Production-VPC-ID
+
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: Production-ALB-DNS
+
+  CloudFrontURL:
+    Description: CloudFront Distribution URL
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Export:
+      Name: Production-CloudFront-URL
+
+  LogsBucket:
+    Description: S3 Bucket for logs
+    Value: !Ref LogsBucket
+    Export:
+      Name: Production-Logs-Bucket
+
+  ContentBucket:
+    Description: S3 Bucket for content
+    Value: !Ref ContentBucket
+    Export:
+      Name: Production-Content-Bucket
+
+  DatabaseEndpoint:
+    Description: RDS Database Endpoint
+    Value: !GetAtt RDSDatabase.Endpoint.Address
+    Export:
+      Name: Production-DB-Endpoint
+
+  DBPasswordSecretArn:
+    Description: ARN of the Secrets Manager secret containing database password
+    Value: !Ref DBPasswordSecret
+    Export:
+      Name: Production-DB-Password-Secret-ARN
+
+  DBPasswordSecretName:
+    Description: Name of the Secrets Manager secret containing database password
+    Value: production-db-password
+    Export:
+      Name: Production-DB-Password-Secret-Name
+
+  KMSKeyId:
+    Description: KMS Key ID for encryption
+    Value: !Ref KMSKey
+    Export:
+      Name: Production-KMS-Key-ID
+
+  KMSKeyArn:
+    Description: KMS Key ARN for encryption
+    Value: !GetAtt KMSKey.Arn
+    Export:
+      Name: Production-KMS-Key-ARN
+
+  ALBSecurityGroupId:
+    Description: Security Group ID for Application Load Balancer
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: Production-ALB-Security-Group-ID
+
+  WebServerSecurityGroupId:
+    Description: Security Group ID for Web Servers
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: Production-WebServer-Security-Group-ID
+
+  DatabaseSecurityGroupId:
+    Description: Security Group ID for Database
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: Production-Database-Security-Group-ID
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: Production-Public-Subnet-1-ID
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: Production-Public-Subnet-2-ID
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: Production-Private-Subnet-1-ID
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: Production-Private-Subnet-2-ID
+
+  ALBTargetGroupArn:
+    Description: Application Load Balancer Target Group ARN
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: Production-ALB-TargetGroup-ARN
+
+  ALBArn:
+    Description: Application Load Balancer ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: Production-ALB-ARN
+
+  AutoScalingGroupName:
+    Description: Auto Scaling Group Name
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: Production-ASG-Name
+
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: Production-LaunchTemplate-ID
+
+  DatabasePort:
+    Description: RDS Database Port
+    Value: '3306'
+    Export:
+      Name: Production-DB-Port
+
+  DatabaseName:
+    Description: RDS Database Instance Identifier
+    Value: production-database
+    Export:
+      Name: Production-DB-Name
+
+  DBUsername:
+    Description: Database master username
+    Value: !Ref DBUsername
+    Export:
+      Name: Production-DB-Username
+
+  EC2InstanceRoleArn:
+    Description: EC2 Instance IAM Role ARN
+    Value: !GetAtt EC2InstanceRole.Arn
+    Export:
+      Name: Production-EC2-Role-ARN
+
+  EC2InstanceProfileArn:
+    Description: EC2 Instance Profile ARN
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: Production-EC2-InstanceProfile-ARN
+
+  CloudFrontDistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: Production-CloudFront-ID
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: Production-IGW-ID
+
+  DBSubnetGroupName:
+    Description: RDS DB Subnet Group Name
+    Value: !Ref DBSubnetGroup
+    Export:
+      Name: Production-DB-SubnetGroup-Name
+```
