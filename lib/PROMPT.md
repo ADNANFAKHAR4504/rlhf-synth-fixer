@@ -1,18 +1,29 @@
-Here’s a more natural, human-written prompt you can paste into Claude:
+I need help setting up AWS IAM with Terraform for a multi-account setup. We're running in us-east-1 and eu-west-1, and need secure cross-account access that passes SOC 2 audits.
 
-I’m wiring up AWS IAM with Terraform and I need production-ready HCL that’s secure, audit-friendly, and easy to extend. Please write the code so it passes SOC 2/GDPR scrutiny and follows least-privilege by default—no blanket wildcards; scope actions to specific resources and use `Condition` where it makes sense. Tag every IAM resource for auditability with `owner`, `purpose`, and `env`, and use a consistent `Name`. All roles and policy names should start with `corp-`. The estate span multiple AWS accounts and two regions (us-east-1 and eu-west-1), and some roles will be assumed cross-account (think `assume_role` with an optional external ID).
+Here's how everything connects:
+- IAM roles in our main account will assume roles in target accounts using trust policies with external IDs
+- A security auditor role will read from CloudTrail logs stored in S3, pull IAM metadata, and query AWS Config for compliance checks
+- A CI deployer role will write to specific S3 buckets and invoke Lambda functions for deployments
+- A breakglass role will have elevated access to EC2 and RDS but only when MFA is present
+- All roles are restricted by a permission boundary that blocks wildcard admin actions and enforces regional limits
 
-Keep the repo simple: Terraform v1.0+ with the AWS provider, and put everything in exactly two files at the root—`provider.tf` and `tap_stack.tf`. No extra folders or files, no Terragrunt.
+Put everything in two files: provider.tf and tap_stack.tf. Use Terraform 1.0+ with the AWS provider.
 
-In `provider.tf`, include: the Terraform and provider blocks (pin the AWS provider version); default region `us-east-1` plus an `eu` alias for `eu-west-1`; an example of assuming into a target account via `assume_role` (account ID and role name as variables); and `default_tags` so `owner`, `purpose`, and `env` flow everywhere.
+In provider.tf:
+- Pin the AWS provider version
+- Set default region to us-east-1 and add an eu alias for eu-west-1
+- Configure assume_role for cross-account access with variables for account ID and role name
+- Use default_tags so owner, purpose, and env tags get applied everywhere
 
-In `tap_stack.tf`, set up `locals` for `name_prefix = "corp-"` and a `common_tags` map that gets merged into all resources. Add a practical permission boundary that blocks dangerous patterns (e.g., no wildcard admin, restrict actions to the two allowed regions, and deny sensitive console actions if `aws:MultiFactorAuthPresent` is false). Keep it tight and comment briefly on why each restriction exists. Model roles from a single `var.roles` map so I can define multiple roles at once. For each role, I want a trust policy (via `aws_iam_policy_document`) that can handle same-account or cross-account principals and optionally requires an external ID; one or more least-privilege inline policies (prefer `aws_iam_policy_document` + `aws_iam_role_policy`; attach AWS managed policies only when truly appropriate); the permission boundary attached; and names shaped like `corp-<purpose>-<env>` (e.g., `corp-ci-deployer-dev`). Please include three clear examples:
-• `corp-security-auditor-ENV`: focused read access for SOC 2 evidence (logs, IAM read, Config read, CloudTrail read) without resorting to a giant “read-everything” policy.
-• `corp-ci-deployer-ENV`: can assume a narrow set of deploy roles and write only to specific resources/paths (show resource-level scoping).
-• `corp-breakglass-ENV`: powerful but contained by the permission boundary, with short session duration and comments on when/how it’s used.
+In tap_stack.tf:
+- Create a permission boundary policy that denies wildcard admin access, restricts actions to us-east-1 and eu-west-1 only, and blocks sensitive console actions unless MFA is used
+- Build three IAM roles with least privilege inline policies, each using the permission boundary:
+  1. corp-security-auditor-ENV: reads CloudTrail logs from S3, pulls IAM details, queries Config
+  2. corp-ci-deployer-ENV: writes to specific S3 paths, invokes Lambda functions for CI/CD
+  3. corp-breakglass-ENV: manages EC2 instances and RDS databases but requires MFA and has short session duration
+- Each role should have a trust policy that handles cross-account assume role with optional external ID
+- Tag everything with owner, purpose, and env for audit tracking
 
-Expose variables for `env` (`dev` | `staging` | `prod`), `owner`, `purpose`, `target_account_id`, `external_id` (optional), and `roles` (a map/object describing purpose, trusted principals, and allowed actions/resources). Add outputs for each role ARN, the permission boundary ARN, and a flattened list of final tags.
+Add variables for env, owner, purpose, target_account_id, and external_id. Output the role ARNs and permission boundary ARN.
 
-Sprinkle short comments that tie choices to SOC 2/GDPR expectations (e.g., MFA requirements = stronger access control; permission boundary = preventive control; tagging = asset inventory & traceability). As a comment, include a tiny CI snippet showing `terraform fmt -check`, `terraform validate`, `tflint`, and `checkov`. Also add a couple of “sanity” examples in comments—e.g., show that a wildcard action would be blocked by the boundary, and that a user without MFA can’t perform a sensitive action.
-
-Style-wise, keep it tidy and straightforward. Prefer `aws_iam_policy_document` over raw JSON blobs, use realistic names with the `corp-` prefix and an `env` suffix, and don’t over-engineer—make it easy to extend to edit `var.roles`. Return only the two files, `provider.tf` and `tap_stack.tf`, with the code and comments described above.
+Keep it clean and commented. Show how the permission boundary blocks dangerous patterns and how roles connect to actual AWS services.
