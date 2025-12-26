@@ -26,5 +26,12 @@
     "Auto Scaling",
     "SNS",
     "Route53"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
 }
