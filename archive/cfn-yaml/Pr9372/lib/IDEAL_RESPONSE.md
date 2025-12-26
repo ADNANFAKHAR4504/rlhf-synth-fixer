@@ -1,0 +1,559 @@
+# IDEAL RESPONSE: Security Configuration as Code Implementation
+
+This document contains the complete, production-ready CloudFormation template implementing comprehensive AWS security best practices.
+
+## CloudFormation Template
+
+### TapStack.yml
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Comprehensive AWS Security Infrastructure - TAP Stack with Enhanced Security Features'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+          - AllowedSSHCIDR
+          - NotificationEmail
+      - Label:
+          default: 'Security Configuration'
+        Parameters:
+          - EnableGuardDuty
+          - EnableDetailedMonitoring
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  AllowedSSHCIDR:
+    Type: String
+    Default: '10.0.0.0/8'
+    Description: 'CIDR block allowed for SSH access to EC2 instances'
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: 'Must be a valid CIDR block (e.g., 10.0.0.0/8)'
+
+  NotificationEmail:
+    Type: String
+    Description: 'Email address for security notifications and alarms'
+    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    ConstraintDescription: 'Must be a valid email address'
+
+  EnableGuardDuty:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable GuardDuty threat detection service'
+
+  EnableDetailedMonitoring:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable detailed monitoring for EC2 instances'
+
+Resources:
+  # VPC and Networking Infrastructure
+  SecureVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: 'default'
+      Tags:
+        - Key: Name
+          Value: !Sub 'SecureVPC-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'PublicSubnet-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'PrivateSubnet-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'IGW-${EnvironmentSuffix}'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SecureVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'PublicRT-${EnvironmentSuffix}'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # Security Groups with Restrictive Rules
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for web servers with restrictive access'
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSSHCIDR
+          Description: 'SSH access from allowed CIDR'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP access'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS access'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub 'WebSecurityGroup-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Roles and Policies
+  EC2SecurityRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'EC2SecurityRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: 'S3ReadOnlyAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${SecureDataBucket.Arn}/*'
+                  - !GetAtt SecureDataBucket.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub 'EC2InstanceProfile-${EnvironmentSuffix}'
+      Roles:
+        - !Ref EC2SecurityRole
+
+  # S3 Buckets with Encryption and Security
+  SecureDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'secure-data-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogBucket
+        LogFilePrefix: 'access-logs/'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  S3AccessLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'secure-access-logs-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # S3 Bucket Policies for HTTPS-only access
+  SecureDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'DenyInsecureConnections'
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${SecureDataBucket.Arn}/*'
+              - !GetAtt SecureDataBucket.Arn
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+  # EC2 Instance with Security Configuration
+  SecureWebServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      InstanceType: 't3.micro'
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref WebSecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      Monitoring: !Ref EnableDetailedMonitoring
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum update -y
+          yum install -y amazon-cloudwatch-agent
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default
+      Tags:
+        - Key: Name
+          Value: !Sub 'SecureWebServer-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # SNS Topic for Notifications
+  SecurityAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'SecurityAlerts-${EnvironmentSuffix}'
+      KmsMasterKeyId: alias/aws/sns
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  SecurityAlertsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SecurityAlertsTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  # CloudWatch Log Groups
+  S3AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/s3/access-logs/${EnvironmentSuffix}'
+      RetentionInDays: 30
+
+  SecurityLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/security/alerts/${EnvironmentSuffix}'
+      RetentionInDays: 90
+
+  # CloudWatch Alarms
+  UnauthorizedAPICallsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'UnauthorizedAPICallsAlarm-${EnvironmentSuffix}'
+      AlarmDescription: 'Alarm for unauthorized API calls detected by CloudTrail'
+      MetricName: 'ErrorCount'
+      Namespace: 'CloudTrailMetrics'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref SecurityAlertsTopic
+      TreatMissingData: notBreaching
+
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'HighCPUUtilization-${EnvironmentSuffix}'
+      AlarmDescription: 'Alarm for high CPU utilization on EC2 instances'
+      MetricName: 'CPUUtilization'
+      Namespace: 'AWS/EC2'
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref SecureWebServer
+      AlarmActions:
+        - !Ref SecurityAlertsTopic
+
+  UnusualS3ActivityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'UnusualS3Activity-${EnvironmentSuffix}'
+      AlarmDescription: 'Alarm for unusual S3 access patterns'
+      MetricName: 'NumberOfObjects'
+      Namespace: 'AWS/S3'
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: BucketName
+          Value: !Ref SecureDataBucket
+      AlarmActions:
+        - !Ref SecurityAlertsTopic
+      TreatMissingData: notBreaching
+
+  # GuardDuty Configuration
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Condition: EnableGuardDutyCondition
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+      DataSources:
+        S3Logs:
+          Enable: true
+        MalwareProtection:
+          ScanEc2InstanceWithFindings:
+            EbsVolumes: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  GuardDutyThreatIntelSet:
+    Type: AWS::GuardDuty::ThreatIntelSet
+    Condition: EnableGuardDutyCondition
+    Properties:
+      Activate: true
+      DetectorId: !Ref GuardDutyDetector
+      Format: TXT
+      Location: 'https://s3.amazonaws.com/public-threat-intel/sample-threat-list.txt'
+      Name: !Sub 'ThreatIntelSet-${EnvironmentSuffix}'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Original DynamoDB Table (maintained from existing template)
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+Conditions:
+  EnableGuardDutyCondition: !Equals [!Ref EnableGuardDuty, 'true']
+
+Outputs:
+  VPCId:
+    Description: 'ID of the created VPC'
+    Value: !Ref SecureVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  PublicSubnetId:
+    Description: 'ID of the public subnet'
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnetId'
+
+  PrivateSubnetId:
+    Description: 'ID of the private subnet'
+    Value: !Ref PrivateSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnetId'
+
+  SecureDataBucketName:
+    Description: 'Name of the secure S3 data bucket'
+    Value: !Ref SecureDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-SecureDataBucketName'
+
+  GuardDutyDetectorId:
+    Condition: EnableGuardDutyCondition
+    Description: 'ID of the GuardDuty detector'
+    Value: !Ref GuardDutyDetector
+    Export:
+      Name: !Sub '${AWS::StackName}-GuardDutyDetectorId'
+
+  SecurityAlertsTopicArn:
+    Description: 'ARN of the security alerts SNS topic'
+    Value: !Ref SecurityAlertsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityAlertsTopicArn'
+
+  EC2InstanceId:
+    Description: 'ID of the secure web server instance'
+    Value: !Ref SecureWebServer
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2InstanceId'
+
+  # Original DynamoDB outputs (maintained)
+  TurnAroundPromptTableName:
+    Description: 'Name of the DynamoDB table'
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
+
+  TurnAroundPromptTableArn:
+    Description: 'ARN of the DynamoDB table'
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+```
+
+### AWS_REGION
+
+```text
+us-east-1
+```
+
+## Security Features Implemented
+
+### 1. Network Security
+- VPC with proper DNS configuration
+- Public and private subnets with controlled routing
+- Security groups with least privilege access
+- SSH access restricted to specific CIDR ranges
+
+### 2. Identity and Access Management
+- IAM roles instead of users for EC2 instances
+- Instance profiles for secure credential delivery
+- Least privilege IAM policies
+- CloudWatch and SSM integration for monitoring
+
+### 3. Data Protection
+- S3 buckets with AES-256 encryption enabled
+- Versioning enabled for data protection
+- Public access completely blocked
+- HTTPS-only bucket policies enforced
+
+### 4. Monitoring and Alerting
+- CloudWatch alarms for security events
+- SNS notifications for immediate alerts
+- Log groups with appropriate retention
+- Multi-dimensional alarm configuration
+
+### 5. Advanced Threat Detection
+- GuardDuty with S3 protection enabled
+- Malware scanning for EC2 instances
+- Threat intelligence integration
+- Configurable threat detection settings
+
+### 6. Database Security
+- DynamoDB with KMS encryption
+- Point-in-time recovery enabled
+- Deletion protection disabled for testing
+- Pay-per-request billing mode
+
+## Deployment Configuration
+
+### Parameters
+- **EnvironmentSuffix**: Supports multi-environment deployments
+- **AllowedSSHCIDR**: Configurable SSH access restrictions
+- **NotificationEmail**: Security alert destination
+- **EnableGuardDuty**: Optional threat detection service
+- **EnableDetailedMonitoring**: Configurable EC2 monitoring
+
+### Outputs
+- Complete set of resource identifiers for integration
+- Cross-stack reference exports
+- Network, security, and database resource details
+- Environment and stack identification
+
+This implementation provides comprehensive security coverage following AWS best practices and the Well-Architected Security Pillar guidelines.
