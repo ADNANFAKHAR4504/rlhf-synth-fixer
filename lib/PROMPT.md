@@ -1,16 +1,19 @@
-## Building a High-Availability AWS Network
+Create a production-ready VPC network infrastructure using AWS CloudFormation that spans multiple availability zones for high availability. The network should support both public-facing and private backend workloads with proper isolation.
 
-Hey, we need to set up a solid, highly available network on AWS using a CloudFormation YAML template.
+## Network Architecture
 
-Here's what the network needs to look like:
+Design a VPC where public subnets connect directly to the internet through an Internet Gateway, enabling web servers and load balancers to receive external traffic. Private subnets should route outbound traffic through NAT Gateways placed in each availability zone, allowing backend services to download updates and reach external APIs without exposing them to inbound internet connections.
 
-- We'll build a main network (VPC) that spreads across two different availability zones.
-- In each of those zones, we need one public part and one private part for the network.
-- We'll put an Internet Gateway on the public parts so things can talk to the Internet.
-- Also, set up two NAT Gateways, one in each public zone. There is stuff in our private networks that can get out to the internet without being directly exposed.
-- For security, we'll set up rules to let in HTTP (port 80) and HTTPS (port 443) traffic to the public parts of our network.
-- And for one of the private sections, we'll allow SSH (port 22) access, but only from a specific set of IP addresses.
+## Infrastructure Requirements
 
-We're going to put all this in the `us-west-2` region(MUST). The goal is a super resilient, high-availability setup that follows all the good practices. Oh, and remember to tag everything with 'Environment: Production'.
+Deploy the VPC across two availability zones with matching subnet pairs in each zone. Public subnets need routes that direct internet-bound traffic to the Internet Gateway, while private subnets route through NAT Gateways for outbound-only connectivity.
 
-What we need back is a complete and working CloudFormation YAML template. It should do everything we just talked about and work when we test it out.
+Configure security groups that allow web traffic to reach public resources and enable private instances to communicate with each other within the VPC. Network ACLs should provide an additional layer of defense at the subnet boundary, permitting necessary traffic flows while blocking everything else by default.
+
+## Expected Resources
+
+The CloudFormation template should provision the complete network stack including the VPC, public and private subnets in each availability zone, an Internet Gateway attached to the VPC, NAT Gateways with Elastic IPs in each public subnet, route tables that direct traffic appropriately, security groups for common workload patterns, and network ACLs with explicit allow rules for required traffic.
+
+## Deployment Notes
+
+Use CloudFormation parameters to allow customization of CIDR blocks and environment naming. Export key resource IDs so other stacks can reference this network infrastructure. Ensure all resources follow AWS tagging best practices for cost allocation and resource management.
