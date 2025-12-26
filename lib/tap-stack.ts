@@ -38,8 +38,9 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     // LocalStack-compatible AWS provider configuration
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                         process.env.AWS_ENDPOINT_URL?.includes('4566');
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
 
     new AwsProvider(this, 'aws-default', {
       region: 'us-east-1',
@@ -49,21 +50,25 @@ export class TapStack extends TerraformStack {
       skipMetadataApiCheck: isLocalStack ? 'true' : undefined,
       skipRequestingAccountId: isLocalStack ? true : undefined,
       s3UsePathStyle: isLocalStack ? true : undefined,
-      endpoints: isLocalStack ? [{
-        apigateway: 'http://localhost:4566',
-        cloudformation: 'http://localhost:4566',
-        cloudwatch: 'http://localhost:4566',
-        cloudwatchlogs: 'http://localhost:4566',
-        dynamodb: 'http://localhost:4566',
-        ec2: 'http://localhost:4566',
-        iam: 'http://localhost:4566',
-        kms: 'http://localhost:4566',
-        lambda: 'http://localhost:4566',
-        s3: 'http://localhost:4566',
-        sns: 'http://localhost:4566',
-        sqs: 'http://localhost:4566',
-        sts: 'http://localhost:4566',
-      }] : undefined,
+      endpoints: isLocalStack
+        ? [
+            {
+              apigateway: 'http://localhost:4566',
+              cloudformation: 'http://localhost:4566',
+              cloudwatch: 'http://localhost:4566',
+              cloudwatchlogs: 'http://localhost:4566',
+              dynamodb: 'http://localhost:4566',
+              ec2: 'http://localhost:4566',
+              iam: 'http://localhost:4566',
+              kms: 'http://localhost:4566',
+              lambda: 'http://localhost:4566',
+              s3: 'http://localhost:4566',
+              sns: 'http://localhost:4566',
+              sqs: 'http://localhost:4566',
+              sts: 'http://localhost:4566',
+            },
+          ]
+        : undefined,
     });
 
     for (const config of props.environments) {
