@@ -1,6 +1,7 @@
 plugins {
     id 'application'
     id 'java'
+    id 'jacoco'
 }
 
 group 'app'
@@ -49,6 +50,20 @@ tasks.named('test') {
     testLogging {
         events "passed", "skipped", "failed"
         exceptionFormat "full"
+    }
+    finalizedBy jacocoTestReport
+}
+
+// Configure JaCoCo for code coverage
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
     }
 }
 
