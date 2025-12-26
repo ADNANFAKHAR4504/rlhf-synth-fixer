@@ -1,0 +1,228 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  TAP Stack - Task Assignment Platform Infrastructure (LocalStack Community Edition)
+  Simplified storage and IAM infrastructure compatible with LocalStack Community Edition.
+
+  Note: This is a LocalStack-compatible version. The original template used EC2 instances,
+  VPC networking, and CloudWatch Alarms which are not available in LocalStack Community Edition.
+
+  This simplified version provides:
+  - S3 bucket for application data storage
+  - IAM roles and policies for service access
+  - CloudWatch Logs for application logging
+  - Basic monitoring capabilities
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'development'
+    Description: 'Environment designation for resource tagging (lowercase for S3 compatibility)'
+    AllowedValues: [development, staging, production]
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+
+  ApplicationName:
+    Type: String
+    Default: 'tap'
+    Description: 'Application name for resource naming (lowercase for S3 compatibility)'
+    MinLength: 1
+    MaxLength: 20
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+
+Resources:
+  # ===== IAM ROLES AND POLICIES =====
+
+  # IAM Role for application services (Lambda, ECS, etc.)
+  ApplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ApplicationName}-${Environment}-AppRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3DataAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${DataBucket.Arn}/*'
+                  - !GetAtt DataBucket.Arn
+        - PolicyName: LogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/${ApplicationName}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-${Environment}-AppRole'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  # ===== STORAGE & DATA MANAGEMENT =====
+
+  # Primary S3 Bucket for application data
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ApplicationName}-${Environment}-data-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: STANDARD_IA
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-${Environment}-DataBucket'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Application Data Storage'
+
+  # S3 Bucket for application logs
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ApplicationName}-${Environment}-logs-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-${Environment}-LogsBucket'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'Application Logs Storage'
+
+  # ===== MONITORING & LOGGING =====
+
+  # CloudWatch Log Group for application logs
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/${ApplicationName}/${Environment}/application'
+      RetentionInDays: 14
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-${Environment}-AppLogGroup'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Log Group for access logs
+  AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/${ApplicationName}/${Environment}/access'
+      RetentionInDays: 7
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-${Environment}-AccessLogGroup'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Log Group for error logs
+  ErrorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/${ApplicationName}/${Environment}/error'
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-${Environment}-ErrorLogGroup'
+        - Key: Environment
+          Value: !Ref Environment
+
+# ===== OUTPUTS =====
+
+Outputs:
+  DataBucketName:
+    Description: 'Name of the primary data S3 bucket'
+    Value: !Ref DataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-DataBucket'
+
+  DataBucketArn:
+    Description: 'ARN of the primary data S3 bucket'
+    Value: !GetAtt DataBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DataBucket-Arn'
+
+  LogsBucketName:
+    Description: 'Name of the logs S3 bucket'
+    Value: !Ref LogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LogsBucket'
+
+  ApplicationRoleName:
+    Description: 'Name of the application IAM role'
+    Value: !Ref ApplicationRole
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationRole'
+
+  ApplicationRoleArn:
+    Description: 'ARN of the application IAM role'
+    Value: !GetAtt ApplicationRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationRole-Arn'
+
+  ApplicationLogGroupName:
+    Description: 'Name of the application CloudWatch log group'
+    Value: !Ref ApplicationLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationLogGroup'
+
+  AccessLogGroupName:
+    Description: 'Name of the access CloudWatch log group'
+    Value: !Ref AccessLogGroup
+
+  ErrorLogGroupName:
+    Description: 'Name of the error CloudWatch log group'
+    Value: !Ref ErrorLogGroup
