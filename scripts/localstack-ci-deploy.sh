@@ -506,11 +506,37 @@ deploy_cdktf() {
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
     local output_json="{}"
-    
+
+    # Try cdktf output first (may not work if terraform reinitializes)
     if npx --yes cdktf output --outputs-file "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null; then
         output_json=$(cat "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null || echo "{}")
     fi
-    
+
+    # Fallback: Read outputs directly from terraform state in cdktf.out
+    if [ "$output_json" == "{}" ] || [ -z "$output_json" ]; then
+        print_status $YELLOW "⚠️ cdktf output returned empty, reading from terraform state..."
+
+        # Find the stack directory in cdktf.out
+        local stack_dir=$(find "$PROJECT_ROOT/cdktf.out" -maxdepth 1 -type d -name "stacks" 2>/dev/null | head -1)
+        if [ -d "$stack_dir" ]; then
+            # Find the first stack subdirectory
+            local first_stack=$(find "$stack_dir" -maxdepth 1 -type d ! -path "$stack_dir" | head -1)
+            if [ -d "$first_stack" ]; then
+                print_status $YELLOW "Reading outputs from: $first_stack"
+                cd "$first_stack"
+
+                # Run terraform output to get the outputs
+                if terraform output -json > /tmp/tf-outputs.json 2>/dev/null; then
+                    # Convert terraform output format to flat key-value pairs
+                    output_json=$(jq -r 'to_entries | map({key: .key, value: .value.value}) | from_entries' /tmp/tf-outputs.json 2>/dev/null || echo "{}")
+                    rm -f /tmp/tf-outputs.json
+                fi
+
+                cd "$PROJECT_ROOT"
+            fi
+        fi
+    fi
+
     save_outputs "$output_json"
 }
 
