@@ -12,7 +12,7 @@ We need to set up secure AWS infrastructure using Terraform CDK with TypeScript 
 
 ### Security Configuration
 Security groups should:
-- Allow HTTP (port 80) and HTTPS (port 443) inbound
+- Allow HTTP on port 80 and HTTPS on port 443 inbound
 - Allow outbound traffic for web server responses and external API calls
 
 Network ACLs need to:
@@ -26,7 +26,7 @@ Network ACLs need to:
 
 ### Storage Requirements
 - S3 bucket for application logs
-- Server-side encryption enabled (AES-256 or KMS)
+- Server-side encryption enabled using AES-256 or KMS
 - EC2 instance should have write-only access to this bucket
 
 ### Access Management
