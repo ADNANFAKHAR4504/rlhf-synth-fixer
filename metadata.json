@@ -13,9 +13,8 @@
     "Security Configuration as Code",
     "General Infrastructure Tooling QA",
     "IaC Optimization",
-    "Observability and Monitoring"
+    "Infrastructure Analysis/Monitoring"
   ],
-  "training_quality": 10,
   "aws_services": [
     "CloudWatch",
     "IAM",

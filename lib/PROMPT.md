@@ -6,12 +6,12 @@ A financial services company needs to implement comprehensive observability for 
 
 ## Requirements
 
-Create a CloudFormation template (JSON format) to deploy an observability stack for payment processing infrastructure. The configuration must:
+Create a CloudFormation JSON template to deploy an observability stack for payment processing infrastructure. The configuration must:
 
 1. Create encrypted CloudWatch Log Groups with 30-day retention and KMS encryption
 2. Deploy CloudWatch Dashboard with widgets for API Gateway latency, Lambda errors, and custom metrics
 3. Configure X-Ray service map and sampling rules at 10% for production traffic
-4. Set up composite CloudWatch Alarms combining multiple metrics (API 5XX errors + Lambda timeouts)
+4. Set up composite CloudWatch Alarms combining multiple metrics including API 5XX errors and Lambda timeouts
 5. Create SNS topics with email subscriptions for critical alerts
 6. Store dashboard JSON configuration in Parameter Store for version control
 7. Implement CloudWatch Logs Insights queries as saved queries for common troubleshooting
@@ -31,7 +31,7 @@ Create a CloudFormation template (JSON format) to deploy an observability stack 
 
 ## Infrastructure Context
 
-Multi-region deployment across us-east-1 (primary) and eu-west-1 (secondary) for financial services compliance. Requires CloudWatch, X-Ray, and Systems Manager Parameter Store. VPC endpoints for CloudWatch and X-Ray to keep traffic private. Existing Lambda functions and API Gateway need instrumentation. KMS keys pre-created in both regions. Cross-region replication for dashboard configurations via Parameter Store. Deployment uses CloudFormation StackSets for multi-region consistency.
+Multi-region deployment across us-east-1 as the primary region and eu-west-1 as the secondary region for financial services compliance. The system connects existing Lambda functions and API Gateway to CloudWatch for metrics collection and log aggregation. Lambda functions send traces to X-Ray for distributed tracing. CloudWatch metric streams forward metrics between regions for cross-region visibility. SNS topics connect to CloudWatch Alarms to deliver notifications when thresholds are breached. Parameter Store integrates with CloudWatch Dashboards to version control dashboard configurations. VPC endpoints connect CloudWatch and X-Ray services to keep traffic private within the VPC. All resources authenticate through IAM roles that integrate with KMS for encryption operations. CloudFormation StackSets coordinate deployment across both regions for consistency.
 
 ## Expected Output
 
