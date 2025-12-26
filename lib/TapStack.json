@@ -1879,7 +1879,7 @@
         },
         "DBName": "appdb",
         "Engine": "postgres",
-        "EngineVersion": "16.4",
+        "EngineVersion": "17.2",
         "DBInstanceClass": {
           "Ref": "DBInstanceClass"
         },
