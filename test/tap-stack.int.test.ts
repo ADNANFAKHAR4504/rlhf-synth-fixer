@@ -1,6 +1,7 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 import path from 'path';
+import * as yaml from 'js-yaml';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -10,9 +11,22 @@ describe('FinanceApp Integration Tests', () => {
 
   beforeAll(() => {
     // Load template for structure validation
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    const jsonPath = path.join(__dirname, '../lib/TapStack.json');
+    const yamlPath = path.join(__dirname, '../lib/TapStack.yml');
+    
+    let templateContent: string;
+    
+    // Try JSON first, fallback to YAML
+    if (fs.existsSync(jsonPath)) {
+      templateContent = fs.readFileSync(jsonPath, 'utf8');
+      template = JSON.parse(templateContent);
+    } else if (fs.existsSync(yamlPath)) {
+      // Load and convert YAML to JSON
+      const yamlContent = fs.readFileSync(yamlPath, 'utf8');
+      template = yaml.load(yamlContent);
+    } else {
+      throw new Error('Neither TapStack.json nor TapStack.yml found');
+    }
 
     // Try to load outputs if they exist (for actual deployed resources)
     try {
@@ -340,10 +354,10 @@ describe('FinanceApp Integration Tests', () => {
       });
     });
 
-    test('RDS should use KMS encryption', () => {
+    test('RDS encryption disabled for LocalStack Community compatibility', () => {
       const rds = template.Resources.FinanceAppDatabase;
-      expect(rds.Properties.StorageEncrypted).toBe(true);
-      expect(rds.Properties.KmsKeyId).toEqual({ Ref: 'FinanceAppKMSKey' });
+      expect(rds.Properties.StorageEncrypted).toBe(false);
+      // KMS encryption removed for LocalStack compatibility
     });
 
     test('IAM roles should follow least privilege principle', () => {
@@ -424,18 +438,17 @@ describe('FinanceApp Integration Tests', () => {
   });
 
   describe('Backup and Recovery Integration', () => {
-    test('RDS should have automated backups configured', () => {
+    test('RDS backups disabled for LocalStack faster deployment', () => {
       const rds = template.Resources.FinanceAppDatabase;
       
-      expect(rds.Properties.BackupRetentionPeriod).toBe(7);
-      expect(rds.Properties.PreferredBackupWindow).toBe('03:00-04:00');
-      expect(rds.Properties.PreferredMaintenanceWindow).toBe('sun:04:00-sun:05:00');
+      expect(rds.Properties.BackupRetentionPeriod).toBe(0);
+      // Backup and maintenance windows removed for LocalStack compatibility
     });
 
-    test('RDS should have deletion protection configured for production safety', () => {
+    test('RDS deletion policy set for testing environment', () => {
       const rds = template.Resources.FinanceAppDatabase;
-      expect(rds.DeletionPolicy).toBe('Snapshot');
-      expect(rds.UpdateReplacePolicy).toBe('Snapshot');
+      expect(rds.DeletionPolicy).toBe('Delete');
+      expect(rds.UpdateReplacePolicy).toBe('Delete');
     });
 
     test('S3 bucket should have versioning enabled', () => {
@@ -587,8 +600,8 @@ describe('FinanceApp Integration Tests', () => {
       // Check for LocalStack compatibility indicators
       const rds = template.Resources.FinanceAppDatabase;
       expect(rds.Properties.MultiAZ).toBe(false); // LocalStack Community requires single-AZ
-      expect(rds.Properties.StorageEncrypted).toBe(true);
-      expect(rds.Properties.BackupRetentionPeriod).toBeGreaterThan(0);
+      expect(rds.Properties.StorageEncrypted).toBe(false); // Disabled for LocalStack Community
+      expect(rds.Properties.BackupRetentionPeriod).toBe(0); // Disabled for faster LocalStack deployment
 
       const s3 = template.Resources.FinanceAppS3Bucket;
       expect(s3.Properties.BucketEncryption).toBeDefined();
