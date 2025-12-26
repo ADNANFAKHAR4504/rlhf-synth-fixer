@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-24T06:15:00-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "101912618",
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeCommit",
+    "S3",
+    "KMS",
+    "CloudWatch Logs",
+    "CloudWatch Events",
+    "SNS",
+    "IAM",
+    "EC2",
+    "ECS",
+    "ECR"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

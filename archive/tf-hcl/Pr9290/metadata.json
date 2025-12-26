@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-ls-trainr896",
+  "team": "synth-2",
+  "startedAt": "2025-08-19T23:18:21+05:30",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "Elastic Beanstalk",
+    "RDS",
+    "Application Load Balancer",
+    "Security Groups",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Subnets",
+    "Route Tables",
+    "Elastic IP",
+    "Secrets Manager"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "ls-trainr896",
+    "pr": "Pr1706"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
