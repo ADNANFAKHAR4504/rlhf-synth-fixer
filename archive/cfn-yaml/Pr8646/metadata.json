@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291586",
+  "team": "5",
+  "startedAt": "2025-08-20T16:35:09.926Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "EC2",
+    "IAM",
+    "S3",
+    "CloudTrail",
+    "Logs",
+    "SNS",
+    "CloudWatch",
+    "ApiGateway"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "govardhan-turing",
+  "dockerS3Location": ""
+}

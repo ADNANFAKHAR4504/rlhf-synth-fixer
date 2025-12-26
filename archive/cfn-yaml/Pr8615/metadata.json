@@ -1,0 +1,31 @@
+{
+  "provider": "localstack",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292011",
+  "team": "synth-2",
+  "startedAt": "2025-08-20T17:54:15.660Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "CloudTrail",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
+}

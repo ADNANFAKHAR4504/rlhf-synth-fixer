@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr904",
+  "team": "synth-2",
+  "startedAt": "2025-08-19T18:33:09+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "iam"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr904",
+    "pr": "Pr1711"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
