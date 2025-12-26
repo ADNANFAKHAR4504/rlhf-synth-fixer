@@ -512,7 +512,7 @@ deploy_cdktf() {
         output_json=$(cat "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null || echo "{}")
     fi
 
-    # Fallback: read terraform outputs from cdktf.out directory
+    # Fallback 1: read terraform outputs from cdktf.out directory using terraform output
     if [ "$output_json" = "{}" ]; then
         print_status $BLUE "   Trying terraform output fallback..."
         for stack_dir in cdktf.out/stacks/*/; do
@@ -534,6 +534,37 @@ try:
 except:
     print('{}')
 " 2>/dev/null)
+                    break
+                fi
+            fi
+        done
+    fi
+
+    # Fallback 2: read directly from terraform.tfstate file
+    if [ "$output_json" = "{}" ]; then
+        print_status $BLUE "   Trying tfstate file fallback..."
+        for stack_dir in cdktf.out/stacks/*/; do
+            if [ -d "$stack_dir" ] && [ -f "$stack_dir/terraform.tfstate" ]; then
+                output_json=$(python3 -c "
+import sys, json
+try:
+    with open('$stack_dir/terraform.tfstate', 'r') as f:
+        state = json.load(f)
+    outputs = state.get('outputs', {})
+    flattened = {}
+    for key, value in outputs.items():
+        if isinstance(value, dict) and 'value' in value:
+            flattened[key] = value['value']
+        else:
+            flattened[key] = value
+    if flattened:
+        print(json.dumps(flattened, indent=2))
+    else:
+        print('{}')
+except Exception as e:
+    print('{}')
+" 2>/dev/null)
+                if [ "$output_json" != "{}" ] && [ -n "$output_json" ]; then
                     break
                 fi
             fi
