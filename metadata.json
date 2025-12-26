@@ -3,8 +3,8 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291564",
-  "team": "5",
+  "po_id": "LS-291564",
+  "team": "synth-2",
   "startedAt": "2025-08-14T10:17:20.356Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
@@ -17,6 +17,6 @@
     "WAF",
     "IAM"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "training_quality": 8
 }
