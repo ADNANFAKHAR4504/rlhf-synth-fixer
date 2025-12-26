@@ -70,8 +70,12 @@ export function createInfrastructure(
 
   return {
     vpcId: vpcResources.vpc.id,
-    publicSubnetIds: pulumi.all(vpcResources.publicSubnets.map(subnet => subnet.id)),
-    privateSubnetIds: pulumi.all(vpcResources.privateSubnets.map(subnet => subnet.id)),
+    publicSubnetIds: pulumi.all(
+      vpcResources.publicSubnets.map(subnet => subnet.id)
+    ),
+    privateSubnetIds: pulumi.all(
+      vpcResources.privateSubnets.map(subnet => subnet.id)
+    ),
     internetGatewayId: vpcResources.internetGateway.id,
     securityGroupId: securityGroup.id,
     ec2InstanceId: ec2Instance.id,

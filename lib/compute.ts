@@ -177,8 +177,8 @@ echo "Setup completed with SSM agent and security hardening" >> /var/log/user-da
 
       userData: userData,
 
-      // Enable detailed monitoring
-      monitoring: true,
+      // Enable detailed monitoring (disabled for LocalStack as it doesn't support MonitorInstances API)
+      monitoring: false,
 
       // EBS optimization for better performance
       ebsOptimized: true,
