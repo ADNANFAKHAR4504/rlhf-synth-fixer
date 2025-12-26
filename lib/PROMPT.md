@@ -1,75 +1,11 @@
-# CloudFormation Template Generation Prompt
+I need a CloudFormation YAML template for deploying a secure web application infrastructure to AWS.
 
-## 1. AWS CloudFormation Template Requirements
+The infrastructure should include an Application Load Balancer that routes traffic to EC2 instances running in an Auto Scaling group. The ALB needs to redirect HTTP requests to HTTPS for security. The EC2 instances connect to an RDS MySQL database that stores application data, and the database access should be restricted by CIDR range through security group rules.
 
-Create a production-ready CloudFormation template in YAML format to establish a secure and scalable web application infrastructure. The template should provision and configure a comprehensive AWS environment that emphasizes security best practices, high availability, and follows the principle of least privilege.
+For storage, create an S3 bucket with server-side encryption enabled that the application uses for static files. The EC2 instances need IAM instance profiles with least-privilege policies that allow them to access only the specific S3 bucket and other required AWS resources.
 
-Role: Infrastructure as Code (IaC) template for web application deployment
-Goal: Set up a secure, compliant, and production-ready AWS environment with proper access controls and monitoring
+All sensitive data at rest must be encrypted using KMS, including the RDS database and CloudTrail logs. Security groups should allow only necessary traffic and must not expose port 22 publicly.
 
-## 2. Environment Setup
+For compliance and monitoring, enable CloudTrail to log all API activity and set up AWS Config for resource compliance tracking. Both services should integrate with KMS encryption.
 
-Required AWS Resources:
-- S3 Bucket:
-  - Purpose: Static file storage
-  - Requirements: Server-side encryption enabled
-  
-- Application Load Balancer (ALB):
-  - Purpose: Handle web traffic
-  - Requirements: HTTP to HTTPS redirection
-  
-- EC2 Instances:
-  - Purpose: Application servers
-  - Requirements: Instance profiles for AWS resource access
-  
-- RDS Instance:
-  - Purpose: Database server
-  - Requirements: KMS encryption, CIDR-based access restrictions
-  
-- IAM Configuration:
-  - Roles and policies with least privilege access
-  - Instance profiles for EC2
-  
-- Monitoring & Logging:
-  - CloudTrail for API activity logging
-  - AWS Config for resource compliance monitoring
-  
-## 3. Constraints
-
-Security Requirements:
-- IAM policies must avoid wildcard (*) actions
-- Security groups must not allow public access to port 22
-- All sensitive data must be encrypted using KMS
-- EC2 instances must use instance profiles
-- S3 buckets require server-side encryption
-- RDS access must be CIDR-range restricted
-- ALB must redirect HTTP to HTTPS
-
-Technical Requirements:
-- Template must pass AWS CloudFormation validation and cfn-lint
-- Region should be parameterized (not hardcoded)
-- Use dynamic references for secrets instead of parameters
-- 'Fn::Sub' is not needed (no variables)
-- Avoid unexpected properties like 'BackupPolicy'
-- Include 'IsLogging' property for AWS::CloudTrail::Trail
-
-Resource Tagging:
-- All resources must include 'Environment' and 'Owner' tags for cost management
-
-## 4. Output Expectations
-
-Template Quality:
-- Successfully deploys all specified AWS resources without errors
-- Uses clear and descriptive logical resource names
-- Follows AWS best practices and security guidelines
-- Implements all security controls and monitoring requirements
-- Properly configures resource relationships and dependencies
-- Creates a complete, production-ready environment
-- Passes CloudFormation validation and linting checks
-
-Security Compliance:
-- Enforces principle of least privilege
-- Implements all required encryption mechanisms
-- Ensures secure network configuration
-- Establishes proper monitoring and logging
-- Maintains secure access controls
+Tag all resources with Environment and Owner tags for cost management. The template should be parameterized so I can deploy to different regions without hardcoding values. Make sure it passes CloudFormation validation and cfn-lint checks.

@@ -794,12 +794,7 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "EC2LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "MinSize": 1,
                 "MaxSize": 3,

@@ -483,7 +483,7 @@ Resources:
       AutoScalingGroupName: WebApp-ASG
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
-        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+        Version: "$Latest"
       MinSize: 1
       MaxSize: 3
       DesiredCapacity: 2
@@ -684,7 +684,7 @@ Outputs:
 
 ## Key Features and Security Implementations
 
-### 🔐 Security Best Practices
+### Security Best Practices
 
 1. **IAM Least Privilege**: All IAM policies use specific actions instead of wildcards
 2. **Encryption**: KMS encryption for S3, RDS, and CloudTrail
@@ -692,7 +692,7 @@ Outputs:
 4. **No SSH Access**: Port 22 is not exposed in any security group
 5. **HTTPS Enforcement**: ALB redirects HTTP to HTTPS
 
-### 🏗️ Infrastructure Components
+### Infrastructure Components
 
 1. **VPC with Multi-AZ**: Public and private subnets across multiple availability zones
 2. **Auto Scaling**: EC2 instances with auto scaling group for high availability
@@ -700,13 +700,13 @@ Outputs:
 4. **Database**: RDS MySQL with encryption and automated backups
 5. **Storage**: S3 bucket with server-side encryption
 
-### 📊 Monitoring and Compliance
+### Monitoring and Compliance
 
 1. **CloudTrail**: API activity logging with KMS encryption
 2. **AWS Config**: Resource compliance monitoring
 3. **CloudWatch**: Integrated monitoring through IAM policies
 
-### 🏷️ Resource Management
+### Resource Management
 
 - All resources tagged with `Environment` and `Owner` for cost management
 - Consistent naming conventions throughout the template

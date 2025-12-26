@@ -481,7 +481,7 @@ Resources:
       AutoScalingGroupName: WebApp-ASG
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
-        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+        Version: "$Latest"
       MinSize: 1
       MaxSize: 3
       DesiredCapacity: 2
