@@ -301,7 +301,10 @@ class TapStackDev extends Stack {
         int maxCapacity = isLocalStack ? 2 : 10;
         int desiredCapacity = isLocalStack ? 1 : 3;
 
-        this.autoScalingGroup = AutoScalingGroup.Builder.create(this, "AutoScalingGroup")
+        // Build AutoScalingGroup with different configurations for LocalStack vs AWS
+        // LocalStack doesn't support LatestVersionNumber property on LaunchTemplate,
+        // so we need to use an escape hatch to set the version explicitly
+        AutoScalingGroup.Builder asgBuilder = AutoScalingGroup.Builder.create(this, "AutoScalingGroup")
                 .vpc(vpc)
                 .launchTemplate(launchTemplate)
                 .minCapacity(minCapacity)
@@ -315,8 +318,19 @@ class TapStackDev extends Stack {
                     .maxBatchSize(1)
                     .minInstancesInService(isLocalStack ? 0 : 2)
                     .pauseTime(Duration.minutes(5))
-                    .build()))
-                .build();
+                    .build()));
+
+        this.autoScalingGroup = asgBuilder.build();
+
+        // LocalStack workaround: Override LaunchTemplate version to use $Latest instead of LatestVersionNumber
+        // LocalStack's CloudFormation doesn't properly support !GetAtt LaunchTemplate.LatestVersionNumber
+        if (isLocalStack) {
+            software.amazon.awscdk.services.autoscaling.CfnAutoScalingGroup cfnAsg =
+                (software.amazon.awscdk.services.autoscaling.CfnAutoScalingGroup) this.autoScalingGroup.getNode().getDefaultChild();
+
+            // Override the LaunchTemplate property to use explicit version
+            cfnAsg.addPropertyOverride("LaunchTemplate.Version", "$Latest");
+        }
 
         // Attach auto scaling group to load balancer target group
         autoScalingGroup.attachToApplicationTargetGroup(this.targetGroup);
