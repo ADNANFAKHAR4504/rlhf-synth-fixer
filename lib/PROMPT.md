@@ -1,49 +1,40 @@
-**Act as an AWS Solution Architect.**
+I need to set up a static website hosting infrastructure on AWS using CloudFormation in YAML format. 
 
-Your task is to **design and implement a secure, reusable AWS infrastructure** for a simple web application using **AWS CloudFormation in YAML format**, following best practices for static website hosting and content distribution.
+The setup needs an S3 bucket serving as the origin for a CloudFront distribution. CloudFront should pull content from S3, and the bucket must block public access - only CloudFront can fetch files through an origin access identity or origin access control.
 
----
+## What I need:
 
-###  **Constraints**:
+**S3 Configuration:**
+- Static website hosting enabled on the bucket
+- Bucket policy that allows CloudFront to read objects
+- Public access completely blocked at the bucket level
 
-* Use **AWS CloudFormation** to define the infrastructure as code.
-* The web application must be hosted on **Amazon S3** using **static website hosting**.
-* Content must be distributed via **Amazon CloudFront**.
-* **IAM policies must restrict direct access to the S3 bucket** so that only **CloudFront** can read the content.
-* Ensure that all resources are deployed in the **us-east-1** region.
-* Resource names and key settings must be **parameterized** for reusability across environments.
+**CloudFront Distribution:**
+- Origin pointing to the S3 bucket
+- Origin access identity configured to authenticate with S3
+- Distribution serves content globally with edge caching
 
----
+**IAM and Security:**
+- Bucket policy granting s3:GetObject permission to CloudFront's OAI
+- Deny all other access to bucket contents
+- All traffic flows through CloudFront only
 
-###  **Environment**:
+**Parameters for reusability:**
+- Environment suffix like dev or prod
+- Application name
+- Optional domain alias
 
-You are setting up a web application hosting environment that includes:
+## Technical requirements:
 
-1. An **S3 Bucket** configured for static website hosting.
-2. A **CloudFront Distribution** with the S3 bucket as the origin.
-3. A **bucket policy** or **origin access control (OAC)** or **origin access identity (OAI)** setup to **block public access** and allow only CloudFront to fetch content.
-4. Use of **CloudFormation Parameters** for:
+- Deploy to us-east-1 region
+- Use CloudFormation YAML format
+- Name the template: `static_web_app_infra.yaml`
+- Must pass cfn-lint validation
 
-   * Environment suffix (e.g., dev, prod)
-   * Application name
-   * Domain alias (optional)
+## Required outputs:
 
----
+- S3 bucket name
+- Website endpoint URL
+- CloudFront distribution domain name
 
-###  **Expected Output**:
-
-Submit a well-structured CloudFormation template in **YAML format** named:
-`static_web_app_infra.yaml`
-
-It must:
-
-* Pass CloudFormation validation.
-* Deploy successfully in `us-east-1`.
-* Use proper logical resource names and exports.
-* Include outputs such as:
-
-  * S3 bucket name
-  * Website endpoint
-  * CloudFront distribution domain name
-
----
+The infrastructure should be production-ready and follow AWS best practices for static website hosting with CloudFront CDN.
