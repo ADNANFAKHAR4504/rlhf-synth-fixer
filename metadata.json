@@ -5,15 +5,16 @@
   "turn_type": "single",
   "po_id": "LS-101912243",
   "team": "synth-2",
-  "startedAt": "2025-11-09T06:57:27.3NZ",
-  "subtask": "IaC Program Optimization",
   "provider": "localstack",
+  "wave": "P1",
+  "startedAt": "2025-11-09T06:57:27.300Z",
+  "subtask": "Application Deployment",
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "API Gateway",
-    "RDS Aurora PostgreSQL",
+    "RDS",
     "Lambda",
     "SQS",
     "Step Functions",
@@ -21,8 +22,6 @@
     "CloudWatch",
     "SNS",
     "IAM",
-    "EC2 VPC",
-    "CloudWatch Logs"
-  ],
-  "wave": "P1"
+    "VPC"
+  ]
 }
