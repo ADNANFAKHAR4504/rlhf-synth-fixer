@@ -6,7 +6,7 @@
   "po_id": "LS-trainr468cdkjava",
   "team": "synth-2",
   "startedAt": "2025-08-26T18:00:13+05:30",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup",
