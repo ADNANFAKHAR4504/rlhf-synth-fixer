@@ -9,8 +9,6 @@
   "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup",
-    "General Infrastructure Tooling QA",
     "Security Configuration as Code"
   ],
   "aws_services": [
