@@ -1,0 +1,6 @@
+# CloudFormation Lint Configuration
+# Suppress warnings that are intentional for LocalStack compatibility
+
+ignore_checks:
+  - W2531  # nodejs18.x deprecation - required for LocalStack compatibility
+           # LocalStack doesn't support nodejs22.x yet, so we intentionally use nodejs18.x
