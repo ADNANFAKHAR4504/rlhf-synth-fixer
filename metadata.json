@@ -6,15 +6,15 @@
   "po_id": "LS-291375",
   "team": "synth-2",
   "startedAt": "2025-12-26T02:30:00.000Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
-    "S3",
     "Lambda",
     "API Gateway",
+    "DynamoDB",
     "CloudWatch",
     "IAM"
   ],
