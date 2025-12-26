@@ -56,32 +56,54 @@ import {
 
 import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import { IAMClient, GetRoleCommand, ListAttachedRolePoliciesCommand } from "@aws-sdk/client-iam";
+import { CloudFormationClient, DescribeStacksCommand } from "@aws-sdk/client-cloudformation";
 
 /* ---------------------------- Setup / Helpers --------------------------- */
 
-const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-if (!fs.existsSync(outputsPath)) {
-  throw new Error(`Expected outputs file at ${outputsPath} — create it before running integration tests.`);
-}
-
-const raw = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
-const firstTopKey = Object.keys(raw)[0];
-const outputsArray: { OutputKey: string; OutputValue: string }[] = raw[firstTopKey];
-const outputs: Record<string, string> = {};
-for (const o of outputsArray) outputs[o.OutputKey] = o.OutputValue;
-
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
 const apiStageName = process.env.API_STAGE_NAME || "prod";
+const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
 
-function deduceRegion(): string {
-  const apiUrl = outputs.ApiInvokeUrl || "";
-  const match = apiUrl.match(/\.([a-z]{2}-[a-z]+-\d)\./);
-  if (match) return match[1];
-  if (process.env.AWS_REGION) return process.env.AWS_REGION;
-  if (process.env.AWS_DEFAULT_REGION) return process.env.AWS_DEFAULT_REGION;
-  return "us-east-1";
+// Function to get outputs from CloudFormation stack or file
+async function getStackOutputs(): Promise<Record<string, string>> {
+  // Try loading from file first (for pre-existing deployments)
+  const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+  if (fs.existsSync(outputsPath)) {
+    const raw = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+    const firstTopKey = Object.keys(raw)[0];
+    const outputsArray: { OutputKey: string; OutputValue: string }[] = raw[firstTopKey];
+    const result: Record<string, string> = {};
+    for (const o of outputsArray) result[o.OutputKey] = o.OutputValue;
+    return result;
+  }
+
+  // Fallback: query CloudFormation stack directly
+  const stackName = `localstack-stack-pr${environmentSuffix}`;
+  const cfn = new CloudFormationClient({ region });
+
+  try {
+    const response = await cfn.send(new DescribeStacksCommand({ StackName: stackName }));
+    const stack = response.Stacks?.[0];
+
+    if (!stack || !stack.Outputs) {
+      throw new Error(`Stack ${stackName} not found or has no outputs`);
+    }
+
+    const result: Record<string, string> = {};
+    for (const output of stack.Outputs) {
+      if (output.OutputKey && output.OutputValue) {
+        result[output.OutputKey] = output.OutputValue;
+      }
+    }
+
+    return result;
+  } catch (error) {
+    throw new Error(`Failed to get stack outputs: ${error}`);
+  }
 }
-const region = deduceRegion();
+
+// Get outputs at module load time
+let outputs: Record<string, string> = {};
 
 // AWS clients
 const ec2 = new EC2Client({ region });
@@ -190,6 +212,9 @@ describe("TapStack — Full Stack Integration Tests", () => {
   let apiId: string;
 
   beforeAll(async () => {
+    // Load stack outputs first
+    outputs = await getStackOutputs();
+
     const vpcs = await retry(() => ec2.send(new DescribeVpcsCommand({})));
     const tapVpc = vpcs.Vpcs?.find((vpc) => vpc.Tags?.some((t) => t.Key === "Name" && t.Value?.includes("TapVpc")));
     if (!tapVpc?.VpcId) throw new Error("Tap VPC not found");
@@ -203,8 +228,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
   });
 
   it("should have valid CloudFormation outputs", () => {
-    expect(Array.isArray(outputsArray)).toBe(true);
-    expect(outputsArray.length).toBeGreaterThan(0);
+    expect(Object.keys(outputs).length).toBeGreaterThan(0);
     ["ApiInvokeUrl", "WebhookTableName", "RawBucketName", "DlqUrl"].forEach((k) => {
       expect(typeof outputs[k]).toBe("string");
       expect(outputs[k].length).toBeGreaterThan(0);
