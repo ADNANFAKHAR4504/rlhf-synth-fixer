@@ -1,6 +1,6 @@
 Hey team,
 
-We need to build a high-availability payment processing infrastructure for a financial services company. Their transaction processing system handles time-sensitive payment authorizations and they need 99.99% uptime. Any downtime directly impacts revenue and customer trust. I've been asked to create this infrastructure using **CloudFormation with JSON** to ensure it can survive AWS availability zone failures.
+We need to build a high-availability payment processing infrastructure for a financial services company. Their system handles time-sensitive payment authorizations and they need 99.99% uptime. Any downtime directly impacts revenue and customer trust. I've been asked to create this infrastructure using CloudFormation with JSON to ensure it can survive AWS availability zone failures.
 
 The critical part here is that the system needs to automatically recover from AZ failures without any manual intervention. When an AZ goes down, the system should keep running without customers noticing anything. We're talking about a multi-AZ deployment across us-east-1a, us-east-1b, and us-east-1c with Aurora PostgreSQL, ECS Fargate tasks, and load balancers all working together to maintain continuous operation.
 
@@ -99,7 +99,7 @@ Create a highly available payment processing infrastructure using **CloudFormati
 - **Reliability**: System automatically maintains exactly 6 ECS tasks during failures
 - **Security**: All data encrypted at rest with KMS customer managed keys
 - **Monitoring**: CloudWatch dashboard shows real-time failover metrics and health status
-- **Resource Naming**: All named resources include environmentSuffix for uniqueness
+- **Naming Convention**: All named resources include environmentSuffix for uniqueness
 - **Destroyability**: All resources can be cleanly deleted without any Retain policies
 - **Multi-Region**: Standby stack deployable to us-west-2 via CloudFormation Stack Sets
 - **Code Quality**: Valid CloudFormation JSON, well-structured, properly documented
