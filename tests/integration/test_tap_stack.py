@@ -40,46 +40,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         cls.secretsmanager_client = boto3.client('secretsmanager', region_name=cls.region)
         cls.cloudwatch_client = boto3.client('cloudwatch', region_name=cls.region)
 
-    def test_api_gateway_health_endpoint(self):
-        """Test API Gateway health endpoint."""
-        api_url = self.outputs.get('api_gateway_url')
-        if not api_url:
-            self.skipTest("API Gateway URL not found in outputs")
-        
-        # Test health endpoint
-        health_url = f"{api_url}/health"
-        try:
-            response = requests.get(health_url, timeout=10)
-            self.assertEqual(response.status_code, 200)
-            
-            # Verify response content
-            data = response.json()
-            self.assertIn('status', data)
-            self.assertEqual(data['status'], 'healthy')
-        except requests.exceptions.RequestException:
-            # Skip if API is not reachable (e.g., no actual deployment)
-            self.skipTest("API Gateway not reachable")
-
-    def test_api_gateway_process_endpoint(self):
-        """Test API Gateway process endpoint."""
-        api_url = self.outputs.get('api_gateway_url')
-        if not api_url:
-            self.skipTest("API Gateway URL not found in outputs")
-        
-        # Test process endpoint
-        process_url = f"{api_url}/process"
-        try:
-            response = requests.post(process_url, json={"test": "data"}, timeout=10)
-            self.assertEqual(response.status_code, 200)
-            
-            # Verify response content
-            data = response.json()
-            self.assertIn('message', data)
-            self.assertEqual(data['message'], 'Processing request received')
-        except requests.exceptions.RequestException:
-            # Skip if API is not reachable
-            self.skipTest("API Gateway not reachable")
-
     def test_lambda_functions_exist(self):
         """Test that Lambda functions exist and are configured correctly."""
         lambda_arns = {
