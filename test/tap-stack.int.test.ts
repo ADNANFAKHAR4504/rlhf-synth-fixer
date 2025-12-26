@@ -24,7 +24,7 @@ import {
 
 const region = process.env.AWS_REGION || 'us-east-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = process.env.STACK_NAME || `TapStack${environmentSuffix}`;
+const stackName = process.env.STACK_NAME || `localstack-stack-${environmentSuffix}`;
 
 // Initialize AWS clients
 const cfnClient = new CloudFormationClient({ region });
