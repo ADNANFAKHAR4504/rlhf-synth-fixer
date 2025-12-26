@@ -242,6 +242,25 @@ public class InfrastructureStack extends Stack {
         Tags.of(applicationLoadBalancer).add("Name", "WebAppALB");
         Tags.of(targetGroup).add("Name", "WebAppTargetGroup");
         Tags.of(snsAlarmTopic).add("Name", "AlarmNotificationTopic");
+
+        // Export CloudFormation outputs for CI/CD validation
+        software.amazon.awscdk.CfnOutput.Builder.create(this, "LoadBalancerDNS")
+                .value(applicationLoadBalancer.getLoadBalancerDnsName())
+                .description("DNS name of the Application Load Balancer")
+                .exportName(String.format("WebAppALB-DNS-%s", environmentSuffix))
+                .build();
+
+        software.amazon.awscdk.CfnOutput.Builder.create(this, "VpcId")
+                .value(vpc.getVpcId())
+                .description("VPC ID")
+                .exportName(String.format("WebAppVPC-ID-%s", environmentSuffix))
+                .build();
+
+        software.amazon.awscdk.CfnOutput.Builder.create(this, "SNSTopicArn")
+                .value(snsAlarmTopic.getTopicArn())
+                .description("SNS Topic ARN for alarm notifications")
+                .exportName(String.format("AlarmTopic-ARN-%s", environmentSuffix))
+                .build();
     }
 
     // Getter methods for accessing resources from other stacks if needed
