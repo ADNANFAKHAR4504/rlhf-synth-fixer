@@ -1,52 +1,35 @@
-# Task: Build a Highly Available AWS Web Application Infrastructure Using CloudFormation
+Need a CloudFormation YAML template named `TapStack.yaml` that provisions a highly available web application infrastructure in AWS. This needs to be resilient, scalable, and cost-effective following AWS architectural best practices.
 
-## Goal
+Here's what the infrastructure needs:
 
-Develop a CloudFormation YAML template named `TapStack.yaml` that provisions a **resilient**, **scalable**, and **cost-effective** infrastructure stack for a web application, following AWS architectural best practices.
+**Resilience and Availability**
+- Deploy EC2 instances across multiple Availability Zones within a single region
+- Ensure infrastructure stays up during zone-level failures through redundancy and geographic distribution
 
-## Infrastructure Criteria
+**Load Distribution**
+- Set up an Application Load Balancer that receives incoming web traffic and distributes it across the EC2 instances in different AZs
+- The ALB should connect to EC2 targets through health checks and support HTTP routing with even traffic flow
 
-Your CloudFormation template should provision the following features:
+**Dynamic Auto Scaling**
+- Create an Auto Scaling Group that connects to the ALB and automatically adjusts EC2 instance count based on real-time demand
+- Minimum 2 EC2 instances, maximum 10 instances
+- Scale based on CPU utilization or other load metrics
+- Include health checks that detect failing instances and trigger the Auto Scaling Group to launch replacements
 
-### 1. **Resilience and Availability**
-- Deploy EC2 instances across **multiple Availability Zones (AZs)** within a single AWS region.
-- Ensure infrastructure continuity during zone-level failures by leveraging redundancy and geographic distribution.
+**Persistent Logging with Lifecycle Management**
+- Create an S3 bucket that receives application logs from the EC2 instances
+- Configure a lifecycle policy that automatically transitions logs to S3 Glacier after 30 days to reduce storage costs
 
-### 2. **Load Distribution**
-- Integrate an **Application Load Balancer (ALB)** to distribute incoming web traffic across the EC2 instances.
-- Support both HTTP (or HTTPS optionally) routing and ensure even traffic flow across all availability zones.
+**Template Flexibility**
+- Make the template region-agnostic unless specific constraints apply
+- Use CloudFormation Parameters for customization of VPC CIDRs, instance types, environment names
+- Apply consistent naming conventions and resource tagging with Environment and Name tags for clarity and cost tracking
 
-### 3. **Dynamic Auto Scaling**
-- Implement **Auto Scaling Groups** to adjust the number of EC2 instances based on real-time demand.
-- Configuration requirements:
-  - **Minimum Capacity:** 2 EC2 instances
-  - **Maximum Capacity:** 10 EC2 instances
-  - **Scaling Mechanism:** Based on CPU utilization or other load metrics
-- Define appropriate **health checks** to identify and automatically replace non-functional instances.
+**Required Outputs**
+- Load Balancer DNS name
+- S3 bucket name
+- Auto Scaling Group name
 
-### 4. **Persistent Logging with Lifecycle Policy**
-- Create an **Amazon S3 bucket** to persist application logs securely.
-- Set up a **lifecycle policy** that transitions logs to **Amazon S3 Glacier** after **30 days** to optimize storage costs.
+The template should be deployable in any AWS environment, syntactically correct, logically organized, and easy to understand and modify. Focus on cost optimization without compromising performance or availability.
 
-### 5. **Flexibility and Reusability**
-- Ensure the template is **region-agnostic** unless specific constraints are mentioned.
-- Use **CloudFormation Parameters** to support customization of VPC CIDRs, instance types, environment names, etc.
-- Apply consistent **naming conventions** and **resource tagging** (e.g., `Environment`, `Name`) for clarity and cost tracking.
-
-## Final Deliverable
-
-- A fully functional CloudFormation template named: `TapStack.yaml`
-- Must be:
-  - **Deployable** in any AWS environment
-  - **Syntactically correct**, **logically organized**, and written using **Infrastructure as Code (IaC)** best practices
-  - Easy to understand and modify for future needs
-
-## Additional Guidelines
-
-- Use **IAM roles or policies** only if required to enable specific services or features.
-- Include **Output values** such as:
-  - Load Balancer DNS name
-  - S3 bucket name
-  - Auto Scaling Group name
-- Focus on **cost optimization** without compromising on performance or availability. 
-
+Use IAM roles or policies only when required to enable specific services or features.
