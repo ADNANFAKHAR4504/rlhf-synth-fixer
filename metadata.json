@@ -18,5 +18,6 @@
     "Amazon CloudWatch",
     "AWS Systems Manager"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "wave": "p0"
 }
