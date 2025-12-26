@@ -5,7 +5,7 @@
   "turn_type": "single",
   "po_id": "LS-291554",
   "team": "synth-2",
-  "wave": "P1",
+  "wave": "P0",
   "provider": "localstack",
   "startedAt": "2025-08-20T14:35:40.236Z",
   "subtask": "CI/CD Pipeline Integration",
