@@ -61,7 +61,7 @@ Detected from IDEAL_RESPONSE.md:
   Platform: pulumi
   Language: python
 
-❌ VALIDATION FAILED: Code does not match metadata.json
+VALIDATION FAILED: Code does not match metadata.json
 ```
 
 **Training Recommendation**:
