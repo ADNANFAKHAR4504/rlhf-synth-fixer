@@ -45,7 +45,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("has default values for variables", () => {
       expect(tapStackContent).toMatch(/default\s*=\s*"dev"/);
-      expect(tapStackContent).toMatch(/default\s*=\s*"us-east-2"/);
+      expect(tapStackContent).toMatch(/default\s*=\s*"us-east-1"/);
     });
   });
 
