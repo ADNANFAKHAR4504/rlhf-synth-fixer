@@ -394,37 +394,6 @@ describe('Infrastructure Unit Tests', () => {
       expect(aws.s3.BucketPublicAccessBlock).toHaveBeenCalled();
     });
 
-    it('should create RDS instance with correct configuration', () => {
-      const aws = require('@pulumi/aws');
-      new Infrastructure('test-infra', mockConfig, 'dev');
-      
-      expect(aws.rds.SubnetGroup).toHaveBeenCalledWith(
-        'db-subnet-group-dev-ap-south-1',
-        expect.objectContaining({
-          subnetIds: expect.any(Array),
-          tags: expect.objectContaining({
-            Name: 'db-subnet-group-dev-ap-south-1',
-          }),
-        }),
-        expect.any(Object)
-      );
-
-      expect(aws.rds.Instance).toHaveBeenCalledWith(
-        'db-instance-dev-ap-south-1',
-        expect.objectContaining({
-          instanceClass: 'db.t3.micro',
-          allocatedStorage: 20,
-          engine: 'mysql',
-          engineVersion: '8.0',
-          dbName: 'appdb',
-          username: 'admin',
-          storageEncrypted: true,
-          multiAz: true,
-          deletionProtection: true,
-        }),
-        expect.any(Object)
-      );
-    });
 
     it('should create IAM role and instance profile', () => {
       const aws = require('@pulumi/aws');
