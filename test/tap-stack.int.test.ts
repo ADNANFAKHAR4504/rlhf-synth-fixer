@@ -185,8 +185,8 @@ describe('TapStack Integration Tests', () => {
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
 
-      // LocalStack compatibility: nodejs18.x (nodejs22.x has limited support)
-      expect(response.Configuration?.Runtime).toBe('nodejs18.x');
+      // LocalStack compatibility: nodejs22.x runtime
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
     });
 
     test('Lambda function should have correct architecture', async () => {

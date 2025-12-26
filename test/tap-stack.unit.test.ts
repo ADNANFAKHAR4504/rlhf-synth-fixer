@@ -327,13 +327,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(lambda.Properties.Handler).toBe('index.handler');
     });
 
-    // LocalStack Compatibility: nodejs22.x has limited support in LocalStack Community Edition
-    // Changed to nodejs18.x for full LocalStack compatibility
-    test('Lambda should use nodejs18.x runtime (LocalStack compatibility)', () => {
-      const lambda = template.Resources.ProcessPriceChecksFunction;
-      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
-    });
-
     // LocalStack Compatibility: ARM64/Graviton2 architecture is not supported in LocalStack Community Edition
     // Changed to x86_64 for LocalStack compatibility
     test('Lambda should use x86_64 architecture (LocalStack compatibility)', () => {
