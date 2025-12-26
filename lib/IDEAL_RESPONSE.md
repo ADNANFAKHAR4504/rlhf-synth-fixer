@@ -686,9 +686,9 @@ output "security_requirements_compliance" {
     iam_least_privilege            = "[PASS] Ultra-minimal IAM permissions following strict least privilege"
     s3_encryption_enabled          = "[PASS] All S3 buckets encrypted with AES256"
     cloudwatch_api_logging         = "[PASS] CloudTrail captures all management and data events"
-    approved_amis_only            = "✓ EC2 uses only approved Amazon Linux 2 AMIs"
-    mfa_console_access            = "✓ MFA strictly enforced for all console operations"
-    rds_encryption_at_rest        = "✓ RDS storage encrypted with AWS managed keys"
+    approved_amis_only            = "[PASS] EC2 uses only approved Amazon Linux 2 AMIs"
+    mfa_console_access            = "[PASS] MFA strictly enforced for all console operations"
+    rds_encryption_at_rest        = "[PASS] RDS storage encrypted with AWS managed keys"
   }
 }
 
@@ -805,12 +805,12 @@ output "secrets_manager_info" {
 
 ## Key Enhancements in This Ideal Implementation
 
-### 🎯 **Smart Infrastructure Management**
+### **Smart Infrastructure Management**
 - **Intelligent VPC Discovery**: Uses existing VPCs with "vpc-*" naming or falls back to default VPC
 - **Dynamic Subnet Selection**: Adapts to available subnet configurations
 - **Unique Naming Strategy**: Prevents conflicts with environment suffixes and randomness
 
-### 🔐 **Advanced Security Features**
+### **Advanced Security Features**
 - **Ultra-Least Privilege IAM**: Conditional and resource-specific permissions
 - **Comprehensive MFA Enforcement**: Strict console access controls
 - **Enhanced CloudTrail**: Advanced bucket policies with source ARN conditions

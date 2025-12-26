@@ -302,7 +302,7 @@ resource "aws_db_instance" "corp_database" {
 
 ---
 
-### 9. 📊 **Insufficient Output Documentation and Visibility**
+### 9. **Insufficient Output Documentation and Visibility**
 
 **Problem:** The original outputs were basic and didn't provide comprehensive visibility into security implementation.
 
@@ -310,7 +310,7 @@ resource "aws_db_instance" "corp_database" {
 # ORIGINAL - BASIC OUTPUTS
 output "vpc_id" {
   description = "ID of the VPC"
-  value       = aws_vpc.corp_vpc.id  # ❌ Would fail with new approach
+  value       = aws_vpc.corp_vpc.id  # Would fail with new approach
 }
 ```
 
@@ -321,8 +321,8 @@ output "vpc_id" {
 output "security_requirements_compliance" {
   description = "Complete security requirements compliance matrix"
   value = {
-    iam_policies_version_controlled = "✓ All IAM policies defined in Terraform with version control"
-    security_groups_http_https_only = "✓ Security groups allow only HTTP (80) and HTTPS (443)"
+    iam_policies_version_controlled = "[PASS] All IAM policies defined in Terraform with version control"
+    security_groups_http_https_only = "[PASS] Security groups allow only HTTP (80) and HTTPS (443)"
     # ... complete compliance matrix
   }
 }
@@ -346,7 +346,7 @@ output "rds_encryption_status" {
 
 ## Summary of Improvements
 
-### 🎯 **Infrastructure Reliability**
+### **Infrastructure Reliability**
 - ✅ Eliminated VPC creation conflicts through intelligent discovery
 - ✅ Fixed CloudTrail configuration with proper ARN references
 - ✅ Implemented conditional resource creation for various environments

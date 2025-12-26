@@ -740,17 +740,17 @@ db_password = "YourSecurePassword123!"
 - Logs stored in encrypted S3 bucket
 - Management and data events tracked
 
-### ✅ **Approved AMIs for EC2**
+### **Approved AMIs for EC2**
 
 - Uses Amazon Linux 2 AMI from trusted source (Amazon)
 - AMI selection automated through data source with owner filter
 
-### ✅ **MFA for Console Access**
+### **MFA for Console Access**
 
 - IAM policy requires MFA for console operations
 - Users cannot perform actions without MFA enabled
 
-### ✅ **Encrypted RDS Storage**
+### **Encrypted RDS Storage**
 
 - RDS instance has `storage_encrypted = true`
 - Data encrypted at rest using AWS managed keys
