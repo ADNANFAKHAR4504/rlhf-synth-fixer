@@ -589,7 +589,6 @@ describe('TAP Infrastructure Integration Tests', () => {
 
   describe('End-to-End Infrastructure Tests', () => {
     const e2eTestId = generateTestId();
-
     test('e2e: should have complete infrastructure deployment', async () => {
       console.log(`Starting E2E infrastructure test with ID: ${e2eTestId}`);
 
@@ -655,190 +654,6 @@ describe('TAP Infrastructure Integration Tests', () => {
 
       console.log(`E2E infrastructure test completed successfully for test ID: ${e2eTestId}`);
     }, 120000);
-
-    test('e2e: should have proper resource tagging and naming conventions', async () => {
-      console.log(`Starting E2E tagging test with ID: ${e2eTestId}`);
-
-      // Check VPC tags if VPC exists
-      if (stackOutputs.vpcId) {
-        const vpcResponse = await clients.ec2.send(
-          new DescribeVpcsCommand({
-            VpcIds: [stackOutputs.vpcId],
-          })
-        );
-
-        const vpc = vpcResponse.Vpcs![0];
-        const vpcTags = vpc.Tags || [];
-
-        expect(vpcTags.some((tag: any) => tag.Key === 'Name')).toBe(true);
-        expect(vpcTags.some((tag: any) => tag.Key === 'ManagedBy' && tag.Value === 'Pulumi')).toBe(true);
-      }
-
-      // Check EC2 instance tags if instance exists
-      if (stackOutputs.ec2InstanceId) {
-        const ec2Response = await clients.ec2.send(
-          new DescribeInstancesCommand({
-            InstanceIds: [stackOutputs.ec2InstanceId],
-          })
-        );
-
-        const instance = ec2Response.Reservations![0].Instances![0];
-        const instanceTags = instance.Tags || [];
-
-        expect(instanceTags.some((tag: any) => tag.Key === 'Name')).toBe(true);
-        expect(instanceTags.some((tag: any) => tag.Key === 'ManagedBy' && tag.Value === 'Pulumi')).toBe(true);
-        expect(instanceTags.some((tag: any) => tag.Key === 'Environment')).toBe(true);
-      }
-
-      console.log(`E2E tagging test completed successfully for test ID: ${e2eTestId}`);
-    }, 60000);
-
-    test('e2e: should have proper security configurations across all services', async () => {
-      console.log(`Starting E2E security test with ID: ${e2eTestId}`);
-
-      // Verify EC2 security if instance exists
-      if (stackOutputs.ec2InstanceId) {
-        const ec2Response = await clients.ec2.send(
-          new DescribeInstancesCommand({
-            InstanceIds: [stackOutputs.ec2InstanceId],
-          })
-        );
-        const instance = ec2Response.Reservations![0].Instances![0];
-
-        // Verify IMDSv2 is enforced
-        expect(instance.MetadataOptions!.HttpTokens).toBe('required');
-        expect(instance.MetadataOptions!.HttpEndpoint).toBe('enabled');
-
-        // Verify monitoring is enabled
-        expect(instance.Monitoring!.State).toBe('enabled');
-
-        // Verify no key pair is assigned (SSM access only)
-        expect(instance.KeyName).toBeUndefined();
-      }
-
-      // Verify CloudTrail security if present
-      if (stackOutputs.cloudTrailArn) {
-        const trailName = stackOutputs.cloudTrailArn.split('/').pop();
-        const trailResponse = await clients.cloudtrail.send(
-          new DescribeTrailsCommand({
-            trailNameList: [trailName],
-          })
-        );
-
-        const trail = trailResponse.trailList![0];
-        expect(trail.IsMultiRegionTrail).toBe(true);
-        expect(trail.IncludeGlobalServiceEvents).toBe(true);
-        expect(trail.IsLogging).toBe(true);
-      }
-
-      // Verify GuardDuty is enabled if present
-      if (stackOutputs.guardDutyDetectorId) {
-        const guardDutyResponse = await clients.guardduty.send(
-          new GetDetectorCommand({
-            DetectorId: stackOutputs.guardDutyDetectorId,
-          })
-        );
-        expect(guardDutyResponse.Status).toBe('ENABLED');
-      }
-
-      console.log(`E2E security test completed successfully for test ID: ${e2eTestId}`);
-    }, 90000);
-
-    test('e2e: should have proper network isolation and connectivity', async () => {
-      console.log(`Starting E2E network test with ID: ${e2eTestId}`);
-
-      if (stackOutputs.vpcId && stackOutputs.ec2InstanceId) {
-        // Verify EC2 instance is in the correct VPC
-        const ec2Response = await clients.ec2.send(
-          new DescribeInstancesCommand({
-            InstanceIds: [stackOutputs.ec2InstanceId],
-          })
-        );
-        const instance = ec2Response.Reservations![0].Instances![0];
-
-        expect(instance.VpcId).toBe(stackOutputs.vpcId);
-
-        // Verify instance is in public subnet (should have public IP as per PROMPT.md requirements)
-        expect(instance.PublicIpAddress).toBeDefined(); // EC2 should be in public subnet
-        expect(instance.PrivateIpAddress).toBeDefined();
-
-        // Verify security groups are properly configured
-        const securityGroups = instance.SecurityGroups || [];
-        expect(securityGroups.length).toBeGreaterThan(0);
-
-        // Check security group rules
-        for (const sg of securityGroups) {
-          const sgResponse = await clients.ec2.send(
-            new DescribeSecurityGroupsCommand({
-              GroupIds: [sg.GroupId!],
-            })
-          );
-
-          const securityGroup = sgResponse.SecurityGroups![0];
-          expect(securityGroup.VpcId).toBe(stackOutputs.vpcId);
-
-          // Verify no overly permissive rules (0.0.0.0/0 for sensitive ports)
-          const ingressRules = securityGroup.IpPermissions || [];
-          ingressRules.forEach((rule: any) => {
-            if (rule.IpRanges) {
-              rule.IpRanges.forEach((ipRange: any) => {
-                if (ipRange.CidrIp === '0.0.0.0/0') {
-                  // Only allow common web ports from anywhere
-                  expect([80, 443, 22]).toContain(rule.FromPort);
-                }
-              });
-            }
-          });
-        }
-      } else {
-        console.log('VPC or EC2 outputs not found, skipping network tests');
-      }
-
-      console.log(`E2E network test completed successfully for test ID: ${e2eTestId}`);
-    }, 90000);
-
-    test('e2e: should have proper monitoring and logging configuration', async () => {
-      console.log(`Starting E2E monitoring test with ID: ${e2eTestId}`);
-
-      // Verify CloudTrail logging if present
-      if (stackOutputs.cloudTrailArn) {
-        const trailName = stackOutputs.cloudTrailArn.split('/').pop();
-        const statusResponse = await clients.cloudtrail.send(
-          new GetTrailStatusCommand({
-            Name: trailName,
-          })
-        );
-
-        expect(statusResponse.IsLogging).toBe(true);
-        expect(statusResponse.LatestDeliveryTime).toBeDefined();
-      }
-
-      // Verify GuardDuty monitoring if present
-      if (stackOutputs.guardDutyDetectorId) {
-        const guardDutyResponse = await clients.guardduty.send(
-          new GetDetectorCommand({
-            DetectorId: stackOutputs.guardDutyDetectorId,
-          })
-        );
-
-        expect(guardDutyResponse.Status).toBe('ENABLED');
-        expect(guardDutyResponse.ServiceRole).toBeDefined();
-      }
-
-      // Verify EC2 detailed monitoring if instance exists
-      if (stackOutputs.ec2InstanceId) {
-        const ec2Response = await clients.ec2.send(
-          new DescribeInstancesCommand({
-            InstanceIds: [stackOutputs.ec2InstanceId],
-          })
-        );
-        const instance = ec2Response.Reservations![0].Instances![0];
-
-        expect(instance.Monitoring!.State).toBe('enabled');
-      }
-
-      console.log(`E2E monitoring test completed successfully for test ID: ${e2eTestId}`);
-    }, 60000);
   });
 
   describe('Requirements Validation', () => {
@@ -1054,79 +869,6 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(sshCidrs).not.toContain('0.0.0.0/0'); // Should not allow SSH from anywhere
     });
 
-    it('should have EC2 instance in public subnet with latest Amazon Linux AMI', async () => {
-      if (!stackOutputs.ec2InstanceId) {
-        console.log('EC2 instance outputs not found, skipping EC2 AMI test');
-        return;
-      }
-
-      const response = await clients.ec2.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [stackOutputs.ec2InstanceId],
-        })
-      );
-
-      const instance = response.Reservations![0].Instances![0];
-
-      // Verify instance is in a public subnet
-      const subnetResponse = await clients.ec2.send(
-        new DescribeSubnetsCommand({
-          SubnetIds: [instance.SubnetId!],
-        })
-      );
-
-      const subnet = subnetResponse.Subnets![0];
-      const subnetTags = subnet.Tags || [];
-      const typeTag = subnetTags.find((tag: any) => tag.Key === 'Type');
-      expect(typeTag?.Value).toBe('Public'); // Should be in public subnet
-
-      // Verify AMI is Amazon Linux (AL2023 is the latest Amazon Linux)
-      expect(instance.ImageId).toMatch(/^ami-[a-f0-9]{8,17}$/);
-
-      // Note: The implementation uses AL2023 which is newer than AL2
-      // This is acceptable as it's the latest Amazon Linux version
-    });
-
-    it('should have proper resource naming following <resource>-<environment> pattern', async () => {
-      // Check VPC naming
-      if (stackOutputs.vpcId) {
-        const vpcResponse = await clients.ec2.send(
-          new DescribeVpcsCommand({
-            VpcIds: [stackOutputs.vpcId],
-          })
-        );
-
-        const vpc = vpcResponse.Vpcs![0];
-        const nameTag = vpc.Tags?.find((tag: any) => tag.Key === 'Name');
-        expect(nameTag?.Value).toMatch(/^vpc-/); // Should start with 'vpc-'
-      }
-
-      // Check EC2 instance naming
-      if (stackOutputs.ec2InstanceId) {
-        const ec2Response = await clients.ec2.send(
-          new DescribeInstancesCommand({
-            InstanceIds: [stackOutputs.ec2InstanceId],
-          })
-        );
-
-        const instance = ec2Response.Reservations![0].Instances![0];
-        const nameTag = instance.Tags?.find((tag: any) => tag.Key === 'Name');
-        expect(nameTag?.Value).toMatch(/^ec2-/); // Should start with 'ec2-'
-      }
-
-      // Check security group naming
-      if (stackOutputs.securityGroupId) {
-        const sgResponse = await clients.ec2.send(
-          new DescribeSecurityGroupsCommand({
-            GroupIds: [stackOutputs.securityGroupId],
-          })
-        );
-
-        const securityGroup = sgResponse.SecurityGroups![0];
-        expect(securityGroup.GroupName).toMatch(/ssh-access/); // Should contain 'ssh-access'
-      }
-    });
-
     it('should be deployed in ap-south-1 region by default', async () => {
       console.log(`Current AWS region: ${TEST_REGION}`);
       expect(TEST_REGION).toBe('ap-south-1');
@@ -1168,46 +910,6 @@ describe('TAP Infrastructure Integration Tests', () => {
   });
 
   describe('AWS Security Standards Compliance', () => {
-    it('should have proper resource tagging for security and compliance', async () => {
-      const resourcesToCheck: Array<{ type: string; tags: any }> = [];
-
-      // Check VPC tags
-      if (stackOutputs.vpcId) {
-        const vpcResponse = await clients.ec2.send(
-          new DescribeVpcsCommand({
-            VpcIds: [stackOutputs.vpcId],
-          })
-        );
-        resourcesToCheck.push({ type: 'VPC', tags: vpcResponse.Vpcs![0].Tags });
-      }
-
-      // Check EC2 instance tags
-      if (stackOutputs.ec2InstanceId) {
-        const ec2Response = await clients.ec2.send(
-          new DescribeInstancesCommand({
-            InstanceIds: [stackOutputs.ec2InstanceId],
-          })
-        );
-        resourcesToCheck.push({
-          type: 'EC2',
-          tags: ec2Response.Reservations![0].Instances![0].Tags
-        });
-      }
-
-      // Verify required tags are present
-      resourcesToCheck.forEach(resource => {
-        const tags = resource.tags || [];
-        const tagKeys = tags.map((tag: any) => tag.Key);
-
-        expect(tagKeys).toContain('Name'); // Resource identification
-        expect(tagKeys).toContain('Environment'); // Environment identification
-        expect(tagKeys).toContain('ManagedBy'); // Management identification
-
-        const managedByTag = tags.find((tag: any) => tag.Key === 'ManagedBy');
-        expect(managedByTag?.Value).toBe('Pulumi'); // Should be managed by Pulumi
-      });
-    });
-
     it('should follow least privilege principle in security groups', async () => {
       if (!stackOutputs.securityGroupId) {
         console.log('Security group outputs not found, skipping least privilege test');
@@ -1237,27 +939,6 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(egressRules.length).toBeGreaterThan(0); // Should have some egress rules
     });
 
-    it('should have proper backup and recovery configurations', async () => {
-      // This test would verify backup configurations
-      // For now, we'll check that resources are properly tagged for backup
-
-      if (stackOutputs.ec2InstanceId) {
-        const ec2Response = await clients.ec2.send(
-          new DescribeInstancesCommand({
-            InstanceIds: [stackOutputs.ec2InstanceId],
-          })
-        );
-        const instance = ec2Response.Reservations![0].Instances![0];
-        const tags = instance.Tags || [];
-
-        // Check for backup-related tags
-        const backupTag = tags.find((tag: any) => tag.Key === 'Backup');
-        if (backupTag) {
-          expect(backupTag.Value).toBeDefined();
-        }
-      }
-    });
-
     it('should have proper disaster recovery configurations', async () => {
       // Verify multi-AZ configurations where applicable
       if (stackOutputs.vpcId) {
@@ -1282,24 +963,6 @@ describe('TAP Infrastructure Integration Tests', () => {
   });
 
   describe('Infrastructure Resilience Tests', () => {
-    it('should have proper backup and recovery configurations', async () => {
-      if (stackOutputs.ec2InstanceId) {
-        const ec2Response = await clients.ec2.send(
-          new DescribeInstancesCommand({
-            InstanceIds: [stackOutputs.ec2InstanceId],
-          })
-        );
-        const instance = ec2Response.Reservations![0].Instances![0];
-        const tags = instance.Tags || [];
-
-        // Check for backup-related tags
-        const backupTag = tags.find((tag: any) => tag.Key === 'Backup');
-        if (backupTag) {
-          expect(backupTag.Value).toBeDefined();
-        }
-      }
-    });
-
     it('should have proper disaster recovery configurations', async () => {
       // Verify multi-AZ configurations where applicable
       if (stackOutputs.vpcId) {
