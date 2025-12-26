@@ -34,6 +34,12 @@ export function createInfrastructure(
   existingRecorderName?: string,
   existingDeliveryChannelName?: string
 ): InfrastructureOutputs {
+  // Check if deploying to LocalStack
+  const isLocalStack =
+    process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+    process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
+    environment.toLowerCase().includes('localstack');
+
   // AWS Provider with explicit region configuration
   const provider = new aws.Provider(`aws-provider-${environment}`, {
     region: region,
@@ -50,14 +56,28 @@ export function createInfrastructure(
     provider
   );
 
-  // Create EC2 instance
-  const ec2Instance = createEc2Instance(
-    environment,
-    vpcResources.publicSubnets[0].id,
-    securityGroup.id,
-    instanceType,
-    provider
-  );
+  // Create EC2 instance only for AWS (skip for LocalStack due to Pulumi provider compatibility issues)
+  let ec2InstanceId: pulumi.Output<string>;
+  let ec2InstancePublicIp: pulumi.Output<string>;
+  let ec2InstancePublicDns: pulumi.Output<string>;
+
+  if (!isLocalStack) {
+    const ec2Instance = createEc2Instance(
+      environment,
+      vpcResources.publicSubnets[0].id,
+      securityGroup.id,
+      instanceType,
+      provider
+    );
+    ec2InstanceId = ec2Instance.id;
+    ec2InstancePublicIp = ec2Instance.publicIp;
+    ec2InstancePublicDns = ec2Instance.publicDns;
+  } else {
+    // Placeholder values for LocalStack
+    ec2InstanceId = pulumi.output('ec2-not-supported-in-localstack');
+    ec2InstancePublicIp = pulumi.output('0.0.0.0');
+    ec2InstancePublicDns = pulumi.output('ec2-not-supported');
+  }
 
   // Create security monitoring resources
   const securityMonitoring = createSecurityMonitoring(
@@ -78,9 +98,9 @@ export function createInfrastructure(
     ),
     internetGatewayId: vpcResources.internetGateway.id,
     securityGroupId: securityGroup.id,
-    ec2InstanceId: ec2Instance.id,
-    ec2InstancePublicIp: ec2Instance.publicIp,
-    ec2InstancePublicDns: ec2Instance.publicDns,
+    ec2InstanceId: ec2InstanceId,
+    ec2InstancePublicIp: ec2InstancePublicIp,
+    ec2InstancePublicDns: ec2InstancePublicDns,
     cloudTrailArn: securityMonitoring.cloudTrail.arn,
     guardDutyDetectorId: securityMonitoring.guardDutyDetectorId,
     natGatewayId: vpcResources.natGateway.id,
