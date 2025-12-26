@@ -2,10 +2,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready multi-tier web application migration with Blue-Green deployment strategy'
 
 Parameters:
-  Environment:
+  EnvironmentSuffix:
     Type: String
-    Default: 'prod'
-    Description: 'Environment name for resource naming'
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
 
   ApplicationName:
     Type: String
@@ -31,7 +31,12 @@ Parameters:
       - m5.xlarge
     Description: 'EC2 instance type for application servers'
 
-  IsLocalStack:
+  KeyPairName:
+    Type: String
+    Default: 'localstack-key'
+    Description: 'Name of the EC2 key pair for SSH access'
+
+  UseLocalStack:
     Type: String
     Default: 'false'
     AllowedValues:
@@ -40,8 +45,9 @@ Parameters:
     Description: 'Set to true when deploying to LocalStack'
 
 Conditions:
-  DeployCodePipeline: !Equals [!Ref IsLocalStack, 'false']
-  DeployNATGateway: !Equals [!Ref IsLocalStack, 'false']
+  DeployCodePipeline: !Equals [!Ref UseLocalStack, 'false']
+  DeployNATGateway: !Equals [!Ref UseLocalStack, 'false']
+  DeployDatabase: !Equals [!Ref UseLocalStack, 'false']
 
 Resources:
   # VPC Configuration (using default VPC)
@@ -53,7 +59,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${ApplicationName}-${Environment}-migration-vpc'
+          Value: !Sub '${AWS::StackName}-${ApplicationName}-${EnvironmentSuffix}-migration-vpc'
 
   # Internet Gateway
   InternetGateway:
@@ -61,7 +67,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${ApplicationName}-${Environment}-migration-igw'
+          Value: !Sub '${AWS::StackName}-${ApplicationName}-${EnvironmentSuffix}-migration-igw'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -79,7 +85,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${ApplicationName}-${Environment}-migration-public-subnet-1'
+          Value: !Sub '${AWS::StackName}-${ApplicationName}-${EnvironmentSuffix}-migration-public-subnet-1'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -90,7 +96,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${ApplicationName}-${Environment}-migration-public-subnet-2'
+          Value: !Sub '${AWS::StackName}-${ApplicationName}-${EnvironmentSuffix}-migration-public-subnet-2'
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -100,7 +106,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${ApplicationName}-${Environment}-migration-private-subnet-1'
+          Value: !Sub '${AWS::StackName}-${ApplicationName}-${EnvironmentSuffix}-migration-private-subnet-1'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -110,7 +116,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${ApplicationName}-${Environment}-migration-private-subnet-2'
+          Value: !Sub '${AWS::StackName}-${ApplicationName}-${EnvironmentSuffix}-migration-private-subnet-2'
 
   # Route Tables
   PublicRouteTable:
@@ -119,7 +125,7 @@ Resources:
       VpcId: !Ref DefaultVPCInfo
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${ApplicationName}-${Environment}-migration-public-rt'
+          Value: !Sub '${AWS::StackName}-${ApplicationName}-${EnvironmentSuffix}-migration-public-rt'
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -157,7 +163,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${ApplicationName}-${Environment}-migration-nat-1'
+          Value: !Sub '${AWS::StackName}-${ApplicationName}-${EnvironmentSuffix}-migration-nat-1'
 
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
@@ -165,7 +171,7 @@ Resources:
       VpcId: !Ref DefaultVPCInfo
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${ApplicationName}-${Environment}-migration-private-rt-1'
+          Value: !Sub '${AWS::StackName}-${ApplicationName}-${EnvironmentSuffix}-migration-private-rt-1'
 
   PrivateRoute1:
     Type: AWS::EC2::Route
@@ -204,7 +210,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-alb-${Environment}-migration-sg'
+          Value: !Sub '${AWS::StackName}-alb-${EnvironmentSuffix}-migration-sg'
 
   ApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -222,7 +228,7 @@ Resources:
           SourceSecurityGroupId: !Ref BastionSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-app-${Environment}-migration-sg'
+          Value: !Sub '${AWS::StackName}-app-${EnvironmentSuffix}-migration-sg'
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -236,7 +242,7 @@ Resources:
           SourceSecurityGroupId: !Ref ApplicationSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-db-${Environment}-migration-sg'
+          Value: !Sub '${AWS::StackName}-db-${EnvironmentSuffix}-migration-sg'
 
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -250,13 +256,13 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-bastion-${Environment}-migration-sg'
+          Value: !Sub '${AWS::StackName}-bastion-${EnvironmentSuffix}-migration-sg'
 
   # IAM Roles and Policies
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'ec2-${Environment}-migration-role'
+      RoleName: !Sub 'ec2-${EnvironmentSuffix}-migration-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -286,7 +292,7 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'ec2-${Environment}-migration-profile'
+      InstanceProfileName: !Sub 'ec2-${EnvironmentSuffix}-migration-profile'
       Roles:
         - !Ref EC2InstanceRole
 
@@ -294,7 +300,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: DeployCodePipeline
     Properties:
-      RoleName: !Sub 'codepipeline-${Environment}-migration-role'
+      RoleName: !Sub 'codepipeline-${EnvironmentSuffix}-migration-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -335,7 +341,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: DeployCodePipeline
     Properties:
-      RoleName: !Sub 'codebuild-${Environment}-migration-role'
+      RoleName: !Sub 'codebuild-${EnvironmentSuffix}-migration-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -367,7 +373,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: DeployCodePipeline
     Properties:
-      RoleName: !Sub 'codedeploy-${Environment}-migration-role'
+      RoleName: !Sub 'codedeploy-${EnvironmentSuffix}-migration-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -384,7 +390,7 @@ Resources:
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub 'rds-${Environment}-migration-secret'
+      Name: !Sub 'rds-${EnvironmentSuffix}-migration-secret'
       Description: 'RDS database credentials'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
@@ -395,23 +401,25 @@ Resources:
   # RDS Subnet Group
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: DeployDatabase
     Properties:
-      DBSubnetGroupName: !Sub 'db-${Environment}-migration-subnet-group'
+      DBSubnetGroupName: !Sub 'db-${EnvironmentSuffix}-migration-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-db-${Environment}-migration-subnet-group'
+          Value: !Sub '${AWS::StackName}-db-${EnvironmentSuffix}-migration-subnet-group'
 
   # RDS Database
   Database:
     Type: AWS::RDS::DBInstance
+    Condition: DeployDatabase
     DeletionPolicy: Delete
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${AWS::StackName}-db-${Environment}-migration'
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-db-${EnvironmentSuffix}-migration'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.40'
@@ -428,13 +436,13 @@ Resources:
       DeletionProtection: false
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-db-${Environment}-migration'
+          Value: !Sub '${AWS::StackName}-db-${EnvironmentSuffix}-migration'
 
   # S3 Bucket for CodeDeploy artifacts
   CodeDeployS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'codedeploy-${Environment}-migration-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'codedeploy-${EnvironmentSuffix}-migration-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -451,7 +459,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub 'alb-${Environment}-migration'
+      Name: !Sub 'alb-${EnvironmentSuffix}-migration'
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -461,13 +469,13 @@ Resources:
         - !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-alb-${Environment}-migration'
+          Value: !Sub '${AWS::StackName}-alb-${EnvironmentSuffix}-migration'
 
   # Target Groups for Blue-Green Deployment
   BlueTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub 'blue-${Environment}-migration-tg'
+      Name: !Sub 'blue-${EnvironmentSuffix}-migration-tg'
       Port: 8080
       Protocol: HTTP
       VpcId: !Ref DefaultVPCInfo
@@ -478,12 +486,12 @@ Resources:
       UnhealthyThresholdCount: 5
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-blue-${Environment}-migration-tg'
+          Value: !Sub '${AWS::StackName}-blue-${EnvironmentSuffix}-migration-tg'
 
   GreenTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub 'green-${Environment}-migration-tg'
+      Name: !Sub 'green-${EnvironmentSuffix}-migration-tg'
       Port: 8080
       Protocol: HTTP
       VpcId: !Ref DefaultVPCInfo
@@ -494,7 +502,7 @@ Resources:
       UnhealthyThresholdCount: 5
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-green-${Environment}-migration-tg'
+          Value: !Sub '${AWS::StackName}-green-${EnvironmentSuffix}-migration-tg'
 
   # ALB Listener
   ALBListener:
@@ -511,10 +519,11 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub 'app-${Environment}-migration-lt'
+      LaunchTemplateName: !Sub 'app-${EnvironmentSuffix}-migration-lt'
       LaunchTemplateData:
         ImageId: ami-091efd91d8c1db442  # Amazon Linux 2 AMI (x86_64, ap-southeast-1, 2025-08-08)
         InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -534,13 +543,13 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub '${AWS::StackName}-app-${Environment}-migration'
+                Value: !Sub '${AWS::StackName}-app-${EnvironmentSuffix}-migration'
 
   # Auto Scaling Groups for Blue-Green
   BlueAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub 'blue-${Environment}-migration-asg'
+      AutoScalingGroupName: !Sub 'blue-${EnvironmentSuffix}-migration-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: '$Latest'
@@ -556,13 +565,13 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-blue-${Environment}-migration-asg'
+          Value: !Sub '${AWS::StackName}-blue-${EnvironmentSuffix}-migration-asg'
           PropagateAtLaunch: true
 
   GreenAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub 'green-${Environment}-migration-asg'
+      AutoScalingGroupName: !Sub 'green-${EnvironmentSuffix}-migration-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: '$Latest'
@@ -578,7 +587,7 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-green-${Environment}-migration-asg'
+          Value: !Sub '${AWS::StackName}-green-${EnvironmentSuffix}-migration-asg'
           PropagateAtLaunch: true
 
   # CodeBuild Project (disabled in LocalStack Community)
@@ -586,7 +595,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Condition: DeployCodePipeline
     Properties:
-      Name: !Sub 'codebuild-${Environment}-migration'
+      Name: !Sub 'codebuild-${EnvironmentSuffix}-migration'
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
         Type: CODEPIPELINE
@@ -619,7 +628,7 @@ Resources:
     Type: AWS::CodeDeploy::Application
     Condition: DeployCodePipeline
     Properties:
-      ApplicationName: !Sub 'app-${Environment}-migration'
+      ApplicationName: !Sub 'app-${EnvironmentSuffix}-migration'
       ComputePlatform: Server
 
   # CodeDeploy Deployment Group (disabled in LocalStack Community)
@@ -628,7 +637,7 @@ Resources:
     Condition: DeployCodePipeline
     Properties:
       ApplicationName: !Ref CodeDeployApplication
-      DeploymentGroupName: !Sub 'dg-${Environment}-migration'
+      DeploymentGroupName: !Sub 'dg-${EnvironmentSuffix}-migration'
       ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
       DeploymentConfigName: CodeDeployDefault.AllAtOnce
       AutoScalingGroups:
@@ -650,7 +659,7 @@ Resources:
     Type: AWS::CodePipeline::Pipeline
     Condition: DeployCodePipeline
     Properties:
-      Name: !Sub 'pipeline-${Environment}-migration'
+      Name: !Sub 'pipeline-${EnvironmentSuffix}-migration'
       RoleArn: !GetAtt CodePipelineServiceRole.Arn
       ArtifactStore:
         Type: S3
@@ -717,12 +726,14 @@ Outputs:
       Name: !Sub '${AWS::StackName}-ALB-ARN'
 
   DatabaseEndpoint:
+    Condition: DeployDatabase
     Description: 'RDS Database Endpoint'
     Value: !GetAtt Database.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-DB-Endpoint'
 
   DatabasePort:
+    Condition: DeployDatabase
     Description: 'RDS Database Port'
     Value: !GetAtt Database.Endpoint.Port
     Export:
