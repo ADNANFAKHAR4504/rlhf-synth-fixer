@@ -26,5 +26,12 @@
     "Secrets Manager",
     "CloudWatch Logs",
     "VPC Flow Logs"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "michael-adeteye",
+  "dockerS3Location": ""
 }
