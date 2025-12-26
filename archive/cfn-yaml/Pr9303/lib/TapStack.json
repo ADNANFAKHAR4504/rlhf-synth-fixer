@@ -1,0 +1,430 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure S3 bucket with comprehensive security configurations",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming and isolation",
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "VpcId": {
+            "Type": "String",
+            "Default": "vpc-localstack",
+            "Description": "VPC ID that will have access to the S3 bucket (use vpc-localstack for LocalStack)"
+        },
+        "BucketNamePrefix": {
+            "Type": "String",
+            "Default": "secure-bucket",
+            "Description": "Prefix for the S3 bucket name"
+        },
+        "EnableObjectLock": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable S3 Object Lock (may have limited support in LocalStack)"
+        },
+        "EnableEventBridge": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable EventBridge notifications (may have limited support in LocalStack)"
+        },
+        "EnableVPCRestriction": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable VPC restrictions in bucket policy (may not work in LocalStack)"
+        }
+    },
+    "Conditions": {
+        "UseObjectLock": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableObjectLock"
+                },
+                "true"
+            ]
+        },
+        "UseEventBridge": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableEventBridge"
+                },
+                "true"
+            ]
+        },
+        "UseVPCRestriction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableVPCRestriction"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "S3EncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for S3 bucket encryption - ${EnvironmentSuffix}"
+                },
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow S3 Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "S3EncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/s3-encryption-key-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "S3EncryptionKey"
+                }
+            }
+        },
+        "AccessLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${BucketNamePrefix}-${EnvironmentSuffix}-access-logs-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteLogsAfter90Days",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        }
+                    ]
+                }
+            }
+        },
+        "SecureS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${BucketNamePrefix}-${EnvironmentSuffix}-main-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "S3EncryptionKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "ObjectLockEnabled": {
+                    "Fn::If": [
+                        "UseObjectLock",
+                        true,
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "ObjectLockConfiguration": {
+                    "Fn::If": [
+                        "UseObjectLock",
+                        {
+                            "ObjectLockEnabled": "Enabled",
+                            "Rule": {
+                                "DefaultRetention": {
+                                    "Mode": "COMPLIANCE",
+                                    "Days": 7
+                                }
+                            }
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "AccessLogsBucket"
+                    },
+                    "LogFilePrefix": "access-logs/"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "NotificationConfiguration": {
+                    "Fn::If": [
+                        "UseEventBridge",
+                        {
+                            "EventBridgeConfiguration": {
+                                "EventBridgeEnabled": true
+                            }
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "SecureS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": {
+                        "Fn::If": [
+                            "UseVPCRestriction",
+                            [
+                                {
+                                    "Sid": "DenyAccessFromOutsideVPC",
+                                    "Effect": "Deny",
+                                    "Principal": "*",
+                                    "Action": "s3:*",
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SecureS3Bucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ],
+                                    "Condition": {
+                                        "StringNotEquals": {
+                                            "aws:SourceVpc": {
+                                                "Ref": "VpcId"
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "Sid": "AllowVPCAccess",
+                                    "Effect": "Allow",
+                                    "Principal": "*",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SecureS3Bucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ],
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "aws:SourceVpc": {
+                                                "Ref": "VpcId"
+                                            }
+                                        }
+                                    }
+                                }
+                            ],
+                            [
+                                {
+                                    "Sid": "AllowBasicAccess",
+                                    "Effect": "Allow",
+                                    "Principal": "*",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:ListBucket",
+                                        "s3:GetBucketLocation",
+                                        "s3:GetBucketVersioning",
+                                        "s3:GetBucketPolicy",
+                                        "s3:GetEncryptionConfiguration",
+                                        "s3:GetBucketLogging",
+                                        "s3:GetBucketNotification",
+                                        "s3:GetBucketObjectLockConfiguration",
+                                        "s3:GetBucketPublicAccessBlock"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SecureS3Bucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "S3AccessLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/s3/${EnvironmentSuffix}/access-logs/${SecureS3Bucket}"
+                },
+                "RetentionInDays": 30
+            }
+        }
+    },
+    "Outputs": {
+        "SecureS3BucketName": {
+            "Description": "Name of the secure S3 bucket",
+            "Value": {
+                "Ref": "SecureS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecureS3BucketName"
+                }
+            }
+        },
+        "SecureS3BucketArn": {
+            "Description": "ARN of the secure S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecureS3Bucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecureS3BucketArn"
+                }
+            }
+        },
+        "AccessLogsBucketName": {
+            "Description": "Name of the access logs bucket",
+            "Value": {
+                "Ref": "AccessLogsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AccessLogsBucketName"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS Key ID used for encryption",
+            "Value": {
+                "Ref": "S3EncryptionKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+                }
+            }
+        },
+        "KMSKeyAlias": {
+            "Description": "KMS Key Alias",
+            "Value": {
+                "Ref": "S3EncryptionKeyAlias"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyAlias"
+                }
+            }
+        },
+        "VpcId": {
+            "Description": "VPC ID configured for bucket access",
+            "Value": {
+                "Ref": "VpcId"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VpcId"
+                }
+            }
+        }
+    }
+}

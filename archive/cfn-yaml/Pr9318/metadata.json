@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291866",
+  "team": "synth-2",
+  "startedAt": "2025-08-11T00:48:21.395Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "EC2",
+    "VPC",
+    "IAM",
+    "CloudWatch",
+    "CloudTrail",
+    "ElasticLoadBalancingV2",
+    "SNS"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}
