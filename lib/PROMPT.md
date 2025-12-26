@@ -1,23 +1,23 @@
 I need to set up a static website hosting infrastructure on AWS using CloudFormation in YAML format. 
 
-The setup needs an S3 bucket serving as the origin for a CloudFront distribution. CloudFront should pull content from S3, and the bucket must block public access - only CloudFront can fetch files through an origin access identity or origin access control.
+The setup needs an S3 bucket that feeds content to a CloudFront distribution. CloudFront pulls files from the S3 origin and distributes them globally. The S3 bucket policy grants read access only to CloudFront's origin access identity, while blocking all other public access.
 
 ## What I need:
 
 **S3 Configuration:**
 - Static website hosting enabled on the bucket
-- Bucket policy that allows CloudFront to read objects
-- Public access completely blocked at the bucket level
+- Bucket policy connected to CloudFront OAI that allows s3:GetObject
+- Public access blocks prevent direct internet access
 
 **CloudFront Distribution:**
-- Origin pointing to the S3 bucket
-- Origin access identity configured to authenticate with S3
-- Distribution serves content globally with edge caching
+- Origin configured to pull content from the S3 bucket endpoint
+- Origin access identity authenticates CloudFront requests to S3
+- Edge locations cache and serve content globally
 
 **IAM and Security:**
-- Bucket policy granting s3:GetObject permission to CloudFront's OAI
-- Deny all other access to bucket contents
-- All traffic flows through CloudFront only
+- S3 bucket policy grants CloudFront OAI permission to fetch objects
+- IAM policy attached to the bucket restricts access to CloudFront only
+- All user requests flow through CloudFront which fetches from S3
 
 **Parameters for reusability:**
 - Environment suffix like dev or prod
@@ -37,4 +37,4 @@ The setup needs an S3 bucket serving as the origin for a CloudFront distribution
 - Website endpoint URL
 - CloudFront distribution domain name
 
-The infrastructure should be production-ready and follow AWS best practices for static website hosting with CloudFront CDN.
+The infrastructure should be production-ready with CloudFront serving as the public-facing CDN that retrieves content from the secured S3 bucket.
