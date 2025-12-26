@@ -56,7 +56,10 @@ Resources:
       VpcId: { Ref: VPC }
       CidrBlock: 10.0.0.0/24
       MapPublicIpOnLaunch: true
-      AvailabilityZone: us-east-1a
+      AvailabilityZone:
+        "Fn::Select":
+          - 0
+          - "Fn::GetAZs": ""
       Tags:
         - Key: Name
           Value: { "Fn::Sub": "tap-public-a-${EnvironmentSuffix}" }
@@ -67,7 +70,10 @@ Resources:
       VpcId: { Ref: VPC }
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
-      AvailabilityZone: us-east-1b
+      AvailabilityZone:
+        "Fn::Select":
+          - 1
+          - "Fn::GetAZs": ""
       Tags:
         - Key: Name
           Value: { "Fn::Sub": "tap-public-b-${EnvironmentSuffix}" }
@@ -78,7 +84,10 @@ Resources:
       VpcId: { Ref: VPC }
       CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: false
-      AvailabilityZone: us-east-1a
+      AvailabilityZone:
+        "Fn::Select":
+          - 0
+          - "Fn::GetAZs": ""
       Tags:
         - Key: Name
           Value: { "Fn::Sub": "tap-private-a-${EnvironmentSuffix}" }
@@ -89,13 +98,27 @@ Resources:
       VpcId: { Ref: VPC }
       CidrBlock: 10.0.3.0/24
       MapPublicIpOnLaunch: false
-      AvailabilityZone: us-east-1b
+      AvailabilityZone:
+        "Fn::Select":
+          - 1
+          - "Fn::GetAZs": ""
       Tags:
         - Key: Name
           Value: { "Fn::Sub": "tap-private-b-${EnvironmentSuffix}" }
 
-  # NAT Gateway and EIP removed for LocalStack compatibility
-  # In LocalStack, private subnets route through IGW for testing
+  # NAT Gateway and EIP for private subnet internet access
+  EIPNatGateway:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      AllocationId: { "Fn::GetAtt": ["EIPNatGateway", "AllocationId"] }
+      SubnetId: { Ref: PublicSubnet1 }
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -131,7 +154,7 @@ Resources:
     Properties:
       RouteTableId: { Ref: PrivateRouteTable1 }
       DestinationCidrBlock: "0.0.0.0/0"
-      GatewayId: { Ref: InternetGateway }
+      NatGatewayId: { Ref: NatGateway }
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -149,7 +172,7 @@ Resources:
     Properties:
       RouteTableId: { Ref: PrivateRouteTable2 }
       DestinationCidrBlock: "0.0.0.0/0"
-      GatewayId: { Ref: InternetGateway }
+      NatGatewayId: { Ref: NatGateway }
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
