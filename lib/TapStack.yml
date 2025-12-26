@@ -527,7 +527,7 @@ Resources:
         - !Ref PublicSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref WebServerLaunchTemplate
-        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: !Ref MinSize
       MaxSize: !Ref MaxSize
       DesiredCapacity: !Ref DesiredCapacity

@@ -525,11 +525,19 @@ describe('TapStack CloudFormation Template - Production Ready', () => {
 
     test('ASG uses correct launch template', () => {
       const asg = template.Resources.AutoScalingGroup;
-      
+
       expect(asg.Properties.LaunchTemplate.LaunchTemplateId).toEqual({ Ref: 'WebServerLaunchTemplate' });
-      expect(asg.Properties.LaunchTemplate.Version).toEqual({ 
-        'Fn::GetAtt': ['WebServerLaunchTemplate', 'LatestVersionNumber'] 
-      });
+
+      // Accept both $Latest (LocalStack-compatible) and Fn::GetAtt (proper CloudFormation)
+      const version = asg.Properties.LaunchTemplate.Version;
+      const isValidVersion =
+        version === '$Latest' ||
+        (typeof version === 'object' &&
+         version['Fn::GetAtt'] &&
+         version['Fn::GetAtt'][0] === 'WebServerLaunchTemplate' &&
+         version['Fn::GetAtt'][1] === 'LatestVersionNumber');
+
+      expect(isValidVersion).toBe(true);
     });
 
     test('ASG has creation and update policies', () => {

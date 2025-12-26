@@ -689,12 +689,7 @@
           "LaunchTemplateId": {
             "Ref": "WebServerLaunchTemplate"
           },
-          "Version": {
-            "Fn::GetAtt": [
-              "WebServerLaunchTemplate",
-              "LatestVersionNumber"
-            ]
-          }
+          "Version": "$Latest"
         },
         "MinSize": {
           "Ref": "MinSize"
