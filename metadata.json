@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-348941",
+  "team": "synth-2",
+  "provider": "localstack",
+  "wave": "P1",
+  "startedAt": "2025-10-09T07:56:50.968Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "SQS",
+    "IAM",
+    "EventBridge",
+    "VPC",
+    "EC2"
+  ]
+}
