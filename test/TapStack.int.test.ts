@@ -96,6 +96,11 @@ describe('TapStack CloudFormation Integration Tests', () => {
         }
       : { region };
 
+    console.log(`⚙️  Client Configuration:`);
+    console.log(`   Region: ${region}`);
+    console.log(`   Endpoint: ${endpoint || 'default AWS'}`);
+    console.log(`   ForcePathStyle: ${endpoint ? 'true' : 'false'}`);
+
     // Initialize AWS clients
     cfnClient = new CloudFormationClient(clientConfig);
     dynamoClient = new DynamoDBClient(clientConfig);
@@ -129,24 +134,28 @@ describe('TapStack CloudFormation Integration Tests', () => {
       // If not found, try ENVIRONMENT_SUFFIX
       if (!stackName && process.env.ENVIRONMENT_SUFFIX) {
         const testStackName = `TapStack${process.env.ENVIRONMENT_SUFFIX}`;
+        console.log(`🔍 Trying stack name from ENVIRONMENT_SUFFIX: ${testStackName}`);
         try {
           const describeResponse = await cfnClient.send(
             new DescribeStacksCommand({ StackName: testStackName })
           );
           if (describeResponse.Stacks && describeResponse.Stacks.length > 0) {
             const status = describeResponse.Stacks[0].StackStatus;
+            console.log(`   Found stack ${testStackName} with status: ${status}`);
             if (status === 'CREATE_COMPLETE' || status === 'UPDATE_COMPLETE') {
               stackName = testStackName;
               console.log(`✅ Using stack from ENVIRONMENT_SUFFIX: ${stackName}`);
             }
           }
-        } catch (error) {
+        } catch (error: any) {
+          console.log(`   Stack ${testStackName} not found: ${error.message}`);
           // Stack not found, continue to discovery
         }
       }
 
       // Fallback: List all stacks and find TapStack*
       if (!stackName) {
+        console.log(`🔍 Listing all CloudFormation stacks...`);
         const listResponse = await cfnClient.send(
           new ListStacksCommand({
             StackStatusFilter: [
@@ -157,12 +166,19 @@ describe('TapStack CloudFormation Integration Tests', () => {
           })
         );
 
+        console.log(`   Found ${listResponse.StackSummaries?.length || 0} stacks total`);
+        if (listResponse.StackSummaries && listResponse.StackSummaries.length > 0) {
+          console.log(`   Stack names: ${listResponse.StackSummaries.map(s => s.StackName).join(', ')}`);
+        }
+
         const tapStacks =
           listResponse.StackSummaries?.filter(
             (stack) =>
               stack.StackName?.startsWith('TapStack') &&
               stack.StackStatus !== 'DELETE_COMPLETE'
           ) || [];
+
+        console.log(`   TapStacks found: ${tapStacks.length}`);
 
         if (tapStacks.length === 0) {
           throw new Error(
