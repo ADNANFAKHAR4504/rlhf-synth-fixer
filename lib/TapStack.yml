@@ -884,7 +884,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Engine: aurora-mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.mysql_aurora.3.05.2'
       DBClusterIdentifier: !Sub ${ProjectName}-${EnvironmentSuffix}-aurora
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
