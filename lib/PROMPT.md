@@ -1,12 +1,11 @@
-We’re setting up a CDKTF project that manages three environments in AWS: development, staging, and production. Each of these environments should live in its own stack so they’re isolated and easy to manage on their own. At the same time, we want to make sure the underlying structure is consistent, so deployments follow the same baseline design everywhere.
+We need to build a CDKTF infrastructure that deploys a web application across three isolated AWS environments: development, staging, and production. Each environment should have EC2 instances running in dedicated VPCs with proper network isolation and security.
 
-Here’s what the setup needs to handle:
+Here's how the services should connect:
 
-- Create three separate stacks (dev, staging, prod) with a consistent architecture but environment-specific differences where needed.
-- Define IAM roles and policies that follow least privilege — keep them tight, and make sure each environment only gets what it needs.
-- Any environment-specific settings (like instance sizes, subnet IDs, or region settings) should be parameterized instead of hardcoded, so we can adjust without editing the code itself.
-- Add AWS health checks and logging for each environment to keep visibility into activity and help with troubleshooting.
-- Make sure the whole setup is written in TypeScript with CDKTF, runs validation without errors, and is deployable in us-west-2.
-- Tag everything properly so we know which environment and project a resource belongs to.
+Create VPC networks for each environment with public subnets across multiple availability zones. EC2 instances deployed in these subnets should have security groups controlling inbound HTTP traffic on port 80 and outbound internet access through an Internet Gateway. The instances need IAM instance profiles attached that grant permissions to write logs to CloudWatch, ensuring they can send application and system logs without hardcoded credentials.
 
-The end goal is a CDKTF solution that gives us clean separation between dev, staging, and prod, applies least privilege security, keeps configs flexible through parameters, and has the right monitoring built in. It should be reliable, scalable, and easy to maintain going forward.
+For security and monitoring, encrypt all EC2 root volumes using KMS keys, and configure CloudWatch log groups to receive logs from the instances through the CloudWatch agent. The KMS keys should have policies allowing both the AWS account root and CloudWatch Logs service to use them for encryption operations. IAM roles attached to EC2 instances should follow least privilege by only granting CreateLogStream and PutLogEvents permissions to the specific log group for that environment.
+
+Each environment needs its own isolated stack in CDKTF with environment-specific parameters for instance types, VPC CIDR blocks, and subnet allocation. Tag all resources with environment and project identifiers so we can track costs and manage resources per environment. The solution should be written in TypeScript with CDKTF, synthesize without errors, and deploy successfully to us-east-1.
+
+The end result should give us three parallel environments where EC2 web servers connect to VPCs for networking, use IAM roles to securely access CloudWatch for logging, and rely on KMS for encryption, with all connections following AWS security best practices.
