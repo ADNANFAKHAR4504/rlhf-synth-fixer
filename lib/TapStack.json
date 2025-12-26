@@ -549,7 +549,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ALB-${EnvironmentSuffix}"
+                    "Fn::Sub": "tap-alb-${EnvironmentSuffix}"
                 },
                 "Scheme": "internet-facing",
                 "Type": "application",
@@ -644,7 +644,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TG-${EnvironmentSuffix}"
+                    "Fn::Sub": "tap-tg-${EnvironmentSuffix}"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",

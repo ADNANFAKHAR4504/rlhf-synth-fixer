@@ -234,7 +234,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Application Load Balancer', () => {
     test('ALB should be active and internet-facing', async () => {
-      const albName = `${stackName}-ALB-${outputs.EnvironmentSuffix}`;
+      const albName = `tap-alb-${outputs.EnvironmentSuffix}`;
       const command = new DescribeLoadBalancersCommand({ Names: [albName] });
       const response = await elbv2Client.send(command);
       
@@ -248,7 +248,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('ALB should have listener on port 80', async () => {
-      const albName = `${stackName}-ALB-${outputs.EnvironmentSuffix}`;
+      const albName = `tap-alb-${outputs.EnvironmentSuffix}`;
       const albCommand = new DescribeLoadBalancersCommand({ Names: [albName] });
       const albResponse = await elbv2Client.send(albCommand);
       const albArn = albResponse.LoadBalancers![0].LoadBalancerArn;
@@ -267,7 +267,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Target group should have both instances registered and healthy', async () => {
-      const tgName = `${stackName}-TG-${outputs.EnvironmentSuffix}`;
+      const tgName = `tap-tg-${outputs.EnvironmentSuffix}`;
       const tgCommand = new DescribeTargetGroupsCommand({ Names: [tgName] });
       const tgResponse = await elbv2Client.send(tgCommand);
       
@@ -369,13 +369,13 @@ describe('TapStack Integration Tests', () => {
       expect(instances.every(i => i.State?.Name === 'running')).toBe(true);
       
       // 3. Check ALB is active
-      const albName = `${stackName}-ALB-${outputs.EnvironmentSuffix}`;
+      const albName = `tap-alb-${outputs.EnvironmentSuffix}`;
       const albCommand = new DescribeLoadBalancersCommand({ Names: [albName] });
       const albResponse = await elbv2Client.send(albCommand);
       expect(albResponse.LoadBalancers![0].State?.Code).toBe('active');
       
       // 4. Check target health
-      const tgName = `${stackName}-TG-${outputs.EnvironmentSuffix}`;
+      const tgName = `tap-tg-${outputs.EnvironmentSuffix}`;
       const tgCommand = new DescribeTargetGroupsCommand({ Names: [tgName] });
       const tgResponse = await elbv2Client.send(tgCommand);
       const targetGroupArn = tgResponse.TargetGroups![0].TargetGroupArn;

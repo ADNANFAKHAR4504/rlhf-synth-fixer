@@ -305,7 +305,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-ALB-${EnvironmentSuffix}'
+      Name: !Sub 'tap-alb-${EnvironmentSuffix}'
       Scheme: internet-facing
       Type: application
       Subnets:
@@ -417,7 +417,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-TG-${EnvironmentSuffix}'
+      Name: !Sub 'tap-tg-${EnvironmentSuffix}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
