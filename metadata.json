@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-IAC-CLO_YML_MED_LAMBDA_API_6k2l8m_9z1a4b7hUV",
+  "team": "synth-2",
+  "startedAt": "2025-10-01T05:37:06.778Z",
+  "subtask": "Cloud Environment Setup",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM",
+    "Systems Manager",
+    "X-Ray",
+    "Application Auto Scaling"
+  ],
+  "wave": "P1"
+}
