@@ -10,8 +10,7 @@
   "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Web Application Deployment",
-    "Security Configuration as Code"
+    "Web Application Deployment"
   ],
   "training_quality": 8,
   "aws_services": [
