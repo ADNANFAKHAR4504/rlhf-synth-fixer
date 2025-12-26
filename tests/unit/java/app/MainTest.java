@@ -108,11 +108,27 @@ public class MainTest {
         Template template = Template.fromStack(stack);
 
         // Verify Auto Scaling Group exists with proper capacity settings
-        template.hasResourceProperties("AWS::AutoScaling::AutoScalingGroup", Map.of(
-            "MinSize", "2",
-            "MaxSize", "10",
-            "DesiredCapacity", "3"
-        ));
+        // Note: Configuration depends on whether LocalStack is detected via AWS_ENDPOINT_URL
+        // In LocalStack: MinSize=1, MaxSize=2, DesiredCapacity=1
+        // In AWS: MinSize=2, MaxSize=10, DesiredCapacity=3
+        // CloudFormation template stores these as strings
+        String endpointUrl = System.getenv("AWS_ENDPOINT_URL");
+        boolean isLocalStack = endpointUrl != null &&
+            (endpointUrl.contains("localhost") || endpointUrl.contains("4566"));
+
+        if (isLocalStack) {
+            template.hasResourceProperties("AWS::AutoScaling::AutoScalingGroup", Map.of(
+                "MinSize", "1",
+                "MaxSize", "2",
+                "DesiredCapacity", "1"
+            ));
+        } else {
+            template.hasResourceProperties("AWS::AutoScaling::AutoScalingGroup", Map.of(
+                "MinSize", "2",
+                "MaxSize", "10",
+                "DesiredCapacity", "3"
+            ));
+        }
     }
 
     /**
@@ -168,8 +184,15 @@ public class MainTest {
 
         Template template = Template.fromStack(stack);
 
-        // Verify at least one CloudWatch alarm is created
-        template.resourceCountIs("AWS::CloudWatch::Alarm", 3);
+        // Verify CloudWatch alarms based on environment
+        // LocalStack Community Edition: 0 alarms (not supported)
+        // AWS: 3 alarms (CPU, UnhealthyHosts, ResponseTime)
+        String endpointUrl = System.getenv("AWS_ENDPOINT_URL");
+        boolean isLocalStack = endpointUrl != null &&
+            (endpointUrl.contains("localhost") || endpointUrl.contains("4566"));
+
+        int expectedAlarms = isLocalStack ? 0 : 3;
+        template.resourceCountIs("AWS::CloudWatch::Alarm", expectedAlarms);
     }
 
     /**
@@ -214,10 +237,20 @@ public class MainTest {
 
         Template template = Template.fromStack(stack);
 
-        // Verify NAT gateways are created for redundancy (at least 2 for high availability)
-        // Note: Actual count depends on AZ availability in the deployment region
+        // Verify NAT gateways based on environment
+        // LocalStack Community Edition: 0 NAT Gateways (not well supported)
+        // AWS: At least 2 for high availability (one per AZ)
+        String endpointUrl = System.getenv("AWS_ENDPOINT_URL");
+        boolean isLocalStack = endpointUrl != null &&
+            (endpointUrl.contains("localhost") || endpointUrl.contains("4566"));
+
         int natGatewayCount = template.toJSON().get("Resources").toString()
             .split("AWS::EC2::NatGateway").length - 1;
-        assertThat(natGatewayCount).isGreaterThanOrEqualTo(2);
+
+        if (isLocalStack) {
+            assertThat(natGatewayCount).isEqualTo(0);
+        } else {
+            assertThat(natGatewayCount).isGreaterThanOrEqualTo(2);
+        }
     }
 }
