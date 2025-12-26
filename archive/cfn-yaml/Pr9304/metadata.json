@@ -20,12 +20,19 @@
     "CloudWatch Logs",
     "NAT Gateway",
     "Internet Gateway",
-    "Route 53",
+    "S3",
     "Elastic IP"
   ],
   "wave": "P0",
   "migrated_from": {
     "po_id": "trainr947",
     "pr": "Pr2041"
-  }
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
