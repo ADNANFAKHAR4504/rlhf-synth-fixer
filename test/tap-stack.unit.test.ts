@@ -72,7 +72,7 @@ describe('TapStack Infrastructure Tests', () => {
     });
   });
 
-  describe('S3 Backend Configuration', () => {
+  describe('Local Backend Configuration', () => {
     beforeEach(() => {
       stack = new TapStack(app, 'TestStack', {
         environmentSuffix: 'test',
@@ -82,20 +82,19 @@ describe('TapStack Infrastructure Tests', () => {
       synthesized = JSON.parse(Testing.synth(stack));
     });
 
-    test('configures S3 backend with correct bucket and region', () => {
-      const backend = synthesized.terraform.backend.s3;
-      expect(backend.bucket).toBe('test-state-bucket');
-      expect(backend.region).toBe('us-west-2');
-      expect(backend.encrypt).toBe(true);
-      expect(backend.use_lockfile).toBe(true);
+    test('configures local backend with correct path', () => {
+      const backend = synthesized.terraform.backend.local;
+      expect(backend).toBeDefined();
+      expect(backend.path).toBe('terraform.test.tfstate');
     });
 
-    test('sets correct state file key', () => {
-      const backend = synthesized.terraform.backend.s3;
-      expect(backend.key).toBe('test/migration-TestStack.tfstate');
+    test('uses local backend for LocalStack compatibility', () => {
+      const backend = synthesized.terraform.backend;
+      expect(backend.local).toBeDefined();
+      expect(backend.s3).toBeUndefined();
     });
+
   });
-
   describe('Migration Infrastructure Resources', () => {
     beforeEach(() => {
       stack = new TapStack(app, 'TestStack', {
