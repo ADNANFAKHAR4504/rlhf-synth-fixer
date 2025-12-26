@@ -352,20 +352,6 @@ export class TapStack extends TerraformStack {
       description: 'The ID of the public subnet',
     });
 
-    new TerraformOutput(this, 'WebServerPublicIpOutput', {
-      value:
-        webInstance?.publicIp ||
-        'N/A (LocalStack Community - EC2 not supported)',
-      description: 'The public IP address of the web server',
-    });
-
-    new TerraformOutput(this, 'WebServerPublicDnsOutput', {
-      value:
-        webInstance?.publicDns ||
-        'N/A (LocalStack Community - EC2 not supported)',
-      description: 'The public DNS name of the web server',
-    });
-
     new TerraformOutput(this, 'LogsBucketNameOutput', {
       value: logBucket.bucket,
       description: 'The name of the S3 logs bucket',
@@ -376,16 +362,34 @@ export class TapStack extends TerraformStack {
       description: 'The ID of the web security group',
     });
 
-    new TerraformOutput(this, 'IamRoleArnOutput', {
-      value: ec2Role?.arn || 'N/A (LocalStack Community - EC2 not supported)',
-      description: 'The ARN of the EC2 IAM role',
-    });
+    // Conditional outputs - only for AWS deployments with EC2
+    if (webInstance && ec2Role) {
+      new TerraformOutput(this, 'WebServerPublicIpOutput', {
+        value: webInstance.publicIp,
+        description: 'The public IP address of the web server',
+      });
 
-    new TerraformOutput(this, 'WebApplicationUrlOutput', {
-      value: webInstance
-        ? `http://${webInstance.publicDns}`
-        : 'N/A (LocalStack Community - EC2 not supported)',
-      description: 'The URL of the web application',
-    });
+      new TerraformOutput(this, 'WebServerPublicDnsOutput', {
+        value: webInstance.publicDns,
+        description: 'The public DNS name of the web server',
+      });
+
+      new TerraformOutput(this, 'IamRoleArnOutput', {
+        value: ec2Role.arn,
+        description: 'The ARN of the EC2 IAM role',
+      });
+
+      new TerraformOutput(this, 'WebApplicationUrlOutput', {
+        value: `http://${webInstance.publicDns}`,
+        description: 'The URL of the web application',
+      });
+    } else {
+      // For LocalStack Community, provide informational outputs
+      new TerraformOutput(this, 'DeploymentNoteOutput', {
+        value:
+          'LocalStack Community Edition - EC2 not supported (requires Pro/Ultimate)',
+        description: 'Deployment information',
+      });
+    }
   }
 }
