@@ -27,15 +27,11 @@ import {
 
 /* ---------------------------- Setup / Helpers --------------------------- */
 
-const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+const outputsPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
 if (!fs.existsSync(outputsPath)) {
   throw new Error(`Expected outputs file at ${outputsPath} — create it before running integration tests.`);
 }
-const raw = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
-const top = Object.keys(raw)[0];
-const outputsArr: { OutputKey: string; OutputValue: string }[] = raw[top];
-const outputs: Record<string, string> = {};
-for (const o of outputsArr) outputs[o.OutputKey] = o.OutputValue;
+const outputs: Record<string, string> = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 
 function deduceRegion(): string {
   if (process.env.AWS_REGION) return process.env.AWS_REGION;
