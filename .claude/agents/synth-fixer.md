@@ -5932,4 +5932,3 @@ All services used are HIGH compatibility (S3, DynamoDB, Lambda, SQS, KMS, IAM)
 ## Related Commands
 
 - `/synth-fixer` - Fix PR until all CI/CD jobs pass
-
