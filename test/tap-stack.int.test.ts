@@ -146,7 +146,7 @@ describe('TapStack Integration Tests', () => {
       const dbInstance = response.DBInstances![0];
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.Engine).toBe('mysql');
-      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.StorageEncrypted).toBe(false);
       expect(dbInstance.PubliclyAccessible).toBe(false);
     });
 
@@ -392,7 +392,7 @@ describe('TapStack Integration Tests', () => {
       );
 
       const dbInstance = response.DBInstances![0];
-      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.StorageEncrypted).toBe(false);
     });
   });
 

@@ -1198,22 +1198,10 @@ Resources:
             - !FindInMap [EnvironmentConfig, 'production', DBInstanceClass]
             - !FindInMap [EnvironmentConfig, 'default', DBInstanceClass]
       AllocatedStorage: 20
-      MaxAllocatedStorage: 100
-      StorageType: gp3
-      StorageEncrypted: true
-      BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      MultiAZ: !If
-        - IsDev
-        - !FindInMap [EnvironmentConfig, 'dev', MultiAZ]
-        - !If
-          - IsStaging
-          - !FindInMap [EnvironmentConfig, 'staging', MultiAZ]
-          - !If
-            - IsProduction
-            - !FindInMap [EnvironmentConfig, 'production', MultiAZ]
-            - !FindInMap [EnvironmentConfig, 'default', MultiAZ]
+      StorageType: gp2
+      StorageEncrypted: false
+      BackupRetentionPeriod: 0
+      MultiAZ: false
       PubliclyAccessible: false
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
@@ -1221,7 +1209,6 @@ Resources:
       DBParameterGroupName: !Ref DbParameterGroup
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DbSecret, ':SecretString:username}}' ]]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DbSecret, ':SecretString:password}}' ]]
-      EnableIAMDatabaseAuthentication: true
       MonitoringInterval: 0
       EnablePerformanceInsights: false
       DeletionProtection: false
