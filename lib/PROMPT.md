@@ -39,7 +39,7 @@ The system will work like this:
 - Glue catalog organizing metadata for Athena queries
 
 **Security:**
-- IAM roles for each Lambda with least-privilege access to just their required buckets and tables
+- IAM roles for each Lambda with least-privilege access to just their required buckets and tables - no wildcards
 - KMS encryption key shared across S3, DynamoDB, and SNS
 - Proper trust relationships between services
 
@@ -54,11 +54,11 @@ The table has partition key 'id' and uses PAY_PER_REQUEST billing. Need to keep 
 
 ## Key Requirements
 
-All S3 buckets need versioning enabled. Lambda functions should use Node.js 22 runtime with inline code for now. Step Functions needs error handling for failed approvals. EventBridge should run daily checks for overdue documents. Make sure IAM policies are specific - no wildcard permissions.
+All S3 buckets need versioning enabled. Lambda functions should use Node.js 22 runtime with inline code for now. Step Functions needs error handling for failed approvals. EventBridge should run daily checks for overdue documents. Make sure IAM policies are specific with exact actions and resource ARNs.
 
 The template should support deploying dev, staging, and prod environments using the EnvironmentSuffix parameter. All resource names should include the suffix so they don't collide.
 
-Need outputs for all major resources so other stacks can reference them. Make sure DependsOn is set correctly so services deploy in the right order - KMS before DynamoDB, buckets before Lambda, etc.
+Need outputs for all major resources so other stacks can reference them. Make sure DependsOn is set correctly so services deploy in the right order - KMS before DynamoDB, buckets before Lambda, and so on.
 
 Would be great to have CloudWatch alarms on Lambda errors and DynamoDB throttling. Also need proper tags on everything for cost tracking.
 
