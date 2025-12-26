@@ -10,18 +10,10 @@ Parameters:
     Description: Environment name (e.g., dev, prod)
     Default: dev
 
-  IsLocalStack:
-    Type: String
-    Description: Set to 'true' when deploying to LocalStack
-    Default: 'false'
-    AllowedValues:
-      - 'true'
-      - 'false'
-
   InstanceAMI:
-    Type: String
-    Description: AMI ID for EC2 instance (use ami-00000000 for LocalStack)
-    Default: ami-00000000
+    Type: AWS::EC2::Image::Id
+    Description: AMI ID for EC2 instance
+    Default: ami-0601422bf6afa8ac3
 
 Resources:
   VPC:

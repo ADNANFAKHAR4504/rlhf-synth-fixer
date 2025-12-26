@@ -41,16 +41,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(envParam.Description).toBe('Environment name (e.g., dev, prod)');
     });
 
-    test('should have IsLocalStack parameter for conditional deployment', () => {
-      expect(template.Parameters.IsLocalStack).toBeDefined();
-      expect(template.Parameters.IsLocalStack.Type).toBe('String');
-      expect(template.Parameters.IsLocalStack.Default).toBe('false');
-    });
-
     test('should have InstanceAMI parameter for configurable AMI', () => {
       expect(template.Parameters.InstanceAMI).toBeDefined();
-      expect(template.Parameters.InstanceAMI.Type).toBe('String');
-      expect(template.Parameters.InstanceAMI.Default).toBe('ami-00000000');
+      expect(template.Parameters.InstanceAMI.Type).toBe('AWS::EC2::Image::Id');
+      expect(template.Parameters.InstanceAMI.Default).toBe('ami-0601422bf6afa8ac3');
     });
   });
 
@@ -277,9 +271,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBe(15);
     });
 
-    test('should have three parameters', () => {
+    test('should have two parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(2);
     });
 
     test('should not have any undefined or null required sections', () => {
