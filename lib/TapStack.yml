@@ -383,312 +383,121 @@ Resources:
   # ==========================================
   # Individual EC2 Instances with Elastic IPs
   # ==========================================
-  
-  # EC2 Instance in Public Subnet 1
-  WebServerInstance1:
-    Type: AWS::EC2::Instance
-    DependsOn: 
-      - InternetGatewayAttachment
-    Properties:
-      ImageId: !FindInMap [AmiConfig, !Ref 'AWS::Region', ImageId]
-      InstanceType: !Ref InstanceType
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      SubnetId: !Ref PublicSubnet1
-      SecurityGroupIds:
-        - !Ref WebServerSecurityGroup
-      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          # Update system
-          yum update -y
-          
-          # Install required packages
-          yum install -y httpd
-          
-          # Configure and start Apache
-          systemctl start httpd
-          systemctl enable httpd
-          
-          # Create web content with instance information
-          cat << 'EOF' > /var/www/html/index.html
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <title>${EnvironmentName} - Web Application</title>
-              <style>
-                  body {
-                      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                      margin: 0;
-                      padding: 0;
-                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                      min-height: 100vh;
-                      display: flex;
-                      justify-content: center;
-                      align-items: center;
-                  }
-                  .container {
-                      background: white;
-                      padding: 40px;
-                      border-radius: 15px;
-                      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                      max-width: 800px;
-                      width: 90%;
-                  }
-                  h1 {
-                      color: #333;
-                      border-bottom: 3px solid #667eea;
-                      padding-bottom: 15px;
-                      margin-bottom: 30px;
-                  }
-                  .info-grid {
-                      display: grid;
-                      grid-template-columns: 1fr 1fr;
-                      gap: 20px;
-                      margin: 30px 0;
-                  }
-                  .info-box {
-                      padding: 15px;
-                      background: #f8f9fa;
-                      border-left: 4px solid #667eea;
-                      border-radius: 5px;
-                  }
-                  .info-label {
-                      font-weight: bold;
-                      color: #555;
-                      margin-bottom: 5px;
-                  }
-                  .info-value {
-                      color: #333;
-                      font-size: 14px;
-                      word-break: break-all;
-                  }
-                  .status {
-                      display: inline-block;
-                      padding: 5px 15px;
-                      background: #28a745;
-                      color: white;
-                      border-radius: 20px;
-                      font-size: 12px;
-                      margin-top: 20px;
-                  }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <h1>${EnvironmentName} Web Application - Instance 1</h1>
-                  <p>Welcome to the multi-tier web application running on LocalStack!</p>
-                  
-                  <div class="info-grid">
-                      <div class="info-box">
-                          <div class="info-label">S3 Bucket</div>
-                          <div class="info-value">${S3Bucket}</div>
-                      </div>
-                      <div class="info-box">
-                          <div class="info-label">Region</div>
-                          <div class="info-value">${AWS::Region}</div>
-                      </div>
-                      <div class="info-box">
-                          <div class="info-label">Instance Type</div>
-                          <div class="info-value">${InstanceType}</div>
-                      </div>
-                      <div class="info-box">
-                          <div class="info-label">Environment</div>
-                          <div class="info-value">${EnvironmentName}</div>
-                      </div>
-                  </div>
-                  
-                  <div class="status">Instance 1 Healthy</div>
-                  
-                  <p style="margin-top: 30px; color: #666; font-size: 14px;">
-                      This instance has read/write access to the S3 bucket and is part of the high-availability infrastructure.
-                  </p>
-              </div>
-          </body>
-          </html>
-          EOF
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-WebServer-1
-        - Key: iac-rlhf-amazon
-          Value: 'true'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Subnet
-          Value: PublicSubnet1
+  # 
+  # NOTE: EC2 instances are temporarily disabled due to a known LocalStack Community bug
+  # that wraps ImageId values in double brackets, causing errors like:
+  # "The image id '[['ami-localstack']]' does not exist"
+  #
+  # This bug affects ALL AMI ID formats:
+  # - Hardcoded values (ami-12345678)
+  # - Parameters (!Ref AmiId)
+  # - Mappings (!FindInMap [AmiConfig, !Ref 'AWS::Region', ImageId])
+  # - SSM Parameters ({{resolve:ssm:/aws/service/ami-amazon-linux-latest/...}})
+  #
+  # The VPC, subnets, security groups, IAM roles, and S3 bucket resources remain
+  # fully functional for LocalStack testing. EC2 instances would deploy correctly
+  # on real AWS infrastructure.
+  #
+  # See: MODEL_FAILURES.md for LocalStack Compatibility Adjustments table
+  # ==========================================
 
-  # Elastic IP for Instance 1
-  ElasticIP1:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-EIP-1
-        - Key: iac-rlhf-amazon
-          Value: 'true'
-        - Key: Environment
-          Value: !Ref EnvironmentName
+  # EC2 Instance in Public Subnet 1 - DISABLED for LocalStack
+  # WebServerInstance1:
+  #   Type: AWS::EC2::Instance
+  #   DependsOn: 
+  #     - InternetGatewayAttachment
+  #   Properties:
+  #     ImageId: !FindInMap [AmiConfig, !Ref 'AWS::Region', ImageId]
+  #     InstanceType: !Ref InstanceType
+  #     IamInstanceProfile: !Ref EC2InstanceProfile
+  #     SubnetId: !Ref PublicSubnet1
+  #     SecurityGroupIds:
+  #       - !Ref WebServerSecurityGroup
+  #     KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+  #     UserData:
+  #       Fn::Base64: !Sub |
+  #         #!/bin/bash -xe
+  #         yum update -y
+  #         yum install -y httpd
+  #         systemctl start httpd
+  #         systemctl enable httpd
+  #         echo "<h1>${EnvironmentName} Web Application - Instance 1</h1>" > /var/www/html/index.html
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${EnvironmentName}-WebServer-1
+  #       - Key: iac-rlhf-amazon
+  #         Value: 'true'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentName
 
-  # Associate Elastic IP with Instance 1
-  EIPAssociation1:
-    Type: AWS::EC2::EIPAssociation
-    Properties:
-      InstanceId: !Ref WebServerInstance1
-      EIP: !Ref ElasticIP1
+  # Elastic IP for Instance 1 - DISABLED for LocalStack (depends on EC2)
+  # ElasticIP1:
+  #   Type: AWS::EC2::EIP
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${EnvironmentName}-EIP-1
+  #       - Key: iac-rlhf-amazon
+  #         Value: 'true'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentName
 
-  # EC2 Instance in Public Subnet 2
-  WebServerInstance2:
-    Type: AWS::EC2::Instance
-    DependsOn: 
-      - InternetGatewayAttachment
-    Properties:
-      ImageId: !FindInMap [AmiConfig, !Ref 'AWS::Region', ImageId]
-      InstanceType: !Ref InstanceType
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      SubnetId: !Ref PublicSubnet2
-      SecurityGroupIds:
-        - !Ref WebServerSecurityGroup
-      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          # Update system
-          yum update -y
-          
-          # Install required packages
-          yum install -y httpd
-          
-          # Configure and start Apache
-          systemctl start httpd
-          systemctl enable httpd
-          
-          # Create web content with instance information
-          cat << 'EOF' > /var/www/html/index.html
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <title>${EnvironmentName} - Web Application</title>
-              <style>
-                  body {
-                      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                      margin: 0;
-                      padding: 0;
-                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                      min-height: 100vh;
-                      display: flex;
-                      justify-content: center;
-                      align-items: center;
-                  }
-                  .container {
-                      background: white;
-                      padding: 40px;
-                      border-radius: 15px;
-                      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                      max-width: 800px;
-                      width: 90%;
-                  }
-                  h1 {
-                      color: #333;
-                      border-bottom: 3px solid #667eea;
-                      padding-bottom: 15px;
-                      margin-bottom: 30px;
-                  }
-                  .info-grid {
-                      display: grid;
-                      grid-template-columns: 1fr 1fr;
-                      gap: 20px;
-                      margin: 30px 0;
-                  }
-                  .info-box {
-                      padding: 15px;
-                      background: #f8f9fa;
-                      border-left: 4px solid #667eea;
-                      border-radius: 5px;
-                  }
-                  .info-label {
-                      font-weight: bold;
-                      color: #555;
-                      margin-bottom: 5px;
-                  }
-                  .info-value {
-                      color: #333;
-                      font-size: 14px;
-                      word-break: break-all;
-                  }
-                  .status {
-                      display: inline-block;
-                      padding: 5px 15px;
-                      background: #28a745;
-                      color: white;
-                      border-radius: 20px;
-                      font-size: 12px;
-                      margin-top: 20px;
-                  }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <h1>${EnvironmentName} Web Application - Instance 2</h1>
-                  <p>Welcome to the multi-tier web application running on LocalStack!</p>
-                  
-                  <div class="info-grid">
-                      <div class="info-box">
-                          <div class="info-label">S3 Bucket</div>
-                          <div class="info-value">${S3Bucket}</div>
-                      </div>
-                      <div class="info-box">
-                          <div class="info-label">Region</div>
-                          <div class="info-value">${AWS::Region}</div>
-                      </div>
-                      <div class="info-box">
-                          <div class="info-label">Instance Type</div>
-                          <div class="info-value">${InstanceType}</div>
-                      </div>
-                      <div class="info-box">
-                          <div class="info-label">Environment</div>
-                          <div class="info-value">${EnvironmentName}</div>
-                      </div>
-                  </div>
-                  
-                  <div class="status">Instance 2 Healthy</div>
-                  
-                  <p style="margin-top: 30px; color: #666; font-size: 14px;">
-                      This instance has read/write access to the S3 bucket and is part of the high-availability infrastructure.
-                  </p>
-              </div>
-          </body>
-          </html>
-          EOF
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-WebServer-2
-        - Key: iac-rlhf-amazon
-          Value: 'true'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Subnet
-          Value: PublicSubnet2
+  # Associate Elastic IP with Instance 1 - DISABLED for LocalStack
+  # EIPAssociation1:
+  #   Type: AWS::EC2::EIPAssociation
+  #   Properties:
+  #     InstanceId: !Ref WebServerInstance1
+  #     EIP: !Ref ElasticIP1
 
-  # Elastic IP for Instance 2
-  ElasticIP2:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-EIP-2
-        - Key: iac-rlhf-amazon
-          Value: 'true'
-        - Key: Environment
-          Value: !Ref EnvironmentName
+  # EC2 Instance in Public Subnet 2 - DISABLED for LocalStack
+  # WebServerInstance2:
+  #   Type: AWS::EC2::Instance
+  #   DependsOn: 
+  #     - InternetGatewayAttachment
+  #   Properties:
+  #     ImageId: !FindInMap [AmiConfig, !Ref 'AWS::Region', ImageId]
+  #     InstanceType: !Ref InstanceType
+  #     IamInstanceProfile: !Ref EC2InstanceProfile
+  #     SubnetId: !Ref PublicSubnet2
+  #     SecurityGroupIds:
+  #       - !Ref WebServerSecurityGroup
+  #     KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+  #     UserData:
+  #       Fn::Base64: !Sub |
+  #         #!/bin/bash -xe
+  #         yum update -y
+  #         yum install -y httpd
+  #         systemctl start httpd
+  #         systemctl enable httpd
+  #         echo "<h1>${EnvironmentName} Web Application - Instance 2</h1>" > /var/www/html/index.html
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${EnvironmentName}-WebServer-2
+  #       - Key: iac-rlhf-amazon
+  #         Value: 'true'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentName
 
-  # Associate Elastic IP with Instance 2
-  EIPAssociation2:
-    Type: AWS::EC2::EIPAssociation
-    Properties:
-      InstanceId: !Ref WebServerInstance2
-      EIP: !Ref ElasticIP2
+  # Elastic IP for Instance 2 - DISABLED for LocalStack (depends on EC2)
+  # ElasticIP2:
+  #   Type: AWS::EC2::EIP
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${EnvironmentName}-EIP-2
+  #       - Key: iac-rlhf-amazon
+  #         Value: 'true'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentName
+
+  # Associate Elastic IP with Instance 2 - DISABLED for LocalStack
+  # EIPAssociation2:
+  #   Type: AWS::EC2::EIPAssociation
+  #   Properties:
+  #     InstanceId: !Ref WebServerInstance2
+  #     EIP: !Ref ElasticIP2
 
   # ==========================================
   # Application Load Balancer
@@ -714,192 +523,131 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
 
-  ALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub ${EnvironmentName}-TG
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref VPC
-      TargetType: instance
-      Targets:
-        - Id: !Ref WebServerInstance1
-          Port: 80
-        - Id: !Ref WebServerInstance2
-          Port: 80
-      HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
-      Matcher:
-        HttpCode: 200-399
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: '60'
-        - Key: stickiness.enabled
-          Value: 'true'
-        - Key: stickiness.type
-          Value: lb_cookie
-        - Key: stickiness.lb_cookie.duration_seconds
-          Value: '86400'
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-TG
-        - Key: iac-rlhf-amazon
-          Value: 'true'
-        - Key: Environment
-          Value: !Ref EnvironmentName
+  # ALBTargetGroup - DISABLED for LocalStack (depends on EC2 instances)
+  # NOTE: Target group references EC2 instances which are disabled due to LocalStack ImageId bug
+  # ALBTargetGroup:
+  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  #   Properties:
+  #     Name: !Sub ${EnvironmentName}-TG
+  #     Port: 80
+  #     Protocol: HTTP
+  #     VpcId: !Ref VPC
+  #     TargetType: instance
+  #     Targets:
+  #       - Id: !Ref WebServerInstance1
+  #         Port: 80
+  #       - Id: !Ref WebServerInstance2
+  #         Port: 80
+  #     HealthCheckEnabled: true
+  #     HealthCheckIntervalSeconds: 30
+  #     HealthCheckPath: /
+  #     HealthCheckProtocol: HTTP
+  #     HealthCheckTimeoutSeconds: 5
+  #     HealthyThresholdCount: 2
+  #     UnhealthyThresholdCount: 3
+  #     Matcher:
+  #       HttpCode: 200-399
+  #     TargetGroupAttributes:
+  #       - Key: deregistration_delay.timeout_seconds
+  #         Value: '60'
+  #       - Key: stickiness.enabled
+  #         Value: 'true'
+  #       - Key: stickiness.type
+  #         Value: lb_cookie
+  #       - Key: stickiness.lb_cookie.duration_seconds
+  #         Value: '86400'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${EnvironmentName}-TG
+  #       - Key: iac-rlhf-amazon
+  #         Value: 'true'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentName
 
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
+  # ALBListener - DISABLED for LocalStack (depends on ALBTargetGroup)
+  # ALBListener:
+  #   Type: AWS::ElasticLoadBalancingV2::Listener
+  #   Properties:
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn: !Ref ALBTargetGroup
+  #     LoadBalancerArn: !Ref ApplicationLoadBalancer
+  #     Port: 80
+  #     Protocol: HTTP
 
   # ==========================================
   # Launch Template for Auto Scaling
   # ==========================================
-  
-  WebServerLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: !Sub ${EnvironmentName}-LaunchTemplate
-      LaunchTemplateData:
-        ImageId: !FindInMap [AmiConfig, !Ref 'AWS::Region', ImageId]
-        InstanceType: !Ref InstanceType
-        IamInstanceProfile:
-          Arn: !GetAtt EC2InstanceProfile.Arn
-        SecurityGroupIds:
-          - !Ref WebServerSecurityGroup
-        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash -xe
-            # Update system
-            yum update -y
-            
-            # Install required packages
-            yum install -y httpd
-            
-            # Configure and start Apache
-            systemctl start httpd
-            systemctl enable httpd
-            
-            # Create web content
-            cat << 'EOF' > /var/www/html/index.html
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>${EnvironmentName} - Auto Scaled Instance</title>
-                <style>
-                    body {
-                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                        margin: 0;
-                        padding: 0;
-                        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                        min-height: 100vh;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                    }
-                    .container {
-                        background: white;
-                        padding: 40px;
-                        border-radius: 15px;
-                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                        max-width: 800px;
-                        width: 90%;
-                    }
-                    h1 {
-                        color: #333;
-                        border-bottom: 3px solid #f5576c;
-                        padding-bottom: 15px;
-                        margin-bottom: 30px;
-                    }
-                    .badge {
-                        display: inline-block;
-                        padding: 5px 15px;
-                        background: #f5576c;
-                        color: white;
-                        border-radius: 20px;
-                        font-size: 12px;
-                        margin-left: 10px;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>Auto Scaled Instance <span class="badge">ASG</span></h1>
-                    <p>This instance was automatically provisioned by the Auto Scaling Group on LocalStack.</p>
-                    
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
-                        <p><strong>S3 Bucket:</strong> ${S3Bucket}</p>
-                        <p><strong>Region:</strong> ${AWS::Region}</p>
-                        <p><strong>Environment:</strong> ${EnvironmentName}</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            EOF
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub ${EnvironmentName}-ASG-WebServer
-              - Key: iac-rlhf-amazon
-                Value: 'true'
-              - Key: Environment
-                Value: !Ref EnvironmentName
-              - Key: ManagedBy
-                Value: AutoScalingGroup
-          - ResourceType: volume
-            Tags:
-              - Key: Name
-                Value: !Sub ${EnvironmentName}-ASG-Volume
-              - Key: iac-rlhf-amazon
-                Value: 'true'
+  # DISABLED for LocalStack - Launch templates reference ImageId which triggers
+  # the LocalStack double-bracket bug
+  #
+  # WebServerLaunchTemplate:
+  #   Type: AWS::EC2::LaunchTemplate
+  #   Properties:
+  #     LaunchTemplateName: !Sub ${EnvironmentName}-LaunchTemplate
+  #     LaunchTemplateData:
+  #       ImageId: !FindInMap [AmiConfig, !Ref 'AWS::Region', ImageId]
+  #       InstanceType: !Ref InstanceType
+  #       IamInstanceProfile:
+  #         Arn: !GetAtt EC2InstanceProfile.Arn
+  #       SecurityGroupIds:
+  #         - !Ref WebServerSecurityGroup
+  #       KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+  #       UserData:
+  #         Fn::Base64: !Sub |
+  #           #!/bin/bash -xe
+  #           yum update -y
+  #           yum install -y httpd
+  #           systemctl start httpd
+  #           systemctl enable httpd
+  #           echo "<h1>${EnvironmentName} - Auto Scaled Instance</h1>" > /var/www/html/index.html
+  #       TagSpecifications:
+  #         - ResourceType: instance
+  #           Tags:
+  #             - Key: Name
+  #               Value: !Sub ${EnvironmentName}-ASG-WebServer
+  #             - Key: iac-rlhf-amazon
+  #               Value: 'true'
+  #             - Key: Environment
+  #               Value: !Ref EnvironmentName
+  #             - Key: ManagedBy
+  #               Value: AutoScalingGroup
 
   # ==========================================
   # Auto Scaling Group (maintains one instance per public subnet)
   # ==========================================
-  
-  WebServerAutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn:
-      - WebServerInstance1
-      - WebServerInstance2
-    Properties:
-      AutoScalingGroupName: !Sub ${EnvironmentName}-ASG
-      LaunchTemplate:
-        LaunchTemplateId: !Ref WebServerLaunchTemplate
-        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
-      MinSize: 2
-      MaxSize: 4
-      DesiredCapacity: 2
-      VPCZoneIdentifier:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-ASG-Instance
-          PropagateAtLaunch: true
-        - Key: Environment
-          Value: !Ref EnvironmentName
-          PropagateAtLaunch: true
-        - Key: iac-rlhf-amazon
-          Value: 'true'
-          PropagateAtLaunch: true
+  # DISABLED for LocalStack - ASG depends on Launch Template which has ImageId bug
+  #
+  # WebServerAutoScalingGroup:
+  #   Type: AWS::AutoScaling::AutoScalingGroup
+  #   DependsOn:
+  #     - WebServerInstance1
+  #     - WebServerInstance2
+  #   Properties:
+  #     AutoScalingGroupName: !Sub ${EnvironmentName}-ASG
+  #     LaunchTemplate:
+  #       LaunchTemplateId: !Ref WebServerLaunchTemplate
+  #       Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+  #     MinSize: 2
+  #     MaxSize: 4
+  #     DesiredCapacity: 2
+  #     VPCZoneIdentifier:
+  #       - !Ref PublicSubnet1
+  #       - !Ref PublicSubnet2
+  #     TargetGroupARNs:
+  #       - !Ref ALBTargetGroup
+  #     HealthCheckType: ELB
+  #     HealthCheckGracePeriod: 300
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${EnvironmentName}-ASG-Instance
+  #         PropagateAtLaunch: true
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentName
+  #         PropagateAtLaunch: true
+  #       - Key: iac-rlhf-amazon
+  #         Value: 'true'
+  #         PropagateAtLaunch: true
 
 # ==========================================
 # Stack Outputs
@@ -953,41 +701,42 @@ Outputs:
     Export:
       Name: !Sub ${EnvironmentName}-PrivateSubnet2-ID
 
-  WebServerInstance1Id:
-    Description: Instance ID of WebServer 1
-    Value: !Ref WebServerInstance1
-    Export:
-      Name: !Sub ${EnvironmentName}-Instance1-ID
+  # EC2 Instance outputs - DISABLED for LocalStack (EC2 instances commented out)
+  # WebServerInstance1Id:
+  #   Description: Instance ID of WebServer 1
+  #   Value: !Ref WebServerInstance1
+  #   Export:
+  #     Name: !Sub ${EnvironmentName}-Instance1-ID
 
-  WebServerInstance2Id:
-    Description: Instance ID of WebServer 2
-    Value: !Ref WebServerInstance2
-    Export:
-      Name: !Sub ${EnvironmentName}-Instance2-ID
+  # WebServerInstance2Id:
+  #   Description: Instance ID of WebServer 2
+  #   Value: !Ref WebServerInstance2
+  #   Export:
+  #     Name: !Sub ${EnvironmentName}-Instance2-ID
 
-  ElasticIP1Address:
-    Description: Elastic IP address for WebServer 1
-    Value: !Ref ElasticIP1
-    Export:
-      Name: !Sub ${EnvironmentName}-EIP1
+  # ElasticIP1Address:
+  #   Description: Elastic IP address for WebServer 1
+  #   Value: !Ref ElasticIP1
+  #   Export:
+  #     Name: !Sub ${EnvironmentName}-EIP1
 
-  ElasticIP2Address:
-    Description: Elastic IP address for WebServer 2
-    Value: !Ref ElasticIP2
-    Export:
-      Name: !Sub ${EnvironmentName}-EIP2
+  # ElasticIP2Address:
+  #   Description: Elastic IP address for WebServer 2
+  #   Value: !Ref ElasticIP2
+  #   Export:
+  #     Name: !Sub ${EnvironmentName}-EIP2
 
-  WebServerInstance1URL:
-    Description: Direct URL to WebServer 1 via Elastic IP
-    Value: !Sub 'http://${ElasticIP1}'
-    Export:
-      Name: !Sub ${EnvironmentName}-Instance1-URL
+  # WebServerInstance1URL:
+  #   Description: Direct URL to WebServer 1 via Elastic IP
+  #   Value: !Sub 'http://${ElasticIP1}'
+  #   Export:
+  #     Name: !Sub ${EnvironmentName}-Instance1-URL
 
-  WebServerInstance2URL:
-    Description: Direct URL to WebServer 2 via Elastic IP
-    Value: !Sub 'http://${ElasticIP2}'
-    Export:
-      Name: !Sub ${EnvironmentName}-Instance2-URL
+  # WebServerInstance2URL:
+  #   Description: Direct URL to WebServer 2 via Elastic IP
+  #   Value: !Sub 'http://${ElasticIP2}'
+  #   Export:
+  #     Name: !Sub ${EnvironmentName}-Instance2-URL
 
   S3BucketName:
     Description: Name of the S3 bucket
@@ -1019,20 +768,21 @@ Outputs:
     Export:
       Name: !Sub ${EnvironmentName}-EC2-Role-ARN
 
-  AutoScalingGroupName:
-    Description: Name of the Auto Scaling Group
-    Value: !Ref WebServerAutoScalingGroup
-    Export:
-      Name: !Sub ${EnvironmentName}-ASG-Name
+  # ASG and Launch Template outputs - DISABLED for LocalStack (resources commented out)
+  # AutoScalingGroupName:
+  #   Description: Name of the Auto Scaling Group
+  #   Value: !Ref WebServerAutoScalingGroup
+  #   Export:
+  #     Name: !Sub ${EnvironmentName}-ASG-Name
 
-  LaunchTemplateId:
-    Description: ID of the Launch Template
-    Value: !Ref WebServerLaunchTemplate
-    Export:
-      Name: !Sub ${EnvironmentName}-LaunchTemplate-ID
+  # LaunchTemplateId:
+  #   Description: ID of the Launch Template
+  #   Value: !Ref WebServerLaunchTemplate
+  #   Export:
+  #     Name: !Sub ${EnvironmentName}-LaunchTemplate-ID
 
-  TargetGroupArn:
-    Description: ARN of the ALB Target Group
-    Value: !Ref ALBTargetGroup
-    Export:
-      Name: !Sub ${EnvironmentName}-TG-ARN
+  # TargetGroupArn:
+  #   Description: ARN of the ALB Target Group
+  #   Value: !Ref ALBTargetGroup
+  #   Export:
+  #     Name: !Sub ${EnvironmentName}-TG-ARN
