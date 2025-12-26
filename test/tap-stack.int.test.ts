@@ -342,7 +342,10 @@ describe('High Availability Payment Processing Infrastructure - Integration Test
       try {
         const response = await client.send(command);
         expect(response.Parameter).toBeDefined();
-        expect(response.Parameter!.Value).toContain('.rds.amazonaws.com');
+        // Accept both AWS RDS endpoints and LocalStack endpoints
+        const value = response.Parameter!.Value!;
+        const isValidEndpoint = value.includes('.rds.amazonaws.com') || value.includes('localhost.localstack.cloud') || value.includes('127.0.0.1');
+        expect(isValidEndpoint).toBe(true);
       } catch (error: any) {
         if (error.name === 'ParameterNotFound') {
           console.log('Skipping: SSM parameter not found (stack may not be deployed)');
@@ -361,7 +364,10 @@ describe('High Availability Payment Processing Infrastructure - Integration Test
       try {
         const response = await client.send(command);
         expect(response.Parameter).toBeDefined();
-        expect(response.Parameter!.Value).toContain('.rds.amazonaws.com');
+        // Accept both AWS RDS endpoints and LocalStack endpoints
+        const value = response.Parameter!.Value!;
+        const isValidEndpoint = value.includes('.rds.amazonaws.com') || value.includes('localhost.localstack.cloud') || value.includes('127.0.0.1');
+        expect(isValidEndpoint).toBe(true);
       } catch (error: any) {
         if (error.name === 'ParameterNotFound') {
           console.log('Skipping: SSM parameter not found (stack may not be deployed)');
