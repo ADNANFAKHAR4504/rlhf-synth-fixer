@@ -7,7 +7,36 @@ description: 🏠 LOCAL-CI - Run all CI stages locally before push
 
 Run all CI/CD stages locally on worktree before pushing to remote.
 
-## ⛔ FIRST THING: REMOVE "HEY TEAM"!
+## ⛔⛔⛔ STEP 0: CHANGE TO CORRECT REPO FIRST! ⛔⛔⛔
+
+**EXECUTE THIS BEFORE ANYTHING ELSE!**
+
+```bash
+# 0.1 Load config
+source /home/adnan/Desktop/rlhf-synth-fixer/config.env
+
+# 0.2 CHANGE TO IAC-TEST-AUTOMATIONS (NOT rlhf-synth-fixer!)
+cd /home/adnan/turing/iac-test-automations
+echo "Current repo: $(pwd)"
+# MUST show: /home/adnan/turing/iac-test-automations
+
+# 0.3 Fetch latest
+git fetch origin
+
+# 0.4 Export LocalStack/AWS credentials (REQUIRED for deploy!)
+export AWS_ACCESS_KEY_ID="test"
+export AWS_SECRET_ACCESS_KEY="test"
+export AWS_DEFAULT_REGION="us-east-1"
+export AWS_ENDPOINT_URL="http://localhost:4566"
+export LOCALSTACK_AUTH_TOKEN="ls-GeQerAMa-NEJe-5207-bego-REhoNUvAc589"
+echo "✓ AWS/LocalStack credentials exported"
+```
+
+**⛔ DO NOT PROCEED UNTIL YOU ARE IN `/home/adnan/turing/iac-test-automations`!**
+
+---
+
+## ⛔ NEXT: REMOVE "HEY TEAM"!
 
 ```bash
 # EXECUTE IMMEDIATELY!
@@ -24,6 +53,30 @@ done
 /local-ci-runner 8543
 /local-ci-runner <pr-number>
 ```
+
+## ⚠️ COMPLETE FLOW (MUST FOLLOW!)
+
+### STEP 0: Go to correct repo
+```bash
+cd /home/adnan/turing/iac-test-automations
+git fetch origin
+```
+
+### STEP 1: Get PR branch and create worktree
+```bash
+PR_NUMBER=$ARGUMENTS
+BRANCH=$(gh pr view $PR_NUMBER --json headRefName -q '.headRefName')
+echo "Branch: $BRANCH"
+
+# Create worktree
+git worktree remove worktree/synth-fixer-$PR_NUMBER --force 2>/dev/null || true
+git worktree add worktree/synth-fixer-$PR_NUMBER origin/$BRANCH
+cd worktree/synth-fixer-$PR_NUMBER
+git checkout -B $BRANCH origin/$BRANCH
+git pull origin $BRANCH --rebase
+```
+
+### STEP 2: Run CI stages in worktree...
 
 ## What it Does
 

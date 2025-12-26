@@ -1,6 +1,24 @@
-# 🤖 SYNTH-AGENT
+# 🤖 RLHF-SYNTH-FIXER
 
 Automated PR Fixer for IAC Test Automations using Claude Code.
+
+## 🎯 Two Agents Available
+
+| Agent | Command | Purpose |
+|-------|---------|---------|
+| **Synth Fixer** | `/synth-fixer <PR>` | Fix PRs via remote CI/CD monitoring |
+| **Local CI Runner** | `/local-ci-runner <PR>` | Run ALL CI stages locally before push |
+
+### Which Agent to Use?
+
+| Scenario | Agent |
+|----------|-------|
+| Quick fixes, remote CI available | `/synth-fixer` |
+| LocalStack deployment testing | `/local-ci-runner` |
+| Full local validation before push | `/local-ci-runner` |
+| Internet issues / GitHub slow | `/local-ci-runner` |
+
+---
 
 ## Smart Repo Detection
 
@@ -215,18 +233,127 @@ The agent automatically ensures `metadata.json` has correct values:
 ## File Structure
 
 ```
-synth-agent/
+rlhf-synth-fixer/
 ├── README.md                    # This file
 ├── CLAUDE.md                    # Project context
-├── config.env                   # Configuration
+├── config.env                   # Configuration (create from config.env.example)
+├── config.env.example           # Example configuration
 ├── logs/
 │   └── status.json              # Status tracking
 └── .claude/
     ├── agents/
-    │   └── synth-fixer.md       # Agent definition
+    │   ├── synth-fixer.md       # Synth Fixer agent
+    │   └── local-ci-runner.md   # Local CI Runner agent
     └── commands/
-        └── synth-fixer.md       # /synth-fixer command
+        ├── synth-fixer.md       # /synth-fixer command
+        └── local-ci-runner.md   # /local-ci-runner command
 ```
+
+---
+
+# 🏠 LOCAL-CI-RUNNER Agent
+
+Run ALL CI/CD stages locally before pushing to GitHub.
+
+## Usage
+
+```bash
+/local-ci-runner <PR_NUMBER>
+
+# Examples:
+/local-ci-runner 9581
+/local-ci-runner 8543
+```
+
+## What It Does
+
+```
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                        🏠 LOCAL CI RUNNER - PHASES                                ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                   ║
+║  ⛔ PHASE 0: LOAD CONFIG & CHANGE REPO                                           ║
+║  ├── Load config.env                                                             ║
+║  ├── cd /home/adnan/turing/iac-test-automations                                  ║
+║  └── Export AWS/LocalStack credentials                                           ║
+║                                                                                   ║
+║  PHASE 1: WORKTREE SETUP                                                         ║
+║  ├── Create worktree for PR branch                                               ║
+║  ├── git pull origin <branch> --rebase                                           ║
+║  └── Remove "Hey Team" from PROMPT.md                                            ║
+║                                                                                   ║
+║  PHASE 2: PROTECTED FILES CHECK                                                  ║
+║  ├── Detect if protected files were modified                                     ║
+║  └── Restore from main branch                                                    ║
+║                                                                                   ║
+║  PHASE 3: LOCAL CI STAGES (ALL MUST PASS!)                                       ║
+║  ├── 3.1 Detect Project Files ⚠️ MANDATORY                                       ║
+║  ├── 3.2 Prompt Quality ⚠️ MANDATORY                                             ║
+║  ├── 3.3 Commit Validation                                                       ║
+║  ├── 3.4 Jest Config                                                             ║
+║  ├── 3.5 Build ⚠️ MANDATORY                                                      ║
+║  ├── 3.6 Synth ⚠️ MANDATORY                                                      ║
+║  ├── 3.7 Lint ⚠️ MANDATORY                                                       ║
+║  ├── 3.8 Unit Tests ⚠️ MANDATORY                                                 ║
+║  ├── 3.9 Deploy (LocalStack, 20min timeout)                                      ║
+║  ├── 3.10 Integration Tests                                                      ║
+║  └── 3.12 IDEAL_RESPONSE ⚠️ MANDATORY                                            ║
+║                                                                                   ║
+║  PHASE 4: PUSH & MONITOR                                                         ║
+║  ├── Push to GitHub                                                              ║
+║  ├── Monitor each CI stage                                                       ║
+║  ├── Auto-fix failures and re-push                                               ║
+║  └── 🎉 STOP when "archive-folders" passes                                       ║
+║                                                                                   ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+```
+
+## LocalStack Requirements
+
+For `Deploy` and `Integration Tests` stages, you need LocalStack Pro:
+
+```bash
+# Set LocalStack token
+localstack auth set-token ls-xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Start LocalStack
+localstack start
+```
+
+Or configure in `config.env`:
+```bash
+LOCALSTACK_AUTH_TOKEN="ls-xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+AWS_ACCESS_KEY_ID="test"
+AWS_SECRET_ACCESS_KEY="test"
+AWS_DEFAULT_REGION="us-east-1"
+AWS_ENDPOINT_URL="http://localhost:4566"
+```
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Live Deploy Monitoring** | Shows resources being created in real-time |
+| **20 min Deploy Timeout** | Stops if deploy takes too long |
+| **Auto-Cleanup on Fail** | Deletes created resources before retry |
+| **IDEAL_RESPONSE Sync** | Auto-updates when code changes |
+| **GitHub CI Monitor** | Watches each stage after push |
+| **Auto-Fix & Re-Push** | Fixes failures and pushes again |
+| **Archive Stop** | Stops when PR is ready for archive |
+
+## Local CI vs Remote CI
+
+| Stage | Local Script | Remote Job |
+|-------|--------------|------------|
+| Detect | `./scripts/detect-metadata.sh` | `detect-metadata` |
+| Prompt Quality | `.claude/scripts/claude-validate-prompt-quality.sh` | `claude-review-prompt-quality` |
+| Build | `./scripts/build.sh` | `build` |
+| Synth | `./scripts/synth.sh` | `synth` |
+| Lint | `./scripts/lint.sh` | `lint` |
+| Unit Tests | `./scripts/unit-tests.sh` | `unit-tests` |
+| Deploy | `./scripts/ci-deploy-conditional.sh` | `deploy` |
+| Integration | `./scripts/ci-integration-tests-conditional.sh` | `integration-tests-live` |
+| IDEAL_RESPONSE | `.claude/scripts/validate-ideal-response.sh` | `claude-review-ideal-response` |
 
 ## Troubleshooting
 
