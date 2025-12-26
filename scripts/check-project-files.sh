@@ -53,13 +53,22 @@ invalid_files=()
 while IFS= read -r file; do
   valid=false
 
-  for folder in "${ALLOWED_FOLDERS[@]}"; do
-    if [[ "$file" == "$folder/"* ]]; then
-      valid=true
-      break
-    fi
-  done
+  # Allow all files within archive/ folders (archive tasks)
+  if [[ "$file" == archive/* ]]; then
+    valid=true
+  fi
 
+  # Check root-level allowed folders
+  if [ "$valid" = false ]; then
+    for folder in "${ALLOWED_FOLDERS[@]}"; do
+      if [[ "$file" == "$folder/"* ]]; then
+        valid=true
+        break
+      fi
+    done
+  fi
+
+  # Check root-level allowed files
   if [ "$valid" = false ]; then
     for allowed_file in "${ALLOWED_FILES[@]}"; do
       if [[ "$file" == "$allowed_file" ]]; then
