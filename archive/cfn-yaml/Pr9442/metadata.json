@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291597",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T06:37:37.187Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "KMS",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "CloudTrail",
+    "AWS Config",
+    "CloudWatch"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291597",
+    "pr": "Pr1842"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
