@@ -98,12 +98,13 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have valid DNS name for ALB', () => {
-      // e.g., name-1234567890.region.elb.amazonaws.com (allow mixed case)
-      expect(stackOutputs.ALBDNSName).toMatch(/^[A-Za-z0-9-]+\.[A-Za-z0-9-]+\.elb\.amazonaws\.com$/);
+      // AWS: name-1234567890.region.elb.amazonaws.com or LocalStack: name.elb.localhost.localstack.cloud
+      expect(stackOutputs.ALBDNSName).toMatch(/^[A-Za-z0-9-]+\.(elb\.(localhost\.localstack\.cloud|[A-Za-z0-9-]+\.elb\.amazonaws\.com))$/);
     });
 
     test('should have valid RDS endpoint format', () => {
-      expect(stackOutputs.RDSEndpoint).toMatch(/^[a-z0-9-]+\..*\.rds\.amazonaws\.com$/);
+      // AWS: id.region.rds.amazonaws.com or LocalStack: localhost.localstack.cloud
+      expect(stackOutputs.RDSEndpoint).toMatch(/^([a-z0-9-]+\..*\.rds\.amazonaws\.com|localhost\.localstack\.cloud)$/);
     });
 
     test('should have valid S3 bucket names', () => {
@@ -132,7 +133,9 @@ describe('TapStack Integration Tests', () => {
 
     test('should have RDS instance accessible', async () => {
       const rdsEndpoint = stackOutputs.RDSEndpoint;
-      const dbIdentifier = rdsEndpoint.split('.')[0];
+      // LocalStack returns localhost.localstack.cloud, AWS returns id.region.rds.amazonaws.com
+      const isLocalStack = rdsEndpoint.includes('localstack.cloud');
+      const dbIdentifier = isLocalStack ? `${environmentSuffix}-database` : rdsEndpoint.split('.')[0];
 
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({
@@ -368,7 +371,9 @@ describe('TapStack Integration Tests', () => {
 
     test('should have RDS instance in private subnet', async () => {
       const rdsEndpoint = stackOutputs.RDSEndpoint;
-      const dbIdentifier = rdsEndpoint.split('.')[0];
+      // LocalStack returns localhost.localstack.cloud, AWS returns id.region.rds.amazonaws.com
+      const isLocalStack = rdsEndpoint.includes('localstack.cloud');
+      const dbIdentifier = isLocalStack ? `${environmentSuffix}-database` : rdsEndpoint.split('.')[0];
 
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({
@@ -383,7 +388,9 @@ describe('TapStack Integration Tests', () => {
 
     test('should have encrypted storage', async () => {
       const rdsEndpoint = stackOutputs.RDSEndpoint;
-      const dbIdentifier = rdsEndpoint.split('.')[0];
+      // LocalStack returns localhost.localstack.cloud, AWS returns id.region.rds.amazonaws.com
+      const isLocalStack = rdsEndpoint.includes('localstack.cloud');
+      const dbIdentifier = isLocalStack ? `${environmentSuffix}-database` : rdsEndpoint.split('.')[0];
 
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({
