@@ -610,15 +610,15 @@ output "instance_id" {
 output "security_requirements_compliance" {
   description = "Security requirements compliance status"
   value = {
-    iam_policies_version_controlled = "✓ All IAM policies defined in Terraform (version controlled)"
-    security_groups_http_https_only = "✓ Security groups allow only HTTP (80) and HTTPS (443)"
-    iam_least_privilege             = "✓ IAM roles follow principle of least privilege"
-    s3_encryption_enabled           = "✓ S3 buckets have default encryption enabled"
-    cloudwatch_api_logging          = "✓ CloudTrail captures all API requests"
-    approved_amis_only              = "✓ EC2 instances use approved AMIs from Amazon"
-    mfa_console_access              = "✓ MFA required for console access"
-    rds_encryption_at_rest          = "✓ RDS storage encrypted at rest"
-    auto_generated_passwords        = "✓ Database password auto-generated and stored securely"
+    iam_policies_version_controlled = "All IAM policies defined in Terraform (version controlled)"
+    security_groups_http_https_only = "Security groups allow only HTTP (80) and HTTPS (443)"
+    iam_least_privilege             = "IAM roles follow principle of least privilege"
+    s3_encryption_enabled           = "S3 buckets have default encryption enabled"
+    cloudwatch_api_logging          = "CloudTrail captures all API requests"
+    approved_amis_only              = "EC2 instances use approved AMIs from Amazon"
+    mfa_console_access              = "MFA required for console access"
+    rds_encryption_at_rest          = "RDS storage encrypted at rest"
+    auto_generated_passwords        = "Database password auto-generated and stored securely"
   }
 }
 
