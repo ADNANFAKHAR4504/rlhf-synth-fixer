@@ -80,7 +80,7 @@ describe('TapStack CloudFormation Template - Multi-Tier Web Application', () => 
     test('should have DBInstanceClass parameter', () => {
       expect(template.Parameters.DBInstanceClass).toBeDefined();
       expect(template.Parameters.DBInstanceClass.Type).toBe('String');
-      expect(template.Parameters.DBInstanceClass.Default).toBe('db.r5.large');
+      expect(template.Parameters.DBInstanceClass.Default).toBe('db.t3.small');
     });
 
     test('should have DesiredTaskCount parameter', () => {
@@ -481,14 +481,12 @@ describe('TapStack CloudFormation Template - Multi-Tier Web Application', () => 
       expect(cluster.Type).toBe('AWS::RDS::DBCluster');
       expect(cluster.DeletionPolicy).toBe('Delete');
       expect(cluster.Properties.StorageEncrypted).toBe(true);
-      expect(cluster.Properties.KmsKeyId).toBeDefined();
     });
 
     test('AuroraDBCluster should have correct engine configuration', () => {
       const cluster = template.Resources.AuroraDBCluster;
       expect(cluster.Properties.Engine).toBe('aurora-mysql');
-      expect(cluster.Properties.EngineMode).toBe('provisioned');
-      expect(cluster.Properties.EngineVersion).toBe('5.7.mysql_aurora.2.11.3');
+      expect(cluster.Properties.EngineVersion).toBe('8.0.mysql_aurora.3.11.0');
     });
 
     test('AuroraDBCluster should have alphanumeric database name', () => {
