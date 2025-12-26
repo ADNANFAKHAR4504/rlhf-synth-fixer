@@ -69,7 +69,7 @@ Create a serverless cryptocurrency price alert system using **CloudFormation wit
 - All Lambda functions must have reserved concurrent executions configured
 - API Gateway must implement usage plans with API keys for authentication
 - CloudWatch alarms must trigger on Lambda errors exceeding 1 percent error rate
-- All IAM roles must follow least privilege with no wildcard resource permissions
+- IAM roles must follow least privilege principle with specific actions and resources only
 - Lambda environment variables must be encrypted with KMS
 - DynamoDB global secondary indexes must project only required attributes not all
 - All resources must be destroyable with no Retain policies
@@ -88,7 +88,7 @@ Create a serverless cryptocurrency price alert system using **CloudFormation wit
 - Reliability: Point-in-time recovery enabled for data protection
 - Security: API Gateway requires API keys for webhook authentication
 - Security: Lambda environment variables encrypted with KMS
-- Security: IAM roles follow least privilege with specific resource permissions
+- Security: IAM roles implement least privilege principle with scoped access
 - Monitoring: CloudWatch alarms configured for Lambda errors and DynamoDB throttling
 - Resource Naming: All resources include EnvironmentSuffix parameter
 - Code Quality: Clean JSON CloudFormation template, well-organized, documented
