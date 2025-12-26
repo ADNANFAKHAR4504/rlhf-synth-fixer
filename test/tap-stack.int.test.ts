@@ -53,8 +53,30 @@ const isLocalStack =
 // Load stack outputs
 const loadStackOutputs = () => {
   try {
-    const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
-    const outputsContent = fs.readFileSync(outputsPath, 'utf8');
+    // Try multiple possible locations for outputs file
+    // In CI: GitHub Actions downloads artifact contents to root directory
+    // Locally: outputs are in cfn-outputs/ directory
+    const possiblePaths = [
+      path.join(__dirname, '../all-outputs.json'),        // CI artifact location
+      path.join(__dirname, '../cfn-outputs/all-outputs.json'), // Local location
+    ];
+
+    let outputsContent: string | null = null;
+    let usedPath: string | null = null;
+
+    for (const outputsPath of possiblePaths) {
+      if (fs.existsSync(outputsPath)) {
+        outputsContent = fs.readFileSync(outputsPath, 'utf8');
+        usedPath = outputsPath;
+        break;
+      }
+    }
+
+    if (!outputsContent) {
+      throw new Error(`all-outputs.json not found in any of these locations: ${possiblePaths.join(', ')}`);
+    }
+
+    console.log(`Loaded outputs from: ${usedPath}`);
     const allOutputs = JSON.parse(outputsContent);
 
     // Extract the first (and likely only) stack's outputs
