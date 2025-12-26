@@ -1,12 +1,12 @@
 Create infrastructure code in CloudFormation JSON format for a healthcare appointment reminder system that sends SMS notifications to patients.
 
 Requirements:
-1. Set up an SNS topic configured for SMS messaging to send appointment reminders to 2500 patients daily
-2. Create a Lambda function in Python 3.9 that processes appointment data and triggers SMS notifications
-3. Implement a DynamoDB table to log all SMS delivery attempts with fields for patient ID, phone number, message content, delivery status, timestamp, and retry count
-4. Configure CloudWatch metrics to track SMS delivery success rates and failures with alarms when failure rate exceeds 5%
-5. Set up SES for email fallback when SMS delivery fails after 3 retry attempts
-6. Create IAM roles and policies with least privilege access for Lambda to interact with SNS, DynamoDB, CloudWatch, and SES
+1. Set up an SNS topic configured for SMS messaging that connects to Lambda for sending appointment reminders to 2500 patients daily
+2. Create a Lambda function in Python 3.9 that reads appointment data, triggers SMS notifications through SNS, and writes delivery logs to DynamoDB
+3. Implement a DynamoDB table that stores all SMS delivery attempts with fields for patient ID, phone number, message content, delivery status, timestamp, and retry count
+4. Configure CloudWatch metrics that integrate with Lambda and SNS to track SMS delivery success rates with alarms when failure rate exceeds 5%
+5. Set up SES integrated with Lambda for email fallback when SMS delivery fails after 3 retry attempts
+6. Create IAM roles that grant Lambda access to SNS for messaging, DynamoDB for logging, CloudWatch for metrics, and SES for email fallback
 7. Include CloudWatch query alarms to monitor individual SMS delivery metrics
 8. Add AWS End User Messaging SMS integration for enhanced SMS resource management and centralized billing
 
