@@ -1,7 +1,7 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 import path from 'path';
-import * as yaml from 'js-yaml';
+import { execSync } from 'child_process';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -21,9 +21,13 @@ describe('FinanceApp Integration Tests', () => {
       templateContent = fs.readFileSync(jsonPath, 'utf8');
       template = JSON.parse(templateContent);
     } else if (fs.existsSync(yamlPath)) {
-      // Load and convert YAML to JSON
-      const yamlContent = fs.readFileSync(yamlPath, 'utf8');
-      template = yaml.load(yamlContent);
+      // Load and convert YAML to JSON using cfn-flip (handles CloudFormation intrinsic functions)
+      try {
+        const jsonContent = execSync(`cfn-flip "${yamlPath}"`, { encoding: 'utf8' });
+        template = JSON.parse(jsonContent);
+      } catch (error: any) {
+        throw new Error(`Failed to convert YAML to JSON: ${error.message}`);
+      }
     } else {
       throw new Error('Neither TapStack.json nor TapStack.yml found');
     }
