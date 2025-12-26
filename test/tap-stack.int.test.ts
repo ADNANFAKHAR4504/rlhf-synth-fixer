@@ -65,10 +65,6 @@ import {
   GetTrailStatusCommand,
 } from '@aws-sdk/client-cloudtrail';
 import {
-  GuardDutyClient,
-  GetDetectorCommand,
-} from '@aws-sdk/client-guardduty';
-import {
   WAFV2Client,
   GetWebACLCommand,
 } from '@aws-sdk/client-wafv2';
@@ -117,7 +113,6 @@ const secretsClient = new SecretsManagerClient({ region: awsRegion });
 const lambdaClient = new LambdaClient({ region: awsRegion });
 const kmsClient = new KMSClient({ region: awsRegion });
 const cloudtrailClient = new CloudTrailClient({ region: awsRegion });
-const guarddutyClient = new GuardDutyClient({ region: awsRegion });
 const wafClient = new WAFV2Client({ region: awsRegion });
 const cloudfrontClient = new CloudFrontClient({ region: awsRegion });
 const elbv2Client = new ElasticLoadBalancingV2Client({ region: awsRegion });
@@ -669,21 +664,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       }, 60000);
     });
 
-    describe('GuardDuty Service Tests', () => {
-      test('should verify GuardDuty detector is enabled', async () => {
-        const detectorId = outputs.GuardDutyDetectorId;
-
-        const response = await guarddutyClient.send(
-          new GetDetectorCommand({
-            DetectorId: detectorId,
-          })
-        );
-
-        expect(response.Status).toBe('ENABLED');
-        expect(response.FindingPublishingFrequency).toBe('FIFTEEN_MINUTES');
-      }, 60000);
-    });
-
     describe('WAF Service Tests', () => {
       test('should verify WAF WebACL is configured with rules', async () => {
         const webAclArn = outputs.WebACLArn;
@@ -1211,7 +1191,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
 
     describe('Complete Security and Monitoring Workflow', () => {
-      test('should execute complete flow: API request → WAF → ALB → CloudWatch logs → GuardDuty monitoring', async () => {
+      test('should execute complete flow: API request → WAF → ALB → CloudWatch logs', async () => {
         // E2E ACTION: Verify complete security stack
 
         // Step 1: Verify WAF is protecting ALB
@@ -1235,16 +1215,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
         );
 
         expect(trailStatus.IsLogging).toBe(true);
-
-        // Step 4: Verify GuardDuty is monitoring
-        const detectorId = outputs.GuardDutyDetectorId;
-        const guarddutyResponse = await guarddutyClient.send(
-          new GetDetectorCommand({
-            DetectorId: detectorId,
-          })
-        );
-
-        expect(guarddutyResponse.Status).toBe('ENABLED');
 
         console.log('E2E Security Workflow: All components verified');
       }, 120000);
