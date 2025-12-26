@@ -963,10 +963,9 @@ class TestTapStack(unittest.TestCase):
 
     def test_monitoring_non_localstack_sns_topic(self):
         """Test monitoring component creates real SNS topic in AWS (not LocalStack)"""
-        from lib.components.monitoring import MonitoringInfrastructure
-
-        # Test without LocalStack environment (real AWS)
-        with patch.dict(os.environ, {}, clear=True):
+        # Patch the is_localstack variable directly in the monitoring module
+        with patch('lib.components.monitoring.is_localstack', False):
+            from lib.components.monitoring import MonitoringInfrastructure
             monitoring = MonitoringInfrastructure('test-monitoring', tags={})
             # Should have sns_topic attribute (real SNS)
             self.assertTrue(hasattr(monitoring, 'sns_topic'))
@@ -974,10 +973,9 @@ class TestTapStack(unittest.TestCase):
 
     def test_frontend_non_localstack_cloudfront(self):
         """Test frontend component creates CloudFront distribution in AWS (not LocalStack)"""
-        from lib.components.frontend import FrontendInfrastructure
-
-        # Test without LocalStack environment (real AWS)
-        with patch.dict(os.environ, {}, clear=True):
+        # Patch the is_localstack variable directly in the frontend module
+        with patch('lib.components.frontend.is_localstack', False):
+            from lib.components.frontend import FrontendInfrastructure
             frontend = FrontendInfrastructure(
                 name='test-frontend',
                 tags={}
