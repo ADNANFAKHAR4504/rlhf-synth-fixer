@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-101912919",
+  "team": "synth-2",
+  "wave": "P1",
+  "startedAt": "2025-12-26T10:00:00+05:30",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Observability and Monitoring"
+  ],
+  "training_quality": 10,
+  "aws_services": [
+    "CloudWatch",
+    "IAM",
+    "KinesisFirehose",
+    "Logs",
+    "S3",
+    "SNS",
+    "SSM",
+    "XRay"
+  ],
+  "migrated_from": {
+    "po_id": "101912919",
+    "pr": "Pr7560"
+  }
+}
