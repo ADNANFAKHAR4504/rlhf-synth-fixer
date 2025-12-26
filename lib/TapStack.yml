@@ -7,6 +7,9 @@ Metadata:
       ignore_checks:
         - W2506  # Allow String type for AmiId parameter (LocalStack compatibility)
         - W1034  # Allow non-standard AMI ID format (ami-localstack) for LocalStack compatibility
+        - W2001  # Parameter not used (EC2 resources commented out for LocalStack bug)
+        - W7001  # Mapping not used (EC2 resources commented out for LocalStack bug)
+        - W8001  # Condition not used (EC2 resources commented out for LocalStack bug)
 
 # ==========================================
 # Parameters for Dynamic Configuration
