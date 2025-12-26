@@ -506,11 +506,46 @@ deploy_cdktf() {
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
     local output_json="{}"
-    
-    if npx --yes cdktf output --outputs-file "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null; then
-        output_json=$(cat "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null || echo "{}")
+
+    # CDKTF output command doesn't work reliably with LocalStack
+    # Extract outputs directly from Terraform state file instead
+    if [ -d "cdktf.out/stacks" ]; then
+        print_status $YELLOW "Extracting outputs from Terraform state files..."
+        local temp_outputs=$(mktemp)
+        echo "{}" > "$temp_outputs"
+
+        # Find all terraform.tfstate files in stack directories
+        for state_file in cdktf.out/stacks/*/terraform.tfstate; do
+            if [ -f "$state_file" ]; then
+                print_status $CYAN "Processing state file: $state_file"
+
+                # Extract outputs from the state file
+                local stack_outputs=$(jq -r '.outputs // {} | to_entries | map({key: .key, value: .value.value}) | from_entries' "$state_file" 2>/dev/null || echo "{}")
+
+                # Merge with existing outputs
+                jq -s '.[0] * .[1]' "$temp_outputs" <(echo "$stack_outputs") > "${temp_outputs}.new"
+                mv "${temp_outputs}.new" "$temp_outputs"
+            fi
+        done
+
+        output_json=$(cat "$temp_outputs" 2>/dev/null || echo "{}")
+        rm -f "$temp_outputs"
+
+        # Log extracted outputs
+        local output_count=$(echo "$output_json" | jq 'keys | length' 2>/dev/null || echo "0")
+        print_status $GREEN "Extracted $output_count outputs from state files"
+
+        if [ "$output_count" -gt 0 ]; then
+            print_status $CYAN "Outputs found:"
+            echo "$output_json" | jq -r 'to_entries[] | "  \(.key) = \(.value)"' 2>/dev/null || echo "$output_json"
+        fi
+    else
+        print_status $YELLOW "No cdktf.out/stacks directory found, trying cdktf output command..."
+        if npx --yes cdktf output --outputs-file "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null; then
+            output_json=$(cat "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null || echo "{}")
+        fi
     fi
-    
+
     save_outputs "$output_json"
 }
 
