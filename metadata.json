@@ -5,8 +5,8 @@
   "turn_type": "single",
   "po_id": "LS-101912392",
   "team": "synth-2",
-  "startedAt": "2025-11-19T05:56:29.569705",
-  "subtask": "AWS CloudFormation",
+  "startedAt": "2025-11-19T05:56:29.569705Z",
+  "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
     "General Infrastructure Tooling QA"
