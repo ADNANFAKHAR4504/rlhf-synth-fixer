@@ -37,3 +37,38 @@ Ideal Implementation: Uses "Development" as the default Environment value, provi
 
 Model Response: Explicitly sets DependsOn: ["WAFWebACL"] on CloudFrontDistribution, which combined with S3BucketPolicy's reference to CloudFrontDistribution.Id creates potential circular dependency issues during stack updates and prevents proper resource cleanup ordering.
 Ideal Implementation: Omits explicit DependsOn declarations, relying on CloudFormation's automatic dependency detection through Ref and GetAtt intrinsic functions, allowing proper dependency graph construction and resource lifecycle management.
+
+## LocalStack Compatibility Adjustments
+
+The following modifications were made to ensure LocalStack Community Edition compatibility. These are intentional architectural decisions, not bugs.
+
+| Feature | Community Edition | Pro/Ultimate Edition | Solution Applied | Production Status |
+|---------|-------------------|---------------------|------------------|-------------------|
+| CloudFront | Limited support | Full support | Conditional deployment with IsUsEast1 condition | Enabled in AWS |
+| WAFv2 | Not supported | Full support | Conditional deployment with IsUsEast1 condition | Enabled in AWS |
+| S3 Origin Access Control | Not supported | Partial support | Falls back to Origin Access Identity for LocalStack | Enabled in AWS |
+| ACM Certificates | Limited | Full support | Made optional with CloudFront default certificate fallback | Enabled in AWS |
+
+### Environment Detection Pattern Used
+
+The template uses CloudFormation conditions for regional and environment-based deployment:
+
+```yaml
+Conditions:
+  IsUsEast1: !Equals [!Ref "AWS::Region", "us-east-1"]
+  HasSSLCertificate: !Not [!Equals [!Ref ACMCertificateArn, ""]]
+```
+
+### Services Verified Working in LocalStack
+
+- S3 (full support)
+- Lambda (basic support)
+- API Gateway (basic support)
+- CloudFormation (full support)
+
+### Notes for LocalStack Deployment
+
+1. CloudFront and WAF are conditionally created only in us-east-1 region
+2. When deploying to LocalStack, ensure AWS_REGION is NOT set to us-east-1 to skip CloudFront/WAF
+3. S3 bucket policy allows CloudFront access conditionally based on region
+4. All core functionality (S3, Lambda, API Gateway) works in LocalStack without CloudFront/WAF
