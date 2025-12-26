@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-292084",
+  "team": "synth-2",
+  "startedAt": "2025-08-20T20:07:36.146Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::EIP",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SubnetRouteTableAssociation",
+    "AWS::EC2::SecurityGroup",
+    "AWS::S3::Bucket",
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::DynamoDB::Table"
+  ],
+  "wave": "P0"
+}
