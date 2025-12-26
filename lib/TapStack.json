@@ -4,16 +4,18 @@
   "Parameters": {
     "Environment": {
       "Type": "String",
-      "Default": "Development",
-      "Description": "Environment designation for resource tagging",
-      "AllowedValues": ["Development", "Staging", "Production"]
+      "Default": "development",
+      "Description": "Environment designation for resource tagging (lowercase for S3 compatibility)",
+      "AllowedValues": ["development", "staging", "production"],
+      "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
     },
     "ApplicationName": {
       "Type": "String",
       "Default": "tap",
-      "Description": "Application name for resource naming",
+      "Description": "Application name for resource naming (lowercase for S3 compatibility)",
       "MinLength": 1,
-      "MaxLength": 20
+      "MaxLength": 20,
+      "AllowedPattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
     }
   },
   "Resources": {
