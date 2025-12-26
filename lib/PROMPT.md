@@ -19,8 +19,8 @@ Design a **CloudFormation YAML template** that enforces **least-privilege IAM de
 
 1. **IAM Roles**
    - Create two roles:
-     - One for **EC2** instances (used by applications).
-     - One for **Lambda** functions (used by serverless workloads).
+     - One for **EC2** instances that connects to S3 to read configuration data, writes application logs to CloudWatch Logs, queries DynamoDB tables, and retrieves secrets from SSM Parameter Store
+     - One for **Lambda** functions that publishes execution logs to CloudWatch Logs, reads and writes data to DynamoDB tables, and stores processed results in S3 buckets
    - Each must have **inline policies** granting only the **minimum required permissions**.
    - Explicitly **deny any wildcard actions (`Action: "*"`)**.
 
@@ -47,8 +47,8 @@ Produce a **deployable CloudFormation YAML template** that:
 
 - Defines an **IAM Permissions Boundary** restricting administrative or escalatory actions.
 - Creates two **IAM Roles**:
-  - `EC2ApplicationRole` with only the permissions needed (e.g., read-only S3 access, CloudWatch logging).
-  - `LambdaExecutionRole` with permissions for logs and limited DynamoDB or S3 operations.
+  - `EC2ApplicationRole` that connects to S3 for reading application configuration files, writes logs to CloudWatch Logs, reads from DynamoDB tables, and retrieves parameters from SSM Parameter Store
+  - `LambdaExecutionRole` that writes execution logs to CloudWatch Logs, performs read and write operations on DynamoDB tables, and uploads processed data to S3 buckets
 - Attaches **inline policies** with least privilege (no wildcards).
 - Applies the **permissions boundary** to both roles.
 - Includes tagging for audit visibility and environment tracking.
