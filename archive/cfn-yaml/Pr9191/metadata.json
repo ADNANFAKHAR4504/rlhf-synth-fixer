@@ -12,20 +12,27 @@
     "Security Configuration as Code"
   ],
   "aws_services": [
-    "Bucket",
-    "BucketPolicy",
-    "Key",
-    "WebACL",
-    "ManagedRuleGroupStatement",
-    "Rule",
-    "Role",
-    "Policy",
+    "S3",
+    "KMS",
     "VPC",
-    "Subnet",
-    "NetworkAcl",
-    "NetworkAclEntry",
-    "RouteTable",
-    "Trail"
+    "WAF",
+    "CloudTrail",
+    "CloudWatch",
+    "IAM",
+    "ELB",
+    "EC2",
+    "NetworkACL",
+    "SecurityGroup",
+    "Route53",
+    "EIP",
+    "NatGateway"
   ],
-  "wave": "P0"
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
