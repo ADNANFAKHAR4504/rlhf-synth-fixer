@@ -658,7 +658,7 @@ UserData:
 
 ---
 
-## 🎓 Training Data Recommendations
+## Training Data Recommendations
 
 To prevent these failures in future generations:
 
@@ -701,7 +701,7 @@ After fixes, the template now:
 
 ---
 
-## 📚 References
+## References
 
 1. **IAC_ISSUES_REFERENCE.md.log** - Comprehensive issue database
 2. **AWS CloudFormation User Guide** - Resource types and properties
