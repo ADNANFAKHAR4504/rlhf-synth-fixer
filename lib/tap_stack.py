@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+from pathlib import Path
 from constructs import Construct
 from cdktf import TerraformStack, TerraformOutput
 # S3Backend import removed - using local backend for LocalStack
@@ -21,6 +22,11 @@ from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 class TapStack(TerraformStack):
     def __init__(self, scope: Construct, stack_id: str, **kwargs):
         super().__init__(scope, stack_id)
+        
+        # Ensure output directories exist for CI/CD pipeline
+        project_root = Path(__file__).resolve().parents[1]
+        (project_root / "cfn-outputs").mkdir(parents=True, exist_ok=True)
+        (project_root / "cdk-outputs").mkdir(parents=True, exist_ok=True)
         
         # Extract parameters from kwargs
         environment_suffix = kwargs.get("environment_suffix", "dev")
@@ -383,20 +389,87 @@ class TapStack(TerraformStack):
         #     }
         #   )
         
-        # Outputs
+        # Outputs - using consistent naming for CI/CD integration
+        # VPC outputs
         TerraformOutput(self, "vpc_id",
             value=vpc.id,
             description="VPC ID"
         )
+        TerraformOutput(self, "VPC",
+            value=vpc.id,
+            description="VPC ID (alternate name)"
+        )
+        TerraformOutput(self, "VPCCIDR",
+            value="10.0.0.0/16",
+            description="VPC CIDR Block"
+        )
 
+        # Subnet outputs - both list and individual
         TerraformOutput(self, "public_subnet_ids",
             value=[subnet.id for subnet in public_subnets],
             description="Public Subnet IDs"
         )
-
         TerraformOutput(self, "private_subnet_ids",
             value=[subnet.id for subnet in private_subnets],
             description="Private Subnet IDs"
+        )
+        TerraformOutput(self, "PublicSubnet1",
+            value=public_subnets[0].id,
+            description="Public Subnet 1 ID"
+        )
+        TerraformOutput(self, "PublicSubnet2",
+            value=public_subnets[1].id,
+            description="Public Subnet 2 ID"
+        )
+        TerraformOutput(self, "PrivateSubnet1",
+            value=private_subnets[0].id,
+            description="Private Subnet 1 ID"
+        )
+        TerraformOutput(self, "PrivateSubnet2",
+            value=private_subnets[1].id,
+            description="Private Subnet 2 ID"
+        )
+
+        # Network outputs
+        TerraformOutput(self, "InternetGateway",
+            value=igw.id,
+            description="Internet Gateway ID"
+        )
+        TerraformOutput(self, "NatGateway1",
+            value=nat_gateways[0].id,
+            description="NAT Gateway 1 ID"
+        )
+        TerraformOutput(self, "NatGateway2",
+            value=nat_gateways[1].id,
+            description="NAT Gateway 2 ID"
+        )
+        TerraformOutput(self, "PublicRouteTable",
+            value=public_rt.id,
+            description="Public Route Table ID"
+        )
+
+        # Security outputs
+        TerraformOutput(self, "SecurityGroup",
+            value=ec2_sg.id,
+            description="EC2 Security Group ID"
+        )
+
+        # Metadata outputs
+        TerraformOutput(self, "EnvironmentSuffix",
+            value=environment_suffix,
+            description="Environment Suffix"
+        )
+        TerraformOutput(self, "AWSRegion",
+            value=aws_region,
+            description="AWS Region"
+        )
+        TerraformOutput(self, "AvailabilityZone1",
+            value=availability_zones[0],
+            description="Availability Zone 1"
+        )
+        TerraformOutput(self, "AvailabilityZone2",
+            value=availability_zones[1],
+            description="Availability Zone 2"
         )
 
         # EC2 instance output removed - instances not deployed in LocalStack version

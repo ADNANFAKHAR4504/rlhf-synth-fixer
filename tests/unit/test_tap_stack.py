@@ -366,6 +366,16 @@ class TestOutputs:
         assert "vpc_id" in self.outputs
         assert "value" in self.outputs["vpc_id"]
 
+    def test_vpc_alternate_output(self):
+        """Test VPC alternate name output is defined."""
+        assert "VPC" in self.outputs
+        assert "value" in self.outputs["VPC"]
+
+    def test_vpc_cidr_output(self):
+        """Test VPC CIDR output is defined."""
+        assert "VPCCIDR" in self.outputs
+        assert self.outputs["VPCCIDR"]["value"] == "10.0.0.0/16"
+
     def test_public_subnet_ids_output(self):
         """Test public subnet IDs output is defined."""
         assert "public_subnet_ids" in self.outputs
@@ -375,6 +385,50 @@ class TestOutputs:
         """Test private subnet IDs output is defined."""
         assert "private_subnet_ids" in self.outputs
         assert "value" in self.outputs["private_subnet_ids"]
+
+    def test_individual_subnet_outputs(self):
+        """Test individual subnet outputs are defined."""
+        assert "PublicSubnet1" in self.outputs
+        assert "PublicSubnet2" in self.outputs
+        assert "PrivateSubnet1" in self.outputs
+        assert "PrivateSubnet2" in self.outputs
+
+    def test_internet_gateway_output(self):
+        """Test Internet Gateway output is defined."""
+        assert "InternetGateway" in self.outputs
+        assert "value" in self.outputs["InternetGateway"]
+
+    def test_nat_gateway_outputs(self):
+        """Test NAT Gateway outputs are defined."""
+        assert "NatGateway1" in self.outputs
+        assert "NatGateway2" in self.outputs
+
+    def test_route_table_output(self):
+        """Test route table output is defined."""
+        assert "PublicRouteTable" in self.outputs
+        assert "value" in self.outputs["PublicRouteTable"]
+
+    def test_security_group_output(self):
+        """Test security group output is defined."""
+        assert "SecurityGroup" in self.outputs
+        assert "value" in self.outputs["SecurityGroup"]
+
+    def test_environment_suffix_output(self):
+        """Test environment suffix output is defined."""
+        assert "EnvironmentSuffix" in self.outputs
+        assert self.outputs["EnvironmentSuffix"]["value"] == "test"
+
+    def test_region_output(self):
+        """Test AWS region output is defined."""
+        assert "AWSRegion" in self.outputs
+        assert self.outputs["AWSRegion"]["value"] == "us-east-1"
+
+    def test_availability_zone_outputs(self):
+        """Test AZ outputs are defined."""
+        assert "AvailabilityZone1" in self.outputs
+        assert "AvailabilityZone2" in self.outputs
+        assert self.outputs["AvailabilityZone1"]["value"] == "us-east-1a"
+        assert self.outputs["AvailabilityZone2"]["value"] == "us-east-1b"
 
     def test_s3_bucket_output(self):
         """Test S3 bucket output is defined (non-LocalStack mode)."""
