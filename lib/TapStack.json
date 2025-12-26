@@ -474,13 +474,15 @@
                                     "Effect": "Allow",
                                     "Action": [
                                         "s3:GetObject",
-                                        "s3:PutObject",
-                                        "s3:DeleteObject",
-                                        "s3:ListBucket"
+                                        "s3:PutObject"
                                     ],
                                     "Resource": [
-                                        "arn:aws:s3:::*",
-                                        "arn:aws:s3:::*/*"
+                                        {
+                                            "Fn::Sub": "${ApplicationDataBucket.Arn}"
+                                        },
+                                        {
+                                            "Fn::Sub": "${ApplicationDataBucket.Arn}/*"
+                                        }
                                     ]
                                 }
                             ]
@@ -494,12 +496,15 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "logs:CreateLogGroup",
                                         "logs:CreateLogStream",
-                                        "logs:PutLogEvents",
-                                        "logs:DescribeLogStreams"
+                                        "logs:PutLogEvents"
                                     ],
-                                    "Resource": "*"
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "APILogGroup",
+                                            "Arn"
+                                        ]
+                                    }
                                 }
                             ]
                         }
@@ -524,6 +529,22 @@
                 "Roles": [
                     {
                         "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "ApplicationDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${AWS::StackName}-app-data-${EnvironmentSuffix}"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-ApplicationDataBucket-${EnvironmentSuffix}"
+                        }
                     }
                 ]
             }
@@ -779,6 +800,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-APILogGroupName"
+                }
+            }
+        },
+        "ApplicationDataBucketName": {
+            "Description": "Name of the S3 bucket for application data",
+            "Value": {
+                "Ref": "ApplicationDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApplicationDataBucketName"
                 }
             }
         },
