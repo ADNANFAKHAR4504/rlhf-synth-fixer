@@ -324,7 +324,7 @@ describe('TapStack CloudFormation Template', () => {
 
       template.hasResourceProperties('AWS::ApiGateway::Method', {
         HttpMethod: 'POST',
-        AuthorizationType: 'NONE'
+        AuthorizationType: 'AWS_IAM'
       });
     });
 
