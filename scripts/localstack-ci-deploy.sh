@@ -506,71 +506,11 @@ deploy_cdktf() {
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
     local output_json="{}"
-
-    # Try cdktf output first
+    
     if npx --yes cdktf output --outputs-file "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null; then
         output_json=$(cat "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null || echo "{}")
     fi
-
-    # Fallback 1: read terraform outputs from cdktf.out directory using terraform output
-    if [ "$output_json" = "{}" ]; then
-        print_status $BLUE "   Trying terraform output fallback..."
-        for stack_dir in cdktf.out/stacks/*/; do
-            if [ -d "$stack_dir" ] && [ -f "$stack_dir/terraform.tfstate" ]; then
-                stack_outputs=$(cd "$stack_dir" && terraform output -json 2>/dev/null || echo "{}")
-                if [ "$stack_outputs" != "{}" ] && [ -n "$stack_outputs" ]; then
-                    # Flatten terraform outputs (they come as {"key": {"value": "actual", "type": "string"}})
-                    output_json=$(echo "$stack_outputs" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    flattened = {}
-    for key, value in data.items():
-        if isinstance(value, dict) and 'value' in value:
-            flattened[key] = value['value']
-        else:
-            flattened[key] = value
-    print(json.dumps(flattened, indent=2))
-except:
-    print('{}')
-" 2>/dev/null)
-                    break
-                fi
-            fi
-        done
-    fi
-
-    # Fallback 2: read directly from terraform.tfstate file
-    if [ "$output_json" = "{}" ]; then
-        print_status $BLUE "   Trying tfstate file fallback..."
-        for stack_dir in cdktf.out/stacks/*/; do
-            if [ -d "$stack_dir" ] && [ -f "$stack_dir/terraform.tfstate" ]; then
-                output_json=$(python3 -c "
-import sys, json
-try:
-    with open('$stack_dir/terraform.tfstate', 'r') as f:
-        state = json.load(f)
-    outputs = state.get('outputs', {})
-    flattened = {}
-    for key, value in outputs.items():
-        if isinstance(value, dict) and 'value' in value:
-            flattened[key] = value['value']
-        else:
-            flattened[key] = value
-    if flattened:
-        print(json.dumps(flattened, indent=2))
-    else:
-        print('{}')
-except Exception as e:
-    print('{}')
-" 2>/dev/null)
-                if [ "$output_json" != "{}" ] && [ -n "$output_json" ]; then
-                    break
-                fi
-            fi
-        done
-    fi
-
+    
     save_outputs "$output_json"
 }
 
