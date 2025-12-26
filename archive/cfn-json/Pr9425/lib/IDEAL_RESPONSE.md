@@ -1,0 +1,1152 @@
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Large-scale profile migration system with EventBridge-triggered data ingestion, Lambda, DynamoDB, OpenSearch, and monitoring",
+
+  "Parameters": {},
+  
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ProfileMigrationVPC"
+          }
+        ]
+      }
+    },
+    
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "PrivateSubnet1"
+          }
+        ]
+      }
+    },
+    
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "PrivateSubnet2"
+          }
+        ]
+      }
+    },
+    
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.10.0/24",
+        "MapPublicIpOnLaunch": true,
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "PublicSubnet1"
+          }
+        ]
+      }
+    },
+    
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.11.0/24",
+        "MapPublicIpOnLaunch": true,
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "PublicSubnet2"
+          }
+        ]
+      }
+    },
+    
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ProfileMigrationIGW"
+          }
+        ]
+      }
+    },
+    
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "InternetGatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    
+    "NATGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {"Fn::GetAtt": ["EIPForNAT", "AllocationId"]},
+        "SubnetId": {"Ref": "PublicSubnet1"}
+      }
+    },
+    
+    "EIPForNAT": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"}
+      }
+    },
+    
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {"Ref": "NATGateway"}
+      }
+    },
+    
+    "SubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet1"},
+        "RouteTableId": {"Ref": "PrivateRouteTable"}
+      }
+    },
+    
+    "SubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet2"},
+        "RouteTableId": {"Ref": "PrivateRouteTable"}
+      }
+    },
+    
+    "S3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "profile-migration-${AWS::AccountId}"},
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldProfiles",
+              "Status": "Enabled",
+              "ExpirationInDays": 30
+            }
+          ]
+        },
+        "NotificationConfiguration": {
+          "LambdaConfigurations": [
+            {
+              "Event": "s3:ObjectCreated:*",
+              "Function": {"Fn::GetAtt": ["TransformValidateLambda", "Arn"]},
+              "Filter": {
+                "S3Key": {
+                  "Rules": [
+                    {
+                      "Name": "suffix",
+                      "Value": ".json"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+    
+    "S3BucketLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "TransformValidateLambda"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "s3.amazonaws.com",
+        "SourceAccount": {"Ref": "AWS::AccountId"},
+        "SourceArn": {"Fn::Sub": "arn:aws:s3:::profile-migration-${AWS::AccountId}"}
+      }
+    },
+
+    "S3RawDataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "profile-raw-data-${AWS::AccountId}"},
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldRawData",
+              "Status": "Enabled",
+              "ExpirationInDays": 7
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+
+    "DataIngestionLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3WritePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:PutObjectAcl"
+                  ],
+                  "Resource": {"Fn::Sub": "${S3RawDataBucket.Arn}/*"}
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+
+    "DataIngestionLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "DataIngestionLambda",
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["DataIngestionLambdaRole", "Arn"]},
+        "MemorySize": 3008,
+        "Timeout": 900,
+        "ReservedConcurrentExecutions": 100,
+        "Environment": {
+          "Variables": {
+            "S3_BUCKET": {"Ref": "S3RawDataBucket"}
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport time\nfrom datetime import datetime\nimport random\n\ns3 = boto3.client('s3')\n\ndef lambda_handler(event, context):\n    # Simulate profile data generation\n    bucket = os.environ['S3_BUCKET']\n    \n    # Generate batch of simulated profile data\n    profiles = []\n    batch_size = 1000\n    \n    for i in range(batch_size):\n        profile = {\n            'user_id': f'user_{random.randint(1, 10000000)}',\n            'name': f'User {i}',\n            'email': f'user{i}@example.com',\n            'timestamp': int(time.time()),\n            'metadata': {\n                'created_at': datetime.utcnow().isoformat(),\n                'source': 'data_ingestion_lambda'\n            }\n        }\n        profiles.append(profile)\n    \n    # Write to S3 bucket\n    key = f'raw/profiles_{int(time.time())}_{context.request_id}.json'\n    s3.put_object(\n        Bucket=bucket,\n        Key=key,\n        Body=json.dumps(profiles),\n        ContentType='application/json'\n    )\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps(f'Ingested {batch_size} profiles to {key}')\n    }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+
+    "DataIngestionScheduleRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": "DataIngestionSchedule",
+        "Description": "Trigger data ingestion every minute",
+        "ScheduleExpression": "rate(1 minute)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {"Fn::GetAtt": ["DataIngestionLambda", "Arn"]},
+            "Id": "DataIngestionTarget"
+          }
+        ]
+      }
+    },
+
+    "DataIngestionLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "DataIngestionLambda"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {"Fn::GetAtt": ["DataIngestionScheduleRule", "Arn"]}
+      }
+    },
+
+    "DynamoDBTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": "ProfileMigrationTable",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "user_id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "user_id",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "BillingMode": "PROVISIONED",
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 20000,
+          "WriteCapacityUnits": 20000
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+    
+    "DynamoDBAutoScalingRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "application-autoscaling.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAutoScalingPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:DescribeTable",
+                    "dynamodb:UpdateTable",
+                    "cloudwatch:PutMetricAlarm",
+                    "cloudwatch:DescribeAlarms",
+                    "cloudwatch:GetMetricStatistics",
+                    "cloudwatch:SetAlarmState",
+                    "cloudwatch:DeleteAlarms"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    
+    "DynamoDBWriteCapacityScalableTarget": {
+      "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+      "Properties": {
+        "MaxCapacity": 40000,
+        "MinCapacity": 20000,
+        "ResourceId": {"Fn::Sub": "table/${DynamoDBTable}"},
+        "RoleARN": {"Fn::GetAtt": ["DynamoDBAutoScalingRole", "Arn"]},
+        "ScalableDimension": "dynamodb:table:WriteCapacityUnits",
+        "ServiceNamespace": "dynamodb"
+      }
+    },
+    
+    "DynamoDBReadCapacityScalableTarget": {
+      "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+      "Properties": {
+        "MaxCapacity": 40000,
+        "MinCapacity": 20000,
+        "ResourceId": {"Fn::Sub": "table/${DynamoDBTable}"},
+        "RoleARN": {"Fn::GetAtt": ["DynamoDBAutoScalingRole", "Arn"]},
+        "ScalableDimension": "dynamodb:table:ReadCapacityUnits",
+        "ServiceNamespace": "dynamodb"
+      }
+    },
+    
+    "DynamoDBWriteScalingPolicy": {
+      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "Properties": {
+        "PolicyName": "DynamoDBWriteAutoScalingPolicy",
+        "PolicyType": "TargetTrackingScaling",
+        "ScalingTargetId": {"Ref": "DynamoDBWriteCapacityScalableTarget"},
+        "TargetTrackingScalingPolicyConfiguration": {
+          "TargetValue": 70.0,
+          "PredefinedMetricSpecification": {
+            "PredefinedMetricType": "DynamoDBWriteCapacityUtilization"
+          }
+        }
+      }
+    },
+    
+    "DynamoDBReadScalingPolicy": {
+      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "Properties": {
+        "PolicyName": "DynamoDBReadAutoScalingPolicy",
+        "PolicyType": "TargetTrackingScaling",
+        "ScalingTargetId": {"Ref": "DynamoDBReadCapacityScalableTarget"},
+        "TargetTrackingScalingPolicyConfiguration": {
+          "TargetValue": 70.0,
+          "PredefinedMetricSpecification": {
+            "PredefinedMetricType": "DynamoDBReadCapacityUtilization"
+          }
+        }
+      }
+    },
+    
+    "OpenSearchDomain": {
+      "Type": "AWS::OpenSearchService::Domain",
+      "Properties": {
+        "DomainName": "profile-migration-search",
+        "EngineVersion": "OpenSearch_2.9",
+        "ClusterConfig": {
+          "InstanceType": "r5.4xlarge.search",
+          "InstanceCount": 6,
+          "DedicatedMasterEnabled": true,
+          "DedicatedMasterType": "r5.xlarge.search",
+          "DedicatedMasterCount": 3,
+          "ZoneAwarenessEnabled": true,
+          "ZoneAwarenessConfig": {
+            "AvailabilityZoneCount": 2
+          }
+        },
+        "EBSOptions": {
+          "EBSEnabled": true,
+          "VolumeType": "gp3",
+          "VolumeSize": 1000,
+          "Iops": 16000,
+          "Throughput": 500
+        },
+        "VPCOptions": {
+          "SubnetIds": [
+            {"Ref": "PrivateSubnet1"},
+            {"Ref": "PrivateSubnet2"}
+          ],
+          "SecurityGroupIds": [
+            {"Ref": "OpenSearchSecurityGroup"}
+          ]
+        },
+        "AdvancedOptions": {
+          "rest.action.multi.allow_explicit_index": "true",
+          "indices.fielddata.cache.size": "40",
+          "indices.query.bool.max_clause_count": "1024"
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+    
+    "OpenSearchSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for OpenSearch domain",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "SourceSecurityGroupId": {"Ref": "LambdaSecurityGroup"}
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "OpenSearchSecurityGroup"
+          }
+        ]
+      }
+    },
+    
+    "FirehoseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Kinesis Firehose",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "FirehoseSecurityGroup"
+          }
+        ]
+      }
+    },
+    
+    "KinesisFirehoseRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "firehose.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "FirehoseOpenSearchPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "es:*",
+                    "s3:*",
+                    "logs:*",
+                    "ec2:CreateNetworkInterface",
+                    "ec2:CreateNetworkInterfacePermission",
+                    "ec2:DeleteNetworkInterface",
+                    "ec2:Describe*"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    
+    "KinesisFirehoseBackupBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "firehose-backup-${AWS::AccountId}"}
+      }
+    },
+    
+    "KinesisFirehoseDeliveryStream": {
+      "Type": "AWS::KinesisFirehose::DeliveryStream",
+      "Properties": {
+        "DeliveryStreamName": "ProfileIndexingStream",
+        "DeliveryStreamType": "DirectPut",
+        "AmazonopensearchserviceDestinationConfiguration": {
+          "DomainARN": {"Fn::GetAtt": ["OpenSearchDomain", "Arn"]},
+          "IndexName": "profiles",
+          "IndexRotationPeriod": "OneDay",
+          "BufferingHints": {
+            "IntervalInSeconds": 60,
+            "SizeInMBs": 5
+          },
+          "VpcConfiguration": {
+            "SubnetIds": [
+              {"Ref": "PrivateSubnet1"},
+              {"Ref": "PrivateSubnet2"}
+            ],
+            "SecurityGroupIds": [
+              {"Ref": "FirehoseSecurityGroup"}
+            ],
+            "RoleARN": {"Fn::GetAtt": ["KinesisFirehoseRole", "Arn"]}
+          },
+          "S3Configuration": {
+            "BucketARN": {"Fn::GetAtt": ["KinesisFirehoseBackupBucket", "Arn"]},
+            "BufferingHints": {
+              "IntervalInSeconds": 60,
+              "SizeInMBs": 5
+            },
+            "CompressionFormat": "GZIP",
+            "Prefix": "backup/",
+            "ErrorOutputPrefix": "error/",
+            "RoleARN": {"Fn::GetAtt": ["KinesisFirehoseRole", "Arn"]}
+          },
+          "ProcessingConfiguration": {
+            "Enabled": false
+          },
+          "CloudWatchLoggingOptions": {
+            "Enabled": true,
+            "LogGroupName": "/aws/kinesisfirehose/profile-indexing",
+            "LogStreamName": "opensearch-delivery"
+          },
+          "RoleARN": {"Fn::GetAtt": ["KinesisFirehoseRole", "Arn"]}
+        }
+      }
+    },
+    
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LambdaFullAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:*",
+                    "dynamodb:*",
+                    "firehose:*",
+                    "logs:*",
+                    "neptune-db:*",
+                    "es:*",
+                    "cloudwatch:*",
+                    "events:*",
+                    "sns:*"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "LambdaSecurityGroup"
+          }
+        ]
+      }
+    },
+    
+    "TransformValidateLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "ProfileTransformValidate",
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
+        "MemorySize": 3008,
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {"Ref": "DynamoDBTable"},
+            "FIREHOSE_STREAM": {"Ref": "KinesisFirehoseDeliveryStream"},
+            "SNS_TOPIC": {"Ref": "MonitoringSNSTopic"}
+          }
+        },
+        "VpcConfig": {
+          "SubnetIds": [
+            {"Ref": "PrivateSubnet1"},
+            {"Ref": "PrivateSubnet2"}
+          ],
+          "SecurityGroupIds": [
+            {"Ref": "LambdaSecurityGroup"}
+          ]
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Transform and validate profile data\n    # Write to DynamoDB with conditional checks\n    # Send to Kinesis Firehose for OpenSearch indexing\n    return {'statusCode': 200}\n"
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+    
+    "GraphBuilderLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "ProfileGraphBuilder",
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
+        "MemorySize": 3008,
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "SNS_TOPIC": {"Ref": "MonitoringSNSTopic"}
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Process DynamoDB stream events\n    # Build graph data structures\n    return {'statusCode': 200}\n"
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+    
+    "LagDetectionLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "MigrationLagDetection",
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
+        "MemorySize": 1024,
+        "Timeout": 60,
+        "Environment": {
+          "Variables": {
+            "SNS_TOPIC": {"Ref": "MonitoringSNSTopic"},
+            "THROTTLE_LAMBDA": {"Ref": "RateAdjustmentLambda"}
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Query CloudWatch metrics for ingestion Lambda and processing Lambda metrics\n    # Detect migration lag\n    # Trigger rate adjustment if needed\n    return {'statusCode': 200}\n"
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+    
+    "RateAdjustmentLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "RateAdjustmentLambda",
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
+        "MemorySize": 512,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "INGESTION_RULE_NAME": {"Ref": "DataIngestionScheduleRule"},
+            "SNS_TOPIC": {"Ref": "MonitoringSNSTopic"}
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    # Adjust EventBridge rule schedule to modify ingestion rate\n    # Apply within 30 seconds\n    return {'statusCode': 200}\n"
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+    
+    "DynamoDBStreamEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "EventSourceArn": {"Fn::GetAtt": ["DynamoDBTable", "StreamArn"]},
+        "FunctionName": {"Ref": "GraphBuilderLambda"},
+        "StartingPosition": "LATEST",
+        "MaximumBatchingWindowInSeconds": 5,
+        "ParallelizationFactor": 10,
+        "MaximumRecordAgeInSeconds": 3600
+      }
+    },
+    
+    "LagDetectionScheduleRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": "LagDetectionSchedule",
+        "Description": "Trigger lag detection every minute",
+        "ScheduleExpression": "rate(1 minute)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {"Fn::GetAtt": ["LagDetectionLambda", "Arn"]},
+            "Id": "LagDetectionTarget"
+          }
+        ]
+      }
+    },
+    
+    "LagDetectionLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "LagDetectionLambda"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {"Fn::GetAtt": ["LagDetectionScheduleRule", "Arn"]}
+      }
+    },
+    
+    "AthenaWorkgroup": {
+      "Type": "AWS::Athena::WorkGroup",
+      "Properties": {
+        "Name": "ProfileValidationWorkgroup",
+        "WorkGroupConfiguration": {
+          "ResultConfiguration": {
+            "OutputLocation": {"Fn::Sub": "s3://athena-results-${AWS::AccountId}/"}
+          },
+          "EnforceWorkGroupConfiguration": true,
+          "EngineVersion": {
+            "SelectedEngineVersion": "Athena engine version 3"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+    
+    "AthenaResultsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "athena-results-${AWS::AccountId}"},
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldResults",
+              "Status": "Enabled",
+              "ExpirationInDays": 7
+            }
+          ]
+        }
+      }
+    },
+    
+    "StepFunctionsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StepFunctionsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "athena:*",
+                    "s3:*",
+                    "glue:*",
+                    "sns:*",
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    
+    "ValidationStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": "ProfileValidationWorkflow",
+        "RoleArn": {"Fn::GetAtt": ["StepFunctionsRole", "Arn"]},
+        "DefinitionString": {
+          "Fn::Sub": "{\n  \"Comment\": \"Profile validation workflow\",\n  \"StartAt\": \"RunAthenaQuery\",\n  \"States\": {\n    \"RunAthenaQuery\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::athena:startQueryExecution.sync\",\n      \"Parameters\": {\n        \"QueryString\": \"SELECT * FROM profiles_raw TABLESAMPLE (1 PERCENT) LIMIT 1000000\",\n        \"WorkGroup\": \"${AthenaWorkgroup}\",\n        \"ResultConfiguration\": {\n          \"OutputLocation\": \"s3://athena-results-${AWS::AccountId}/\"\n        }\n      },\n      \"Next\": \"ValidateResults\"\n    },\n    \"ValidateResults\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"DataValidation\",\n        \"Payload.$\": \"$\"\n      },\n      \"End\": true\n    }\n  }\n}"
+        },
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+    
+    "ValidationScheduleRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": "ValidationSchedule",
+        "Description": "Trigger validation workflow every 15 minutes",
+        "ScheduleExpression": "rate(15 minutes)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {"Fn::GetAtt": ["ValidationStateMachine", "Arn"]},
+            "Id": "ValidationTarget",
+            "RoleArn": {"Fn::GetAtt": ["EventBridgeRole", "Arn"]}
+          }
+        ]
+      }
+    },
+    
+    "EventBridgeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "InvokeStepFunctions",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "states:StartExecution",
+                  "Resource": {"Ref": "ValidationStateMachine"}
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+
+    "MonitoringSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "ProfileMigrationMonitoring",
+        "DisplayName": "Profile Migration Monitoring",
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "ProfileMigration"
+          }
+        ]
+      }
+    },
+    
+    "MigrationLagAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "ProfileMigrationLag",
+        "AlarmDescription": "Alert when migration lag exceeds 10 minutes",
+        "MetricName": "MigrationLag",
+        "Namespace": "ProfileMigration",
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 600,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "AlarmActions": [
+          {"Ref": "MonitoringSNSTopic"},
+          {"Fn::GetAtt": ["RateAdjustmentLambda", "Arn"]}
+        ],
+        "TreatMissingData": "breaching"
+      }
+    },
+
+    "RateAdjustmentLambdaAlarmPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "RateAdjustmentLambda"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "lambda.alarms.cloudwatch.amazonaws.com",
+        "SourceAccount": {"Ref": "AWS::AccountId"},
+        "SourceArn": {"Fn::GetAtt": ["MigrationLagAlarm", "Arn"]}
+      }
+    },
+
+
+    "LambdaConcurrentExecutionsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "TransformLambdaConcurrency",
+        "AlarmDescription": "Alert when Lambda concurrent executions approach limit",
+        "MetricName": "ConcurrentExecutions",
+        "Namespace": "AWS/Lambda",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {"Ref": "TransformValidateLambda"}
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 3800,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "AlarmActions": [
+          {"Ref": "MonitoringSNSTopic"}
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    
+    "DynamoDBThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "DynamoDBWriteThrottle",
+        "AlarmDescription": "Alert when DynamoDB writes are throttled",
+        "MetricName": "WriteThrottleEvents",
+        "Namespace": "AWS/DynamoDB",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {"Ref": "DynamoDBTable"}
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 100,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "AlarmActions": [
+          {"Ref": "MonitoringSNSTopic"}
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  
+  "Outputs": {
+    "S3BucketName": {
+      "Description": "S3 bucket for processed data",
+      "Value": {"Ref": "S3Bucket"}
+    },
+    "S3RawDataBucketName": {
+      "Description": "S3 bucket for raw ingested data",
+      "Value": {"Ref": "S3RawDataBucket"}
+    },
+    "DataIngestionLambdaArn": {
+      "Description": "ARN of the data ingestion Lambda function",
+      "Value": {"Fn::GetAtt": ["DataIngestionLambda", "Arn"]}
+    },
+    "DynamoDBTableName": {
+      "Description": "DynamoDB table for profiles",
+      "Value": {"Ref": "DynamoDBTable"}
+    },
+    "OpenSearchDomainEndpoint": {
+      "Description": "OpenSearch domain endpoint",
+      "Value": {"Fn::GetAtt": ["OpenSearchDomain", "DomainEndpoint"]}
+    },
+    "FirehoseStreamName": {
+      "Description": "Kinesis Firehose delivery stream",
+      "Value": {"Ref": "KinesisFirehoseDeliveryStream"}
+    },
+    "MonitoringTopicArn": {
+      "Description": "SNS topic for monitoring alerts",
+      "Value": {"Ref": "MonitoringSNSTopic"}
+    },
+    "ValidationStateMachineArn": {
+      "Description": "Step Functions state machine for validation",
+      "Value": {"Ref": "ValidationStateMachine"}
+    }
+  }
+}
+```

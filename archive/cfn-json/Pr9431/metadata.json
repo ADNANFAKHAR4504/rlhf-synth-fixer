@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349028",
+  "team": "synth",
+  "startedAt": "2025-10-29T15:19:32.625Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AutoScaling",
+    "CloudTrail",
+    "CloudWatch",
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "IAM",
+    "Logs",
+    "S3"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

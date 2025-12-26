@@ -1,0 +1,1371 @@
+```yml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Enterprise-grade infrastructure for modern web application with HA and security - Production Ready'
+
+# ====================
+# Metadata Section
+# ====================
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - EnvironmentName
+          - ProjectName
+          - CostCenter
+      - Label:
+          default: "Compute Configuration"
+        Parameters:
+          - KeyPairName
+          - InstanceType
+      - Label:
+          default: "Database Configuration"
+        Parameters:
+          - DBInstanceClass
+          - DBMasterUsername
+          - DBMasterPassword
+      - Label:
+          default: "Notification Configuration"
+        Parameters:
+          - AlertEmail
+    ParameterLabels:
+      EnvironmentName:
+        default: "Environment Name"
+      AlertEmail:
+        default: "Alert Email Address"
+
+# ====================
+# Parameters Section
+# ====================
+Parameters:
+  EnvironmentName:
+    Description: Environment name prefix for resource naming
+    Type: String
+    Default: Production
+    AllowedValues:
+      - Development
+      - Staging
+      - Production
+    
+  ProjectName:
+    Description: Project name for tagging and cost tracking
+    Type: String
+    Default: WebApplication
+    MinLength: 1
+    MaxLength: 50
+    
+  CostCenter:
+    Description: Cost center for billing purposes
+    Type: String
+    Default: Engineering
+    
+  KeyPairName:
+    Description: EC2 Key Pair for SSH access
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|[A-Za-z0-9._-]+$'
+    ConstraintDescription: Must be blank or a valid EC2 key pair name
+    
+  InstanceType:
+    Description: EC2 instance type for web servers
+    Type: String
+    Default: t3.medium
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+    
+  DBInstanceClass:
+    Description: RDS instance class
+    Type: String
+    Default: db.t3.small
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+    
+  DBMasterUsername:
+    Description: Database master username
+    Type: String
+    Default: dbadmin
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    
+  DBMasterPassword:
+    Description: Database master password (must include uppercase, lowercase, numbers, and special characters)
+    Type: String
+    NoEcho: true
+    Default: 'ChangeMe123!'
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$'
+    ConstraintDescription: Must contain at least one uppercase letter, one lowercase letter, one number, and one special character
+    
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    
+  AlertEmail:
+    Description: Email address for CloudWatch alarm notifications
+    Type: String
+    Default: alerts@example.com
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: Must be a valid email address
+
+# ====================
+# Mappings Section
+# ====================
+Mappings:
+  SubnetConfig:
+    VPC:
+      CIDR: '10.0.0.0/16'
+    PublicSubnet1:
+      CIDR: '10.0.1.0/24'
+    PublicSubnet2:
+      CIDR: '10.0.2.0/24'
+    PrivateSubnet1:
+      CIDR: '10.0.11.0/24'
+    PrivateSubnet2:
+      CIDR: '10.0.12.0/24'
+  EnvironmentNameLowerMap:
+    Development:
+      Lower: development
+    Staging:
+      Lower: staging
+    Production:
+      Lower: production
+
+# ====================
+# Conditions Section
+# ====================
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentName, 'Production']
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+
+# ====================
+# Resources Section
+# ====================
+Resources:
+
+  # =====================================
+  # SNS Topic for Notifications
+  # =====================================
+  
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${EnvironmentName}-${ProjectName}-Alarms'
+      DisplayName: !Sub '${EnvironmentName} Infrastructure Alarms'
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Alarm-Topic'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =====================================
+  # VPC and Core Networking Components
+  # =====================================
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [SubnetConfig, VPC, CIDR]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-VPC'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-IGW'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # =====================================
+  # Public Subnets Configuration
+  # =====================================
+  
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']  
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet1, CIDR]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Public-Subnet-AZ1'
+        - Key: Type
+          Value: Public
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']  
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet2, CIDR]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Public-Subnet-AZ2'
+        - Key: Type
+          Value: Public
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =====================================
+  # Private Subnets Configuration
+  # =====================================
+  
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']  
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Private-Subnet-AZ1'
+        - Key: Type
+          Value: Private
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']  
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Private-Subnet-AZ2'
+        - Key: Type
+          Value: Private
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =====================================
+  # NAT Gateways Configuration 
+  # =====================================
+  
+  # NAT Gateway 1 for AZ1
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-NAT-EIP-AZ1'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-NAT-Gateway-AZ1'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+  
+  # NAT Gateway 2 for AZ2 (High Availability)
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-NAT-EIP-AZ2'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-NAT-Gateway-AZ2'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =====================================
+  # Route Tables and Routes
+  # =====================================
+  
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Public-Routes'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+      
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+      
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+  
+  # Private Route Table for AZ1    
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Private-Routes-AZ1'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway1
+      
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+  
+  # Private Route Table for AZ2    
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Private-Routes-AZ2'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway2
+      
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  # =====================================
+  # Application Load Balancer
+  # =====================================
+  
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${EnvironmentName}-ALB'
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ALB'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${EnvironmentName}-TG'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-TargetGroup'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  # =====================================
+  # Security Groups
+  # =====================================
+  
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${EnvironmentName}-ALB-SG'
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: Allow HTTP traffic from internet
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ALB-SG'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+  
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${EnvironmentName}-WebServer-SG'
+      GroupDescription: Security group for web servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Allow HTTP traffic from ALB
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'
+          Description: Allow SSH access (restrict in production)
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-WebServer-SG'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${EnvironmentName}-Database-SG'
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: Allow MySQL/Aurora access from web servers
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Database-SG'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =====================================
+  # IAM Roles and Policies
+  # =====================================
+  
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentName}-EC2-Role-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore  # Added for Session Manager
+      Policies:
+        - PolicyName: S3ReadOnlyAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                  - 's3:GetBucketVersioning'
+                Resource:
+                  - !GetAtt TemplateStorageBucket.Arn
+                  - !Sub '${TemplateStorageBucket.Arn}/*'
+        - PolicyName: EC2DescribeAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:DescribeTags'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-EC2-Role'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${EnvironmentName}-EC2-Profile-${AWS::Region}'
+      Roles:
+        - !Ref EC2Role
+
+  # =====================================
+  # EC2 Launch Template
+  # =====================================
+  
+  EC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${EnvironmentName}-WebServer-Template'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref AWS::NoValue]
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        Monitoring:
+          Enabled: true
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required  # IMDSv2 for enhanced security
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${EnvironmentName}-WebServer'
+              - Key: Environment
+                Value: !Ref EnvironmentName
+              - Key: Project
+                Value: !Ref ProjectName
+              - Key: CostCenter
+                Value: !Ref CostCenter
+              - Key: iac-rlhf-amazon
+                Value: 'true'
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            # Update system
+            yum update -y
+            
+            # Install required packages
+            yum install -y httpd amazon-cloudwatch-agent mysql
+            
+            # Configure Apache
+            systemctl start httpd
+            systemctl enable httpd
+            
+            # Create dynamic index page
+            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+            AVAILABILITY_ZONE=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+            
+            cat > /var/www/html/index.html <<EOF
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>${EnvironmentName} Web Application</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 50px; }
+                    .info { background-color: #f0f0f0; padding: 20px; border-radius: 5px; }
+                </style>
+            </head>
+            <body>
+                <h1>${EnvironmentName} Environment - Web Application</h1>
+                <div class="info">
+                    <p><strong>Instance ID:</strong> $INSTANCE_ID</p>
+                    <p><strong>Availability Zone:</strong> $AVAILABILITY_ZONE</p>
+                    <p><strong>Region:</strong> ${AWS::Region}</p>
+                    <p><strong>Project:</strong> ${ProjectName}</p>
+                </div>
+            </body>
+            </html>
+            EOF
+            
+            # Configure CloudWatch agent
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWCONFIG
+            {
+              "agent": {
+                "metrics_collection_interval": 60,
+                "run_as_user": "root"
+              },
+              "metrics": {
+                "namespace": "${EnvironmentName}/WebServer",
+                "metrics_collected": {
+                  "cpu": {
+                    "measurement": [
+                      {"name": "cpu_usage_idle", "rename": "CPU_IDLE", "unit": "Percent"},
+                      {"name": "cpu_usage_iowait", "rename": "CPU_IOWAIT", "unit": "Percent"},
+                      {"name": "cpu_usage_user", "rename": "CPU_USER", "unit": "Percent"},
+                      {"name": "cpu_usage_system", "rename": "CPU_SYSTEM", "unit": "Percent"}
+                    ],
+                    "totalcpu": false,
+                    "metrics_collection_interval": 60
+                  },
+                  "disk": {
+                    "measurement": [
+                      {"name": "used_percent", "rename": "DISK_USED", "unit": "Percent"},
+                      {"name": "free", "rename": "DISK_FREE", "unit": "Bytes"}
+                    ],
+                    "metrics_collection_interval": 60,
+                    "resources": ["/", "/tmp"]
+                  },
+                  "mem": {
+                    "measurement": [
+                      {"name": "mem_used_percent", "rename": "MEM_USED", "unit": "Percent"},
+                      {"name": "mem_available", "rename": "MEM_AVAILABLE", "unit": "Bytes"}
+                    ],
+                    "metrics_collection_interval": 60
+                  },
+                  "netstat": {
+                    "measurement": [
+                      {"name": "tcp_established", "rename": "TCP_ESTABLISHED", "unit": "Count"},
+                      {"name": "tcp_time_wait", "rename": "TCP_TIME_WAIT", "unit": "Count"}
+                    ],
+                    "metrics_collection_interval": 60
+                  }
+                }
+              },
+              "logs": {
+                "logs_collected": {
+                  "files": {
+                    "collect_list": [
+                      {
+                        "file_path": "/var/log/httpd/access_log",
+                        "log_group_name": "/aws/ec2/${EnvironmentName}/apache/access",
+                        "log_stream_name": "{instance_id}"
+                      },
+                      {
+                        "file_path": "/var/log/httpd/error_log",
+                        "log_group_name": "/aws/ec2/${EnvironmentName}/apache/error",
+                        "log_stream_name": "{instance_id}"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            CWCONFIG
+            
+            # Start CloudWatch agent
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+              -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+            
+            # Signal CloudFormation completion
+            yum install -y aws-cfn-bootstrap
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+
+  # =====================================
+  # Auto Scaling Group
+  # =====================================
+  
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - NatGateway1
+      - NatGateway2
+    Properties:
+      AutoScalingGroupName: !Sub '${EnvironmentName}-ASG'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 6
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-WebServer-ASG'
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: !Ref ProjectName
+          PropagateAtLaunch: true
+        - Key: CostCenter
+          Value: !Ref CostCenter
+          PropagateAtLaunch: true
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Count: 2
+        Timeout: PT15M
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 2
+        PauseTime: PT5M
+        WaitOnResourceSignals: true
+
+  # =====================================
+  # Auto Scaling Policies
+  # =====================================
+  
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: 1
+      
+  ScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: -1
+
+  # =====================================
+  # RDS Database
+  # =====================================
+  
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${EnvironmentName}-db-subnet-group-${AWS::Region}'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-DB-SubnetGroup'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  DBMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}/rds/master'
+      Description: !Sub 'Master credentials for ${EnvironmentName} database'
+      SecretString: !Sub |
+        {"username":"${DBMasterUsername}","password":"${DBMasterPassword}"}
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-RDS-Master-Secret'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  RDSDatabase:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-database-${AWS::Region}'
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: mysql
+      EngineVersion: '8.0.43'
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      MultiAZ: true
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
+      PubliclyAccessible: false
+      DeletionProtection: !If [IsProduction, true, false]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-RDS-Database'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  RDSEnhancedMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-RDS-Monitoring-Role'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # =====================================
+  # S3 Bucket for Template Storage
+  # =====================================
+  
+  TemplateStorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 
+        - '${EnvLower}-cfn-templates-${AWS::AccountId}-${AWS::Region}'
+        - { EnvLower: !FindInMap [EnvironmentNameLowerMap, !Ref EnvironmentName, Lower] }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Template-Storage'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          
+  TemplateStorageBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TemplateStorageBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt TemplateStorageBucket.Arn
+              - !Sub '${TemplateStorageBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${TemplateStorageBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'AES256'
+
+  # =====================================
+  # CloudWatch Log Groups
+  # =====================================
+  
+  ApacheAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/${EnvironmentName}/apache/access'
+      RetentionInDays: 30
+      
+  ApacheErrorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/${EnvironmentName}/apache/error'
+      RetentionInDays: 30
+
+  # =====================================
+  # CloudWatch Alarms
+  # =====================================
+  
+  HighCPUAlarmASG:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-HighCPU-ASG'
+      AlarmDescription: !Sub 'High CPU usage on ${EnvironmentName} Auto Scaling Group'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      AlarmActions:
+        - !Ref ScaleUpPolicy
+        - !Ref AlarmNotificationTopic
+      TreatMissingData: notBreaching
+      
+  LowCPUAlarmASG:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-LowCPU-ASG'
+      AlarmDescription: !Sub 'Low CPU usage on ${EnvironmentName} Auto Scaling Group'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 20
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      AlarmActions:
+        - !Ref ScaleDownPolicy
+      TreatMissingData: notBreaching
+      
+  DatabaseCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-Database-HighCPU'
+      AlarmDescription: !Sub 'High CPU usage on ${EnvironmentName} RDS Database'
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref RDSDatabase
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      TreatMissingData: notBreaching
+      
+  DatabaseStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-Database-LowStorage'
+      AlarmDescription: !Sub 'Low storage space on ${EnvironmentName} RDS Database'
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2147483648  # 2GB in bytes
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref RDSDatabase
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      TreatMissingData: notBreaching
+      
+  ALBTargetHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${EnvironmentName}-ALB-UnhealthyTargets'
+      AlarmDescription: !Sub 'Unhealthy targets in ${EnvironmentName} ALB Target Group'
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !GetAtt ALBTargetGroup.TargetGroupFullName
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      TreatMissingData: notBreaching
+
+# ====================
+# Outputs Section
+# ====================
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${EnvironmentName}-VPC-ID'
+      
+  VPCCidr:
+    Description: VPC CIDR Block
+    Value: !GetAtt VPC.CidrBlock
+    Export:
+      Name: !Sub '${EnvironmentName}-VPC-CIDR'
+      
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-PublicSubnet1-ID'
+      
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-PublicSubnet2-ID'
+      
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-PrivateSubnet1-ID'
+      
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-PrivateSubnet2-ID'
+  
+  ApplicationLoadBalancerDNS:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${EnvironmentName}-ALB-DNS'
+      
+  ApplicationLoadBalancerURL:
+    Description: URL of the Application Load Balancer
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+    Export:
+      Name: !Sub '${EnvironmentName}-ALB-URL'
+      
+  ApplicationLoadBalancerArn:
+    Description: ARN of the Application Load Balancer
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${EnvironmentName}-ALB-ARN'
+      
+  DatabaseEndpoint:
+    Description: RDS Database Endpoint
+    Value: !GetAtt RDSDatabase.Endpoint.Address
+    Export:
+      Name: !Sub '${EnvironmentName}-DB-Endpoint'
+      
+  DatabasePort:
+    Description: RDS Database Port
+    Value: !GetAtt RDSDatabase.Endpoint.Port
+    Export:
+      Name: !Sub '${EnvironmentName}-DB-Port'
+      
+  DatabaseConnectionString:
+    Description: Database connection string (without password)
+    Value: !Sub 'mysql://${DBMasterUsername}:****@${RDSDatabase.Endpoint.Address}:${RDSDatabase.Endpoint.Port}/mysql'
+    
+  TemplateBucketName:
+    Description: S3 Bucket for CloudFormation templates
+    Value: !Ref TemplateStorageBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-Template-Bucket'
+      
+  TemplateBucketArn:
+    Description: ARN of S3 Template Bucket
+    Value: !GetAtt TemplateStorageBucket.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-Template-Bucket-ARN'
+      
+  NATGateway1IP:
+    Description: Elastic IP address of NAT Gateway AZ1
+    Value: !Ref NatGateway1EIP
+    Export:
+      Name: !Sub '${EnvironmentName}-NAT1-EIP'
+      
+  NATGateway2IP:
+    Description: Elastic IP address of NAT Gateway AZ2
+    Value: !Ref NatGateway2EIP
+    Export:
+      Name: !Sub '${EnvironmentName}-NAT2-EIP'
+      
+  ALBSecurityGroupId:
+    Description: Security Group ID for Application Load Balancer
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ALB-SG-ID'
+      
+  WebServerSecurityGroupId:
+    Description: Security Group ID for Web Servers
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-WebServer-SG-ID'
+      
+  DatabaseSecurityGroupId:
+    Description: Security Group ID for Database
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-Database-SG-ID'
+      
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling Group
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ASG-Name'
+      
+  LaunchTemplateId:
+    Description: ID of the EC2 Launch Template
+    Value: !Ref EC2LaunchTemplate
+    Export:
+      Name: !Sub '${EnvironmentName}-LaunchTemplate-ID'
+      
+  EC2RoleArn:
+    Description: ARN of the EC2 IAM Role
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-EC2-Role-ARN'
+      
+  EC2InstanceProfileArn:
+    Description: ARN of the EC2 Instance Profile
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-EC2-Profile-ARN'
+      
+  AlarmTopicArn:
+    Description: ARN of SNS Topic for Alarms
+    Value: !Ref AlarmNotificationTopic
+    Export:
+      Name: !Sub '${EnvironmentName}-Alarm-Topic-ARN'
+      
+  StackName:
+    Description: CloudFormation Stack Name
+    Value: !Ref 'AWS::StackName'
+    
+  StackRegion:
+    Description: Stack deployment region
+    Value: !Ref 'AWS::Region'
+    
+  DeploymentTimestamp:
+    Description: Timestamp of stack creation/update
+    Value: !Ref 'AWS::StackId'
+```

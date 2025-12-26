@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "localstack",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291830",
+  "team": "synth-2",
+  "wave": "P0",
+  "startedAt": "2025-08-20T11:20:35.394Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "EC2",
+    "VPC",
+    "Internet Gateway",
+    "VPC Gateway Attachment",
+    "Subnet",
+    "RDS",
+    "DB Subnet Group",
+    "Security Groups",
+    "Route Tables",
+    "NAT Gateway",
+    "Elastic IP",
+    "S3",
+    "Secrets Manager"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "michael-adeteye",
+  "dockerS3Location": ""
+}

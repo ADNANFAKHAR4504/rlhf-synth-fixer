@@ -36,18 +36,51 @@ claude_review:
 
 # ═══════════════════════════════════════════════════════════════
 # ITERATION SETTINGS
-# CRITICAL: CI credits are LIMITED - prioritize local validation!
+# CRITICAL: DO EVERYTHING LOCALLY - Push only once to CI!
 # ═══════════════════════════════════════════════════════════════
 iteration:
-  max_fix_iterations: 3 # Reduced from 10 - prioritize local validation over CI iterations
-  max_cicd_iterations: 2 # REDUCED from 10 - CI credits are LIMITED! Max 2 pushes allowed
-  max_deployment_attempts: 3 # Maximum deployment attempts per iteration
+  max_fix_iterations: 2 # REDUCED: Apply all fixes upfront, max 2 local iterations
+  max_cicd_iterations: 1 # CRITICAL: Only 1 CI push allowed! Do everything locally first
+  max_deployment_attempts: 2 # Maximum deployment attempts per iteration
   use_batch_fix: true # Enable batch fix approach (apply ALL fixes before re-deploy)
-  continue_until_production_ready: true # MUST iterate until all CI/CD jobs pass
+  use_deterministic_patches: true # NEW: Apply known patches without waiting for errors
+  continue_until_production_ready: false # CHANGED: Don't loop in CI - fix locally!
   run_local_prevalidation: true # MANDATORY: Run local validation before pushing to CI/CD
   prevalidation_script: '.claude/scripts/localstack-prevalidate.sh' # Path to pre-validation script
-  enforce_local_validation: true # NEW: Block CI push if local validation fails
-  ci_credit_warning: true # NEW: Show warnings about CI credit consumption
+  quick_patch_script: '.claude/scripts/localstack-quick-patch.sh' # NEW: Deterministic patch script
+  enforce_local_validation: true # Block CI push if local validation fails
+  ci_credit_warning: true # Show warnings about CI credit consumption
+  skip_ci_monitoring_loop: true # NEW: Don't wait for CI - push once and move on
+
+# ═══════════════════════════════════════════════════════════════
+# QUICK MIGRATE MODE (NEW - Simplified approach)
+# For tasks that already work on AWS - just need LocalStack config
+# ═══════════════════════════════════════════════════════════════
+quick_migrate:
+  enabled: true # Use simplified migration for compatible tasks
+  pre_check_compatibility: true # Check service compatibility before starting
+  skip_unsupported_tasks: true # Auto-skip tasks with Pro-only services
+  max_total_time_minutes: 30 # Target: Complete in 30 minutes or less
+  
+  # Services that should auto-skip (require LocalStack Pro)
+  pro_only_services:
+    - eks
+    - appsync
+    - amplify
+    - sagemaker
+    - cognito-idp
+    - iot
+    - iotanalytics
+    - mediaconvert
+    - medialive
+    
+  # Steps in quick-migrate (no iteration):
+  # 1. Pre-check compatibility (10 seconds)
+  # 2. Apply deterministic patches (2 minutes)
+  # 3. Local deploy test (5 minutes)
+  # 4. Local integration test (5 minutes)
+  # 5. Push to CI (one time only)
+  # Total: ~15-20 minutes
 
 # ═══════════════════════════════════════════════════════════════
 # TIMEOUT SETTINGS (in seconds)
@@ -79,40 +112,49 @@ localstack:
 
 # ═══════════════════════════════════════════════════════════════
 # BATCH FIX STRATEGY SETTINGS
-# Aggressive preventive fixes to minimize CI/CD iterations
+# DETERMINISTIC: Apply ALL known fixes upfront - no iteration needed
 # ═══════════════════════════════════════════════════════════════
 batch_fix:
   enabled: true # Enable batch fix approach
   apply_preventive_fixes: true # Apply fixes even without specific errors
-  single_comprehensive_push: true # NEW: Apply ALL fixes in single commit before push
+  single_comprehensive_push: true # Apply ALL fixes in single commit before push
+  deterministic_mode: true # NEW: Apply ALL patches without waiting for errors
+  skip_error_detection: true # NEW: Don't waste time detecting errors - just apply all fixes
 
-  # Fix priority order (applied in this sequence)
+  # Fix priority order (ALL applied in this sequence - no cherry-picking)
   # IMPORTANT: metadata_fix MUST be first - CI/CD validates metadata.json before anything else
   fix_priority:
     - metadata_fix # 🔴 CRITICAL - MUST BE FIRST - Schema compliance for CI/CD
-    - typescript_fix # 🔴 CRITICAL - Run tsc and fix type errors
-    - lint_fix # 🔴 CRITICAL - Run lint:fix before push
     - endpoint_config # 🔴 Critical - LocalStack endpoint detection
     - s3_path_style # 🔴 Critical - S3 path-style access
-    - removal_policy # 🟡 High - RemovalPolicy.DESTROY
+    - removal_policy # 🔴 Critical - RemovalPolicy.DESTROY for cleanup
     - test_config # 🟡 High - Test endpoint configuration
     - jest_config # 🟡 High - Jest configuration (test vs tests folder)
-    - iam_simplify # 🟡 Medium - IAM policy simplification
-    - resource_naming # 🟡 Medium - Resource naming simplification
-    - unsupported_service # 🟡 Medium - Unsupported service conditionals
-    - default_parameters # 🟢 Low - Default parameter values
+    - typescript_fix # 🟡 High - Run tsc and fix type errors
+    - lint_fix # 🟡 High - Run lint:fix before push
+    - iam_simplify # 🟢 Medium - IAM policy simplification (if IAM used)
+    - unsupported_service # 🟢 Medium - Unsupported service conditionals
+
+  # DETERMINISTIC PATCHES: Apply ALL of these regardless of errors
+  # These are the fixes needed for 95% of AWS→LocalStack migrations
+  always_apply:
+    - metadata_fix # Required for CI/CD
+    - endpoint_config # Required for LocalStack connection
+    - s3_path_style # Required for S3 operations
+    - removal_policy # Required for cleanup
+    - test_config # Required for integration tests
+    - jest_config # Required for test discovery
 
   # Preventive fixes (apply even if no error detected)
-  # EXPANDED: Apply more fixes upfront to reduce iterations
   preventive_fixes:
     - metadata_fix # ALWAYS - Required for CI/CD to pass
-    - typescript_fix # ALWAYS - Compile check before push
-    - lint_fix # ALWAYS - Auto-fix lint issues
-    - endpoint_config # Almost always needed
-    - s3_path_style # If using S3/buckets
-    - removal_policy # Always for LocalStack
+    - endpoint_config # ALWAYS - Required for LocalStack
+    - s3_path_style # ALWAYS - Required for S3
+    - removal_policy # ALWAYS - Required for cleanup
     - test_config # If test/ directory exists
     - jest_config # If jest.config.js exists
+    - typescript_fix # ALWAYS - Compile check before push
+    - lint_fix # ALWAYS - Auto-fix lint issues
 
   # Conditional fixes (only apply if specific error detected)
   conditional_fixes:

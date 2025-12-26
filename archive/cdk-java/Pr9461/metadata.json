@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-trainr128cdkjava",
+  "team": "synth-2",
+  "startedAt": "2025-08-27T17:10:51+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "Systems Manager"
+  ],
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

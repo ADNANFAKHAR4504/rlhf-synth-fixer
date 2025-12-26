@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr490cdkjava",
+  "team": "synth-2",
+  "startedAt": "2025-08-26T22:23:28+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "provider": "localstack",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Auto Scaling Groups",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "Launch Template",
+    "Target Groups"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,1691 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless backend for mobile app user profile management",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix to append to resource names (e.g., dev, staging, prod)"
+        },
+        "DynamoDBReadCapacity": {
+            "Type": "Number",
+            "Default": 1,
+            "MinValue": 1,
+            "MaxValue": 10,
+            "Description": "Initial read capacity for DynamoDB table"
+        },
+        "DynamoDBWriteCapacity": {
+            "Type": "Number",
+            "Default": 1,
+            "MinValue": 1,
+            "MaxValue": 10,
+            "Description": "Initial write capacity for DynamoDB table"
+        },
+        "LogRetentionDays": {
+            "Type": "Number",
+            "Default": 7,
+            "AllowedValues": [
+                1,
+                3,
+                5,
+                7,
+                14,
+                30,
+                60,
+                90,
+                120,
+                150,
+                180,
+                365,
+                400,
+                545,
+                731,
+                1827,
+                3653
+            ],
+            "Description": "CloudWatch log retention period in days"
+        }
+    },
+    "Resources": {
+        "ApiGatewayCloudWatchLogsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "apigateway.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                ]
+            }
+        },
+        "ApiGatewayAccount": {
+            "Type": "AWS::ApiGateway::Account",
+            "Properties": {
+                "CloudWatchRoleArn": {
+                    "Fn::GetAtt": [
+                        "ApiGatewayCloudWatchLogsRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "UserProfilesTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": [
+                        "user-profiles-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "BillingMode": "PROVISIONED",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "userId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "email",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "createdAt",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "userId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "EmailIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "email",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": {
+                                "Ref": "DynamoDBReadCapacity"
+                            },
+                            "WriteCapacityUnits": {
+                                "Ref": "DynamoDBWriteCapacity"
+                            }
+                        }
+                    },
+                    {
+                        "IndexName": "CreatedAtIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "createdAt",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": {
+                                "Ref": "DynamoDBReadCapacity"
+                            },
+                            "WriteCapacityUnits": {
+                                "Ref": "DynamoDBWriteCapacity"
+                            }
+                        }
+                    }
+                ],
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": {
+                        "Ref": "DynamoDBReadCapacity"
+                    },
+                    "WriteCapacityUnits": {
+                        "Ref": "DynamoDBWriteCapacity"
+                    }
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Service",
+                        "Value": "UserProfile"
+                    }
+                ]
+            }
+        },
+        "DynamoDBAutoScalingRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "application-autoscaling.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAutoscalePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:DescribeTable",
+                                        "dynamodb:UpdateTable",
+                                        "cloudwatch:PutMetricAlarm",
+                                        "cloudwatch:DescribeAlarms",
+                                        "cloudwatch:GetMetricStatistics",
+                                        "cloudwatch:SetAlarmState",
+                                        "cloudwatch:DeleteAlarms"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "TableReadCapacityScalableTarget": {
+            "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+            "Properties": {
+                "ServiceNamespace": "dynamodb",
+                "ResourceId": {
+                    "Fn::Sub": "table/${UserProfilesTable}"
+                },
+                "ScalableDimension": "dynamodb:table:ReadCapacityUnits",
+                "MinCapacity": 2,
+                "MaxCapacity": 20,
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "DynamoDBAutoScalingRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "TableWriteCapacityScalableTarget": {
+            "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+            "Properties": {
+                "ServiceNamespace": "dynamodb",
+                "ResourceId": {
+                    "Fn::Sub": "table/${UserProfilesTable}"
+                },
+                "ScalableDimension": "dynamodb:table:WriteCapacityUnits",
+                "MinCapacity": 2,
+                "MaxCapacity": 20,
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "DynamoDBAutoScalingRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "TableReadScalingPolicy": {
+            "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "${UserProfilesTable}-read-scaling"
+                },
+                "PolicyType": "TargetTrackingScaling",
+                "ScalingTargetId": {
+                    "Ref": "TableReadCapacityScalableTarget"
+                },
+                "TargetTrackingScalingPolicyConfiguration": {
+                    "TargetValue": 70,
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "DynamoDBReadCapacityUtilization"
+                    }
+                }
+            }
+        },
+        "TableWriteScalingPolicy": {
+            "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "${UserProfilesTable}-write-scaling"
+                },
+                "PolicyType": "TargetTrackingScaling",
+                "ScalingTargetId": {
+                    "Ref": "TableWriteCapacityScalableTarget"
+                },
+                "TargetTrackingScalingPolicyConfiguration": {
+                    "TargetValue": 70,
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "DynamoDBWriteCapacityUtilization"
+                    }
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "UserProfilesTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${UserProfilesTable.Arn}/index/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SSMParameterAccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:GetParameter",
+                                        "ssm:GetParameters",
+                                        "ssm:GetParametersByPath"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/userprofile/${EnvironmentSuffix}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CreateUserFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "create-user-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "UserProfilesTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport uuid\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef lambda_handler(event, context):\n    try:\n        body = json.loads(event.get('body', '{}'))\n        \n        # Validate required fields\n        required_fields = ['email', 'firstName', 'lastName']\n        for field in required_fields:\n            if field not in body:\n                return {\n                    'statusCode': 400,\n                    'headers': {\n                        'Content-Type': 'application/json',\n                        'Access-Control-Allow-Origin': '*'\n                    },\n                    'body': json.dumps({'error': f'Missing required field: {field}'})\n                }\n        \n        # Generate user ID and timestamp\n        user_id = str(uuid.uuid4())\n        timestamp = datetime.utcnow().isoformat()\n        \n        # Create user item\n        user_item = {\n            'userId': user_id,\n            'email': body['email'],\n            'firstName': body['firstName'],\n            'lastName': body['lastName'],\n            'createdAt': timestamp,\n            'updatedAt': timestamp,\n            'active': True\n        }\n        \n        # Add optional fields\n        if 'phoneNumber' in body:\n            user_item['phoneNumber'] = body['phoneNumber']\n        if 'metadata' in body:\n            user_item['metadata'] = body['metadata']\n        \n        # Store in DynamoDB\n        table.put_item(Item=user_item)\n        \n        return {\n            'statusCode': 201,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(user_item, default=str)\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
+                }
+            }
+        },
+        "GetUserFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "get-user-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "UserProfilesTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\nclass DecimalEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, Decimal):\n            return float(obj)\n        return super(DecimalEncoder, self).default(obj)\n\ndef lambda_handler(event, context):\n    try:\n        # Get user ID from path parameters\n        user_id = event.get('pathParameters', {}).get('userId')\n        \n        if not user_id:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User ID is required'})\n            }\n        \n        # Get user from DynamoDB\n        response = table.get_item(Key={'userId': user_id})\n        \n        if 'Item' not in response:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User not found'})\n            }\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(response['Item'], cls=DecimalEncoder)\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
+                }
+            }
+        },
+        "UpdateUserFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "update-user-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "UserProfilesTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\nclass DecimalEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, Decimal):\n            return float(obj)\n        return super(DecimalEncoder, self).default(obj)\n\ndef lambda_handler(event, context):\n    try:\n        # Get user ID from path parameters\n        user_id = event.get('pathParameters', {}).get('userId')\n        \n        if not user_id:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User ID is required'})\n            }\n        \n        body = json.loads(event.get('body', '{}'))\n        \n        # Build update expression\n        update_expression = \"SET updatedAt = :updatedAt\"\n        expression_values = {':updatedAt': datetime.utcnow().isoformat()}\n        \n        # Add fields to update\n        updateable_fields = ['firstName', 'lastName', 'email', 'phoneNumber', 'metadata', 'active']\n        for field in updateable_fields:\n            if field in body:\n                update_expression += f\", {field} = :{field}\"\n                expression_values[f\":{field}\"] = body[field]\n        \n        # Update user in DynamoDB\n        response = table.update_item(\n            Key={'userId': user_id},\n            UpdateExpression=update_expression,\n            ExpressionAttributeValues=expression_values,\n            ReturnValues=\"ALL_NEW\"\n        )\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(response['Attributes'], cls=DecimalEncoder)\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
+                }
+            }
+        },
+        "DeleteUserFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "delete-user-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "UserProfilesTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef lambda_handler(event, context):\n    try:\n        # Get user ID from path parameters\n        user_id = event.get('pathParameters', {}).get('userId')\n        \n        if not user_id:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User ID is required'})\n            }\n        \n        # Delete user from DynamoDB\n        table.delete_item(Key={'userId': user_id})\n        \n        return {\n            'statusCode': 204,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': ''\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
+                }
+            }
+        },
+        "ListUsersFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "list-users-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "UserProfilesTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\nclass DecimalEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, Decimal):\n            return float(obj)\n        return super(DecimalEncoder, self).default(obj)\n\ndef lambda_handler(event, context):\n    try:\n        # Get query parameters\n        query_params = event.get('queryStringParameters') or {}\n        limit = int(query_params.get('limit', 20))\n        last_evaluated_key = query_params.get('lastKey')\n        \n        # Build scan parameters\n        scan_params = {'Limit': limit}\n        if last_evaluated_key:\n            scan_params['ExclusiveStartKey'] = {'userId': last_evaluated_key}\n        \n        # Scan table\n        response = table.scan(**scan_params)\n        \n        result = {\n            'users': response.get('Items', []),\n            'count': response.get('Count', 0)\n        }\n        \n        if 'LastEvaluatedKey' in response:\n            result['lastKey'] = response['LastEvaluatedKey']['userId']\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(result, cls=DecimalEncoder)\n        }\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
+                }
+            }
+        },
+        "CreateUserLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${CreateUserFunction}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                }
+            }
+        },
+        "GetUserLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${GetUserFunction}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                }
+            }
+        },
+        "UpdateUserLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${UpdateUserFunction}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                }
+            }
+        },
+        "DeleteUserLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${DeleteUserFunction}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                }
+            }
+        },
+        "ListUsersLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ListUsersFunction}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                }
+            }
+        },
+        "RestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": [
+                        "user-profile-api-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Description": "REST API for user profile management",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "UsersResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "RestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "users"
+            }
+        },
+        "UserIdResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ParentId": {
+                    "Ref": "UsersResource"
+                },
+                "PathPart": "{userId}"
+            }
+        },
+        "CreateUserMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "UsersResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "ListUsersMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "UsersResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListUsersFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "GetUserMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "UserIdResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "RequestParameters": {
+                    "method.request.path.userId": true
+                },
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "UpdateUserMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "UserIdResource"
+                },
+                "HttpMethod": "PUT",
+                "AuthorizationType": "NONE",
+                "RequestParameters": {
+                    "method.request.path.userId": true
+                },
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateUserFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "DeleteUserMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "UserIdResource"
+                },
+                "HttpMethod": "DELETE",
+                "AuthorizationType": "NONE",
+                "RequestParameters": {
+                    "method.request.path.userId": true
+                },
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteUserFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "UsersOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "UsersResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            }
+                        }
+                    ],
+                    "PassthroughBehavior": "WHEN_NO_MATCH",
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "UserIdOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "UserIdResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,PUT,DELETE,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            }
+                        }
+                    ],
+                    "PassthroughBehavior": "WHEN_NO_MATCH",
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "CreateUserMethod",
+                "GetUserMethod",
+                "UpdateUserMethod",
+                "DeleteUserMethod",
+                "ListUsersMethod",
+                "UsersOptionsMethod",
+                "UserIdOptionsMethod",
+                "ApiGatewayAccount"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "Description": {
+                    "Fn::Sub": "Deployment for ${EnvironmentSuffix} environment"
+                }
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "StageName": {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "TracingEnabled": true,
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "LoggingLevel": "INFO",
+                        "DataTraceEnabled": true,
+                        "MetricsEnabled": true,
+                        "ThrottlingRateLimit": 1000,
+                        "ThrottlingBurstLimit": 2000
+                    }
+                ]
+            }
+        },
+        "CreateUserLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "CreateUserFunction",
+                        "Arn"
+                    ]
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*"
+                }
+            }
+        },
+        "GetUserLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "GetUserFunction",
+                        "Arn"
+                    ]
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*"
+                }
+            }
+        },
+        "UpdateUserLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "UpdateUserFunction",
+                        "Arn"
+                    ]
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*"
+                }
+            }
+        },
+        "DeleteUserLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "DeleteUserFunction",
+                        "Arn"
+                    ]
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*"
+                }
+            }
+        },
+        "ListUsersLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "ListUsersFunction",
+                        "Arn"
+                    ]
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*"
+                }
+            }
+        },
+        "TableNameParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/userprofile/${EnvironmentSuffix}/table-name"
+                },
+                "Type": "String",
+                "Value": {
+                    "Ref": "UserProfilesTable"
+                },
+                "Description": "DynamoDB table name for user profiles",
+                "Tier": "Standard"
+            }
+        },
+        "ApiEndpointParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/userprofile/${EnvironmentSuffix}/api-endpoint"
+                },
+                "Type": "String",
+                "Value": {
+                    "Fn::Sub": "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}"
+                },
+                "Description": "API Gateway endpoint URL",
+                "Tier": "Standard"
+            }
+        },
+        "EnvironmentParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/userprofile/${EnvironmentSuffix}/environment"
+                },
+                "Type": "String",
+                "Value": {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "Description": "Current environment",
+                "Tier": "Standard"
+            }
+        },
+        "DynamoDBThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": [
+                        "dynamodb-throttle-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "AlarmDescription": "Alarm when DynamoDB table experiences throttling",
+                "MetricName": "ConsumedReadCapacityUnits",
+                "Namespace": "AWS/DynamoDB",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TableName",
+                        "Value": {
+                            "Ref": "UserProfilesTable"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": [
+                        "lambda-errors-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "AlarmDescription": "Alarm when Lambda functions have errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ApiGateway4XXAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": [
+                        "api-4xx-errors-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "AlarmDescription": "Alarm when API Gateway has high 4XX error rate",
+                "MetricName": "4XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Ref": "RestApi"
+                        }
+                    },
+                    {
+                        "Name": "Stage",
+                        "Value": {
+                            "Ref": "ApiStage"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGateway5XXAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": [
+                        "api-5xx-errors-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "AlarmDescription": "Alarm when API Gateway has 5XX errors",
+                "MetricName": "5XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Ref": "RestApi"
+                        }
+                    },
+                    {
+                        "Name": "Stage",
+                        "Value": {
+                            "Ref": "ApiStage"
+                        }
+                    }
+                ]
+            }
+        },
+        "MonitoringDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": [
+                        "user-profile-${LowerStackName}-${EnvironmentSuffix}",
+                        {
+                            "LowerStackName": {
+                                "Fn::Join": [
+                                    "",
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Join": [
+                                                    "-",
+                                                    {
+                                                        "Fn::Split": [
+                                                            "_",
+                                                            {
+                                                                "Fn::Select": [
+                                                                    0,
+                                                                    {
+                                                                        "Fn::Split": [
+                                                                            "/",
+                                                                            {
+                                                                                "Ref": "AWS::StackName"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ApiGateway\", \"Count\", {\"stat\": \"Sum\", \"label\": \"Total Requests\"}],\n          [\".\", \"4XXError\", {\"stat\": \"Sum\", \"label\": \"4XX Errors\"}],\n          [\".\", \"5XXError\", {\"stat\": \"Sum\", \"label\": \"5XX Errors\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"API Gateway Metrics\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"ApiName\": \"${RestApi}\",\n          \"Stage\": \"${ApiStage}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\"}],\n          [\".\", \"Duration\", {\"stat\": \"Average\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Function Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\"}],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Capacity\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${UserProfilesTable}\"\n        }\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ApiEndpoint": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB table name",
+            "Value": {
+                "Ref": "UserProfilesTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TableName"
+                }
+            }
+        },
+        "DynamoDBTableArn": {
+            "Description": "DynamoDB table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "UserProfilesTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TableArn"
+                }
+            }
+        },
+        "CreateUserFunctionArn": {
+            "Description": "Create User Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CreateUserFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CreateUserFunction"
+                }
+            }
+        },
+        "GetUserFunctionArn": {
+            "Description": "Get User Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "GetUserFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GetUserFunction"
+                }
+            }
+        },
+        "UpdateUserFunctionArn": {
+            "Description": "Update User Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "UpdateUserFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-UpdateUserFunction"
+                }
+            }
+        },
+        "DeleteUserFunctionArn": {
+            "Description": "Delete User Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DeleteUserFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DeleteUserFunction"
+                }
+            }
+        },
+        "ListUsersFunctionArn": {
+            "Description": "List Users Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ListUsersFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ListUsersFunction"
+                }
+            }
+        },
+        "Environment": {
+            "Description": "Environment name",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Environment"
+                }
+            }
+        }
+    }
+}

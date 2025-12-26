@@ -469,7 +469,7 @@ deploy_cdktf() {
 
     # Synthesize and deploy based on language
     print_status $YELLOW "🔧 Synthesizing CDKTF..."
-    
+
     case "$language" in
         "ts"|"js")
             cdktf synth 2>&1
@@ -490,50 +490,99 @@ deploy_cdktf() {
     esac
 
     print_status $YELLOW "🚀 Deploying to LocalStack..."
-    cdktf deploy --auto-approve 2>&1
-    local exit_code=$?
-    
+
+    # Capture deploy output to extract outputs later
+    local deploy_log="/tmp/cdktf-deploy-$$.log"
+    cdktf deploy --auto-approve 2>&1 | tee "$deploy_log"
+    local exit_code=${PIPESTATUS[0]}
+
     if [ $exit_code -ne 0 ]; then
         print_status $RED "❌ CDKTF deployment failed with exit code: $exit_code"
         echo ""
         describe_cdktf_failure
+        rm -f "$deploy_log"
         exit $exit_code
     fi
 
     print_status $GREEN "✅ CDKTF deployment completed!"
     echo ""
 
-    # Collect outputs
+    # Collect outputs - parse directly from deploy logs
     print_status $YELLOW "📊 Collecting deployment outputs..."
     local output_json="{}"
 
-    # Try cdktf output first (may not work if terraform reinitializes)
-    if npx --yes cdktf output --outputs-file "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null; then
-        output_json=$(cat "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null || echo "{}")
-    fi
+    # Extract outputs from the deploy log
+    # The format is:
+    # Outputs:
+    #
+    # AlbDnsName-dev-us-east-1 = "alb-dev-us-east-1-5cf6f1dc.elb.localhost.localstack.cloud"
+    # ...
 
-    # Fallback: Read outputs directly from terraform state in cdktf.out
-    if [ "$output_json" == "{}" ] || [ -z "$output_json" ]; then
-        print_status $YELLOW "⚠️ cdktf output returned empty, reading from terraform state..."
+    if [ -f "$deploy_log" ]; then
+        print_status $BLUE "   Parsing outputs from deploy logs..."
 
-        # Find the stack directory in cdktf.out
-        local stack_dir=$(find "$PROJECT_ROOT/cdktf.out" -maxdepth 1 -type d -name "stacks" 2>/dev/null | head -1)
-        if [ -d "$stack_dir" ]; then
-            # Find the first stack subdirectory
-            local first_stack=$(find "$stack_dir" -maxdepth 1 -type d ! -path "$stack_dir" | head -1)
-            if [ -d "$first_stack" ]; then
-                print_status $YELLOW "Reading outputs from: $first_stack"
-                cd "$first_stack"
+        # Extract the Outputs section and convert to JSON
+        output_json=$(python3 -c "
+import sys, json, re
 
-                # Run terraform output to get the outputs
-                if terraform output -json > /tmp/tf-outputs.json 2>/dev/null; then
-                    # Convert terraform output format to flat key-value pairs
-                    output_json=$(jq -r 'to_entries | map({key: .key, value: .value.value}) | from_entries' /tmp/tf-outputs.json 2>/dev/null || echo "{}")
-                    rm -f /tmp/tf-outputs.json
-                fi
+outputs = {}
+in_outputs_section = False
+deploy_log_path = '$deploy_log'
 
-                cd "$PROJECT_ROOT"
+try:
+    with open(deploy_log_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+
+            # Detect start of Outputs section
+            if line == 'Outputs:':
+                in_outputs_section = True
+                continue
+
+            # Stop if we hit another section or empty lines after outputs
+            if in_outputs_section and line and not line.startswith(' ') and '=' not in line:
+                break
+
+            # Parse output lines: key = \"value\" or key = value
+            if in_outputs_section and '=' in line:
+                # Match pattern: key = \"value\" or key = value
+                match = re.match(r'^(\S+)\s*=\s*\"?([^\"]+)\"?\s*$', line)
+                if match:
+                    key = match.group(1).strip()
+                    value = match.group(2).strip()
+                    # Remove quotes if present
+                    value = value.strip('\"')
+                    outputs[key] = value
+
+    print(json.dumps(outputs, indent=2))
+except Exception as e:
+    print('{}', file=sys.stderr)
+    print(f'Error parsing outputs: {e}', file=sys.stderr)
+" 2>&1)
+
+        # Clean up deploy log
+        rm -f "$deploy_log"
+
+        # Check if we got valid JSON
+        if echo "$output_json" | jq . > /dev/null 2>&1; then
+            local output_count=$(echo "$output_json" | jq 'keys | length' 2>/dev/null || echo "0")
+            print_status $BLUE "   Extracted $output_count outputs from deploy logs"
+        else
+            print_status $YELLOW "   ⚠️  Could not parse outputs from deploy logs, trying cdktf output command..."
+            # Fallback to cdktf output command
+            if npx --yes cdktf output --outputs-file "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null; then
+                output_json=$(cat "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null || echo "{}")
+            else
+                output_json="{}"
             fi
+        fi
+    else
+        print_status $YELLOW "   ⚠️  Deploy log not found, trying cdktf output command..."
+        # Fallback to cdktf output command
+        if npx --yes cdktf output --outputs-file "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null; then
+            output_json=$(cat "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null || echo "{}")
+        else
+            output_json="{}"
         fi
     fi
 
