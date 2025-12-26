@@ -36,9 +36,10 @@ import { Route } from '@cdktf/provider-aws/lib/route';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
 
 // LocalStack detection: Check for LocalStack endpoint in environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                     process.env.LOCALSTACK_ENDPOINT !== undefined;
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+  process.env.LOCALSTACK_ENDPOINT !== undefined;
 
 // --- Reusable Regional Construct ---
 interface RegionalInfraProps {
@@ -223,7 +224,8 @@ export class TapStack extends TerraformStack {
     const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
 
     // LocalStack endpoint configuration
-    const localStackEndpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+    const localStackEndpoint =
+      process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
 
     const primaryProvider = isLocalStack
       ? new AwsProvider(this, 'aws-primary', {
@@ -235,18 +237,20 @@ export class TapStack extends TerraformStack {
           skipMetadataApiCheck: 'true',
           skipRequestingAccountId: true,
           s3UsePathStyle: true,
-          endpoints: [{
-            s3: localStackEndpoint,
-            dynamodb: localStackEndpoint,
-            rds: localStackEndpoint,
-            kms: localStackEndpoint,
-            cloudwatch: localStackEndpoint,
-            iam: localStackEndpoint,
-            sts: localStackEndpoint,
-            ec2: localStackEndpoint,
-            route53: localStackEndpoint,
-            acm: localStackEndpoint,
-          }],
+          endpoints: [
+            {
+              s3: localStackEndpoint,
+              dynamodb: localStackEndpoint,
+              rds: localStackEndpoint,
+              kms: localStackEndpoint,
+              cloudwatch: localStackEndpoint,
+              iam: localStackEndpoint,
+              sts: localStackEndpoint,
+              ec2: localStackEndpoint,
+              route53: localStackEndpoint,
+              acm: localStackEndpoint,
+            },
+          ],
         })
       : new AwsProvider(this, 'aws-primary', {
           region: primaryRegion,
@@ -263,18 +267,20 @@ export class TapStack extends TerraformStack {
           skipMetadataApiCheck: 'true',
           skipRequestingAccountId: true,
           s3UsePathStyle: true,
-          endpoints: [{
-            s3: localStackEndpoint,
-            dynamodb: localStackEndpoint,
-            rds: localStackEndpoint,
-            kms: localStackEndpoint,
-            cloudwatch: localStackEndpoint,
-            iam: localStackEndpoint,
-            sts: localStackEndpoint,
-            ec2: localStackEndpoint,
-            route53: localStackEndpoint,
-            acm: localStackEndpoint,
-          }],
+          endpoints: [
+            {
+              s3: localStackEndpoint,
+              dynamodb: localStackEndpoint,
+              rds: localStackEndpoint,
+              kms: localStackEndpoint,
+              cloudwatch: localStackEndpoint,
+              iam: localStackEndpoint,
+              sts: localStackEndpoint,
+              ec2: localStackEndpoint,
+              route53: localStackEndpoint,
+              acm: localStackEndpoint,
+            },
+          ],
         })
       : new AwsProvider(this, 'aws-secondary', {
           region: secondaryRegion,
@@ -291,18 +297,20 @@ export class TapStack extends TerraformStack {
           skipMetadataApiCheck: 'true',
           skipRequestingAccountId: true,
           s3UsePathStyle: true,
-          endpoints: [{
-            s3: localStackEndpoint,
-            dynamodb: localStackEndpoint,
-            rds: localStackEndpoint,
-            kms: localStackEndpoint,
-            cloudwatch: localStackEndpoint,
-            iam: localStackEndpoint,
-            sts: localStackEndpoint,
-            ec2: localStackEndpoint,
-            route53: localStackEndpoint,
-            acm: localStackEndpoint,
-          }],
+          endpoints: [
+            {
+              s3: localStackEndpoint,
+              dynamodb: localStackEndpoint,
+              rds: localStackEndpoint,
+              kms: localStackEndpoint,
+              cloudwatch: localStackEndpoint,
+              iam: localStackEndpoint,
+              sts: localStackEndpoint,
+              ec2: localStackEndpoint,
+              route53: localStackEndpoint,
+              acm: localStackEndpoint,
+            },
+          ],
         })
       : new AwsProvider(this, 'aws-s3-replica', {
           region: s3ReplicaRegion,
@@ -361,7 +369,10 @@ export class TapStack extends TerraformStack {
         peerVpcId: secondaryInfra.vpc.id,
         peerRegion: secondaryRegion,
         autoAccept: false,
-        tags: { ...tags, Name: `peering-${primaryRegion}-to-${secondaryRegion}` },
+        tags: {
+          ...tags,
+          Name: `peering-${primaryRegion}-to-${secondaryRegion}`,
+        },
       });
 
       // FIX: Corrected the class name from VpcPeeringConnectionAccepter to VpcPeeringConnectionAccepterA
@@ -579,7 +590,7 @@ export class TapStack extends TerraformStack {
               sampledRequestsEnabled: true,
             },
           },
-        ] as any,
+        ] as any, // Type assertion needed for complex WAF rule configuration
         tags,
       });
 
@@ -686,6 +697,11 @@ export class TapStack extends TerraformStack {
         healthCheckId: secondaryDbHealthCheck.id,
       });
     }
+
+    // Always output deployment mode to ensure outputs exist
+    new TerraformOutput(this, 'DeploymentMode', {
+      value: isLocalStack ? 'localstack' : 'aws',
+    });
 
     new TerraformOutput(this, 'PrimaryRdsEndpoint', {
       value: primaryInfra.dbInstance.address,
