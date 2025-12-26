@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-101912243",
+  "team": "synth-2",
+  "provider": "localstack",
+  "wave": "P1",
+  "startedAt": "2025-11-09T06:57:27.300Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "RDS",
+    "Lambda",
+    "SQS",
+    "Step Functions",
+    "EventBridge",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "VPC"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}
