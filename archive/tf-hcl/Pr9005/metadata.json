@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291319",
+  "team": "synth-2",
+  "startedAt": "2025-08-15T12:48:04.363Z",
+  "subtask": "Failure Recovery and High Availability",
+  "provider": "localstack",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "rds",
+    "vpc",
+    "iam",
+    "ec2"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "LS-291319",
+    "pr": "Pr1348"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
