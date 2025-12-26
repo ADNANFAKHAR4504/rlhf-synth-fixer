@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291597",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T06:37:37.187Z",
+  "subtask": "Web Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "KMS",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "CloudTrail",
+    "AWS Config",
+    "CloudWatch"
+  ],
+  "wave": "P0"
+}
