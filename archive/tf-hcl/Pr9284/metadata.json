@@ -15,7 +15,7 @@
     "VPC",
     "EC2",
     "IAM",
-    "CloudWatch Logs",
+    "CloudWatch",
     "Security Groups",
     "Network ACLs",
     "VPC Flow Logs",
@@ -26,5 +26,12 @@
   "migrated_from": {
     "po_id": "trainr917",
     "pr": "Pr1797"
-  }
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
