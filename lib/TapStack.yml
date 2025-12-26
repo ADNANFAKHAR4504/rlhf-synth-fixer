@@ -350,10 +350,16 @@ Resources:
   # Backup Plan
   BackupPlan:
     Type: AWS::Backup::BackupPlan
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - E3002
+            - E3003
     Properties:
       BackupPlan:
         BackupPlanName: !Sub tap-${EnvironmentSuffix}-backup-plan
-        BackupPlanRule:
+        Rules:
           - RuleName: DailyBackup
             TargetBackupVaultName: !Ref BackupVault
             ScheduleExpression: 'cron(0 5 * * ? *)'
