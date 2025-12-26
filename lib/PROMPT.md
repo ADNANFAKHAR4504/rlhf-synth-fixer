@@ -10,11 +10,25 @@ I have this basic Terraform setup that creates a simple cloud environment, but m
 
 I need help creating a CDK Java implementation that matches our Terraform setup exactly. Here's what the infrastructure should include:
 
-The VPC needs to use a 10.0.0.0/16 CIDR block, and I need 2 subnets in different availability zones for high availability. There should be an EC2 instance with a public IP address that's accessible from the internet. 
+The VPC needs to use a 10.0.0.0/16 CIDR block, and I need 2 subnets in different availability zones for high availability. There should be an EC2 instance with a public IP address that's accessible from the internet.
 
 For networking, I need an Internet Gateway properly configured and a Security Group that allows SSH access on port 22. Everything needs to follow our tagging standards with 'Project: TerraformSetup' tags applied to all resources.
 
 Our naming convention requires all resources to have a 'cdk-' prefix to distinguish them from our existing infrastructure.
+
+### Service Integration Requirements
+
+The infrastructure needs to have proper service connectivity between components:
+
+The EC2 instance needs to integrate with CloudWatch for monitoring and logging. I want instance logs automatically streamed to a CloudWatch Log Group so our ops team can monitor everything from a central location without SSH access.
+
+For storage, the EC2 instance should have access to an S3 bucket where it can upload and download files. The IAM role attached to the instance should grant appropriate S3 permissions so applications can use the bucket without hardcoded credentials.
+
+I also need Systems Manager integration so our team can manage the instance remotely without dealing with SSH keys. The IAM role should include the AWS managed SSM policy to enable this.
+
+The VPC needs to provide proper network isolation with security groups controlling access. The Internet Gateway should allow the EC2 instance in the public subnet to reach the internet for software updates and external API calls.
+
+All the IAM policies and roles need to follow least privilege principles, granting only the specific permissions each service needs to interact with others.
 
 ## My Constraints and Challenges
 
