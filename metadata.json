@@ -3,19 +3,28 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "LS-229161",
+  "po_id": "LS-291592",
   "team": "synth-2",
-  "startedAt": "2025-07-21T16:11:43.192Z",
+  "wave": "P1",
+  "startedAt": "2025-08-18T20:34:02.371Z",
   "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Serverless Infrastructure (Functions as Code)"
+    "Web Application Deployment",
+    "Security Configuration as Code"
   ],
+  "training_quality": 8,
   "aws_services": [
-    "Lambda",
-    "DynamoDB",
-    "APIGateway",
-    "IAM"
-  ],
-  "wave": "P0"
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "Internet Gateway",
+    "KMS",
+    "Secrets Manager"
+  ]
 }
