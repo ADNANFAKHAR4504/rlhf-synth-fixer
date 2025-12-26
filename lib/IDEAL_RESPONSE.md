@@ -1,6 +1,6 @@
 # Serverless Application Infrastructure - Ideal Solution
 
-This solution creates a complete serverless application using Pulumi JavaScript with RESTful APIs served through API Gateway and backend processing implemented via AWS Lambda functions.
+This solution creates a complete serverless application using Pulumi JS with RESTful APIs served through API Gateway and backend processing implemented via AWS Lambda functions.
 
 ## Infrastructure Overview
 
@@ -16,7 +16,7 @@ The infrastructure implements all 8 requirements:
 
 ## File: bin/tap.mjs
 
-```javascript
+```js
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *
@@ -68,7 +68,7 @@ export const worldFunctionName = stack.worldFunctionName;
 
 ## File: lib/TapStack.mjs
 
-```javascript
+```js
 /**
  * TapStack.mjs
  *
