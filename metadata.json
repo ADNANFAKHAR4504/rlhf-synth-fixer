@@ -1,0 +1,22 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-101912392",
+  "team": "synth-2",
+  "startedAt": "2025-11-19T05:56:29.569705",
+  "subtask": "AWS CloudFormation",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "KMS",
+    "IAM"
+  ],
+  "wave": "P1"
+}
