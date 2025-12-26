@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291513",
+  "team": "synth-2",
+  "startedAt": "2025-08-17T04:36:21.969Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "SecretsManager",
+    "SNS"
+  ],
+  "wave": "P1",
+  "migrated_from": {
+    "po_id": "291513",
+    "pr": "Pr1486"
+  }
+}
