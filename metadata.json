@@ -5,7 +5,7 @@
   "turn_type": "single",
   "po_id": "LS-291592",
   "team": "synth-2",
-  "wave": "P1",
+  "wave": "P0",
   "startedAt": "2025-08-18T20:34:02.371Z",
   "subtask": "Application Deployment",
   "provider": "localstack",
