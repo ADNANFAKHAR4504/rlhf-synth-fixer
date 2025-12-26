@@ -6,11 +6,16 @@
   "po_id": "LS-229161",
   "team": "synth-2",
   "startedAt": "2025-07-21T16:11:43.192Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "APIGateway",
+    "IAM"
+  ],
   "wave": "P0"
 }
