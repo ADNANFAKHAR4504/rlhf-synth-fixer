@@ -3,21 +3,49 @@ package app;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Duration;
-import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.elasticloadbalancingv2.*;
-import software.amazon.awscdk.services.elasticloadbalancingv2.targets.*;
-import software.amazon.awscdk.services.autoscaling.*;
-import software.amazon.awscdk.services.iam.*;
-import software.amazon.awscdk.services.cloudwatch.*;
-import software.amazon.awscdk.services.logs.*;
+import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
+import software.amazon.awscdk.services.autoscaling.CpuUtilizationScalingProps;
+import software.amazon.awscdk.services.autoscaling.ElbHealthCheckOptions;
+import software.amazon.awscdk.services.autoscaling.RequestCountScalingProps;
+import software.amazon.awscdk.services.autoscaling.RollingUpdateOptions;
+import software.amazon.awscdk.services.autoscaling.UpdatePolicy;
+import software.amazon.awscdk.services.cloudwatch.Alarm;
+import software.amazon.awscdk.services.cloudwatch.Metric;
+import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
+import software.amazon.awscdk.services.ec2.ISubnet;
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ec2.LaunchTemplate;
+import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.UserData;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
+import software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps;
+import software.amazon.awscdk.services.elasticloadbalancingv2.TargetType;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.PolicyDocument;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.logs.LogGroup;
+import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
@@ -25,13 +53,13 @@ import java.util.stream.Collectors;
  * This class provides a simple container for stack-specific configuration
  * including environment suffix for resource naming.
  */
-class TapStackProps {
+final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(String environmentSuffix, StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String envSuffix, final StackProps props) {
+        this.environmentSuffix = envSuffix;
+        this.stackProps = props != null ? props : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -50,13 +78,13 @@ class TapStackProps {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String envSuffix) {
+            this.environmentSuffix = envSuffix;
             return this;
         }
 
-        public Builder stackProps(StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps props) {
+            this.stackProps = props;
             return this;
         }
 
@@ -91,7 +119,7 @@ class TapStackDev extends Stack {
      * @param id The unique identifier for this stack
      * @param props Optional properties for configuring the stack
      */
-    public TapStackDev(final Construct scope, final String id, final StackProps props) {
+    TapStackDev(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
 
         // Extract environment suffix from stack name if present
@@ -102,8 +130,8 @@ class TapStackDev extends Stack {
 
         // Detect LocalStack environment
         String endpointUrl = System.getenv("AWS_ENDPOINT_URL");
-        this.isLocalStack = endpointUrl != null &&
-                           (endpointUrl.contains("localhost") || endpointUrl.contains("4566"));
+        this.isLocalStack = endpointUrl != null
+                && (endpointUrl.contains("localhost") || endpointUrl.contains("4566"));
 
         // Create VPC with high availability across 3 AZs
         createVpc();
@@ -190,7 +218,7 @@ class TapStackDev extends Stack {
         return albSg;
     }
 
-    private SecurityGroup createInstanceSecurityGroup(SecurityGroup albSg) {
+    private SecurityGroup createInstanceSecurityGroup(final SecurityGroup albSg) {
         SecurityGroup instanceSg = SecurityGroup.Builder.create(this, "InstanceSG")
                 .vpc(vpc)
                 .description("Security group for EC2 instances")
@@ -203,7 +231,7 @@ class TapStackDev extends Stack {
         return instanceSg;
     }
 
-    private void createApplicationLoadBalancer(SecurityGroup albSg) {
+    private void createApplicationLoadBalancer(final SecurityGroup albSg) {
         this.loadBalancer = ApplicationLoadBalancer.Builder.create(this, "ApplicationLB")
                 .vpc(vpc)
                 .internetFacing(true)
@@ -241,7 +269,7 @@ class TapStackDev extends Stack {
                 .build());
     }
 
-    private void createAutoScalingGroup(Role instanceRole, SecurityGroup instanceSg) {
+    private void createAutoScalingGroup(final Role instanceRole, final SecurityGroup instanceSg) {
         // Create launch template with user data for application setup
         LaunchTemplate launchTemplate = LaunchTemplate.Builder.create(this, "LaunchTemplate")
                 .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
