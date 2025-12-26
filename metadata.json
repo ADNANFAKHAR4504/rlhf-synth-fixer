@@ -9,7 +9,7 @@
   "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
-    "Serverless Infrastructure (Functions as Code)"
+    "Infrastructure Analysis/Monitoring"
   ],
   "aws_services": [
     "Lambda",
