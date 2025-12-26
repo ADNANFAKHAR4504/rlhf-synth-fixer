@@ -8,9 +8,21 @@
   "startedAt": "2025-12-26T03:44:00.000Z",
   "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
-  "subject_labels": ["General Infrastructure Tooling QA"],
-  "aws_services": ["VPC", "EC2", "RDS", "S3", "CloudTrail", "IAM", "KMS", "AutoScaling", "SecretsManager"],
-  "wave": "P1",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudTrail",
+    "IAM",
+    "KMS",
+    "AutoScaling",
+    "SecretsManager"
+  ],
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291790",
     "pr": "Pr1246"
