@@ -83,7 +83,7 @@ Create a multi-region disaster recovery payment processing system using CloudFor
 - Deploy primary infrastructure to ap-southeast-1 region
 - Deploy DR infrastructure to ap-southeast-2 region
 - Resource names must include environmentSuffix parameter for uniqueness
-- Follow naming convention: {resource-type}-{purpose}-{environmentSuffix}
+- Follow naming convention: resourceType-purpose-environmentSuffix
 
 ### Constraints
 
