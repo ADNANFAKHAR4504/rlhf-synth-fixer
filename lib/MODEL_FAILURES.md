@@ -91,6 +91,7 @@ The following modifications were made to ensure LocalStack Community Edition com
 | AMI Parameter Type | AWS::EC2::Image::Id | Works in both | Type validation adjusted | Standard in AWS |
 | Auto Scaling DependsOn | Single dependency | Works in both | DependsOn: FinanceAppKMSKey | Standard in AWS |
 | RDS DBInstance | Limited support, may timeout | Full support with Pro/Ultimate | Uses basic configuration | Full RDS in AWS |
+| RDS Endpoint Format | Returns `localhost.localstack.cloud` | Returns standard format | Tests accept both formats | `.rds.amazonaws.com` in AWS |
 
 > **Note**: If running with Pro/Ultimate license, many workarounds above are unnecessary. The fixer will detect your license and skip unneeded fixes.
 
