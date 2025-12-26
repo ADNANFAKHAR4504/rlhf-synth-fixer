@@ -11,6 +11,22 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": [],
-  "wave": "P0"
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "IAM",
+    "KMS"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
