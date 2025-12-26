@@ -30,6 +30,7 @@ bash .claude/scripts/claude-validate-prompt-quality.sh
 **Your role is to:**
 - ✅ Validate that prompts describe service connectivity and integration
 - ✅ Ensure prompts are human-written (not LLM-generated with formal indicators)
+- ✅ Verify prompts sound like talking to ONE person (not a team or group)
 - ✅ Check security best practices when relevant
 - ❌ NOT require prompts to exactly match example templates
 - ❌ NOT fail prompts that are well-structured but use different approaches
@@ -61,6 +62,7 @@ The prompt quality validation has passed all checks.
 - ✅ Multi-service architecture with clear service interactions
 - ✅ Connector-based structure showing HOW services work together
 - ✅ Security validation (conditional based on prompt focus)
+- ✅ Human conversational tone (sounds like talking to one person, not a team/group)
 - ✅ No LLM-generated content detected (no emojis, en/em dashes, brackets, formal abbreviations)
 
 ### Quality Assessment
@@ -110,15 +112,20 @@ The prompt quality validation has failed.
 1. Review the script output above for specific failures
 2. Update `lib/PROMPT.md` to address the issues
 3. **Ensure the prompt describes HOW AWS services connect and integrate**, not just listing them
-4. **Remove LLM-generated indicators:**
+4. **Use one-to-one conversational tone:**
+   - Talk to ONE person (the AI assistant), not a team or group
+   - Remove "hey team", "hi everyone", "folks", "guys", "dear all", etc.
+   - Use phrases like "Can you help me...", "I need to...", or just state the request
+   - Sound like a real human asking for help from another person
+5. **Remove LLM-generated indicators:**
    - Remove emojis
    - Replace en dashes (–) and em dashes (—) with regular hyphens (-)
    - Remove square brackets [ ] completely
    - Limit round/curly brackets to maximum 1 pair
    - Remove formal abbreviations like "e.g.", "i.e.", "etc."
    - Use natural, conversational language
-5. **Security considerations**: Only required if the prompt is security-focused (IAM, security groups, encryption, etc.)
-6. Push your changes
+6. **Security considerations**: Only required if the prompt is security-focused (IAM, security groups, encryption, etc.)
+7. Push your changes
 
 ### Examples
 
@@ -133,6 +140,24 @@ The prompt quality validation has failed.
 > "Deploy S3 and Lambda"
 
 > "Create EC2 instances and RDS database"
+
+**Bad prompts (non-human tone - addressing a group):**
+> "Hey team, I need to deploy an S3 bucket that triggers Lambda..."
+
+> "Hi everyone, can someone help me set up API Gateway with Lambda?"
+
+> "Folks, we need to create a VPC with EC2 instances..."
+
+> "Dear all, please deploy a CloudFormation stack for..."
+
+**Good prompts (human one-to-one tone):**
+> "Hey, can you help me deploy an S3 bucket that triggers Lambda when files are uploaded?"
+
+> "I need to set up API Gateway connected to Lambda functions for my API."
+
+> "Help me create a VPC with EC2 instances that connect to RDS."
+
+> (No greeting) "Deploy a CloudFormation stack with S3 bucket triggering Lambda for data processing."
 
 **LLM-generated indicators to avoid:**
 > "Deploy an S3 bucket – which triggers a Lambda – that processes files (e.g., images) and stores results [optional: in DynamoDB]."
@@ -266,6 +291,7 @@ Consider adding a "Suggestions for Enhancement" section to your comment:
 **4. Quality Focus Areas**
 - **Service Integration**: Does it describe HOW services connect?
 - **Data Flow**: Is the path of data through services clear?
+- **Human Conversational Tone**: Does it sound like talking to ONE person (not a team/group)?
 - **Human-Written**: Does it avoid LLM indicators (emojis, en/em dashes, brackets, formal abbreviations)?
 - **Realistic Scenarios**: Does it reflect real-world production patterns?
 - **Security Context**: When relevant, does it describe security boundaries and controls?

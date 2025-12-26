@@ -282,10 +282,94 @@ fi
 echo ""
 
 # ============================================================
-# CHECK 4: LLM-Generated Content Detection
+# CHECK 4: Human Conversational Tone Detection
 # ============================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ":clipboard: CHECK 4: LLM-Generated Content Detection"
+echo ":clipboard: CHECK 4: Human Conversational Tone (One-to-One)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Prompts should sound like talking to ONE person (the AI assistant),"
+echo "not addressing a team or group. This should feel like a real human"
+echo "asking for help from another person."
+echo ""
+
+NON_HUMAN_TONE_FAIL=false
+NON_HUMAN_PATTERNS_FOUND=()
+
+# Patterns that indicate talking to multiple people or non-human tone
+NON_HUMAN_PATTERNS=(
+  "hey team"
+  "hi team"
+  "hello team"
+  "team,"
+  "hey everyone"
+  "hi everyone"
+  "hello everyone"
+  "everyone,"
+  "hey folks"
+  "hi folks"
+  "hello folks"
+  "folks,"
+  "hey guys"
+  "hi guys"
+  "guys,"
+  "hey all"
+  "hi all"
+  "hello all"
+  "dear team"
+  "dear all"
+  "to whom it may concern"
+  "greetings team"
+  "attention team"
+  "attention all"
+)
+
+echo "Checking for plural/group addressing patterns..."
+for pattern in "${NON_HUMAN_PATTERNS[@]}"; do
+  if grep -iq "$pattern" "$PROMPT_FILE"; then
+    echo ":x: Found non-human pattern: '$pattern'"
+    grep -in "$pattern" "$PROMPT_FILE" | head -2 | while read -r line; do
+      echo "    $line"
+    done
+    NON_HUMAN_TONE_FAIL=true
+    NON_HUMAN_PATTERNS_FOUND+=("$pattern")
+  fi
+done
+
+if [ "$NON_HUMAN_TONE_FAIL" = true ]; then
+  echo ""
+  echo ":x: FAIL: Non-human conversational tone detected"
+  echo ""
+  echo "Found ${#NON_HUMAN_PATTERNS_FOUND[@]} pattern(s) that suggest addressing a group:"
+  for p in "${NON_HUMAN_PATTERNS_FOUND[@]}"; do
+    echo "  • '$p'"
+  done
+  echo ""
+  echo "The prompt should sound like a person asking ONE individual (the AI) for help."
+  echo ""
+  echo "Examples of GOOD (one-to-one conversation):"
+  echo "  ✓ 'Hey, can you help me deploy...'"
+  echo "  ✓ 'I need to set up...'"
+  echo "  ✓ 'Can you create...'"
+  echo "  ✓ 'Help me build...'"
+  echo "  ✓ No greeting at all, just the request"
+  echo ""
+  echo "Examples of BAD (group addressing):"
+  echo "  ✗ 'Hey team, I need...'"
+  echo "  ✗ 'Hi everyone, can someone help...'"
+  echo "  ✗ 'Folks, I need assistance with...'"
+  echo "  ✗ 'Dear team, please deploy...'"
+  echo ""
+else
+  echo ":white_check_mark: PASS: Conversational tone is appropriate (one-to-one)"
+fi
+echo ""
+
+# ============================================================
+# CHECK 5: LLM-Generated Content Detection
+# ============================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ":clipboard: CHECK 5: LLM-Generated Content Detection"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -418,10 +502,22 @@ echo ""
 echo "Service Connectivity:  $([ "$CONNECTIVITY_PASS" = true ] && echo ":white_check_mark: PASS" || echo ":x: FAIL")"
 echo "Complexity/Multi-svc:  $([ "$COMPLEXITY_PASS" = true ] && echo ":white_check_mark: PASS" || echo ":x: FAIL")"
 echo "Security Validation:   $([ "$SECURITY_PASS" = true ] && echo ":white_check_mark: PASS" || echo ":x: FAIL (if security-focused)")"
+echo "Human Tone (1-to-1):   $([ "$NON_HUMAN_TONE_FAIL" = false ] && echo ":white_check_mark: PASS" || echo ":x: FAIL")"
 echo "LLM-Generated Check:   $([ "$LLM_GENERATED_FAIL" = false ] && echo ":white_check_mark: PASS" || echo ":x: FAIL")"
 echo ""
 
 # Exit code logic
+if [ "$NON_HUMAN_TONE_FAIL" = true ]; then
+  echo ":x: VALIDATION FAILED: Non-human conversational tone detected"
+  echo ""
+  echo "The prompt should sound like a person asking ONE individual (the AI) for help,"
+  echo "not addressing a team or group. Remove any plural greetings or group addressing."
+  echo ""
+  echo "Rewrite to sound like you're talking to a single person in need of help."
+  echo ""
+  exit 1
+fi
+
 if [ "$LLM_GENERATED_FAIL" = true ]; then
   echo ":x: VALIDATION FAILED: LLM-generated content detected"
   echo ""

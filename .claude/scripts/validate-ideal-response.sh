@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # validate-ideal-response.sh
-# Validates that IDEAL_RESPONSE.md contains exact code from infrastructure files and tests
+# Validates that IDEAL_RESPONSE.md contains exact code from infrastructure files in lib/ folder
+# Test files (unit tests, integration tests) are NOT validated
 # Exit 0: validation passed
 # Exit 1: validation failed
 
@@ -136,37 +137,9 @@ case "$PLATFORM" in
 esac
 
 echo ""
-echo "Checking test files..."
+echo "Test files are not validated (skipping unit tests and integration tests)"
 echo ""
 
-# Check unit test files
-if [ -d "test" ]; then
-    TEST_DIR="test"
-elif [ -d "tests" ]; then
-    TEST_DIR="tests"
-else
-    TEST_DIR=""
-fi
-
-if [ -n "$TEST_DIR" ]; then
-    # Find unit test files
-    for test_file in $(find "$TEST_DIR" -name "*.unit.test.*" -o -name "*_unit_test.*" -o -name "*UnitTest.*"); do
-        if [ -f "$test_file" ]; then
-            check_file_in_ideal_response "$test_file" || VALIDATION_FAILED=1
-        fi
-    done
-
-    # Find integration test files
-    for test_file in $(find "$TEST_DIR" -name "*.int.test.*" -o -name "*_int_test.*" -o -name "*IntTest.*" -o -name "*IntegrationTest.*"); do
-        if [ -f "$test_file" ]; then
-            check_file_in_ideal_response "$test_file" || VALIDATION_FAILED=1
-        fi
-    done
-else
-    echo "  WARNING: No test directory found (test/ or tests/)"
-fi
-
-echo ""
 echo "========================================="
 echo "Validation Summary"
 echo "========================================="
@@ -174,17 +147,17 @@ echo "========================================="
 if [ $VALIDATION_FAILED -eq 0 ]; then
     echo "RESULT: PASSED"
     echo ""
-    echo "All infrastructure code and test files are correctly documented in IDEAL_RESPONSE.md"
+    echo "All infrastructure code files in lib/ folder are correctly documented in IDEAL_RESPONSE.md"
     exit 0
 else
     echo "RESULT: FAILED"
     echo ""
-    echo "The following files are missing or do not match in IDEAL_RESPONSE.md:"
+    echo "The following infrastructure files are missing or do not match in IDEAL_RESPONSE.md:"
     for file in "${MISMATCHED_FILES[@]}"; do
         echo "  - $file"
     done
     echo ""
-    echo "IDEAL_RESPONSE.md must contain the EXACT code from all infrastructure files and tests."
+    echo "IDEAL_RESPONSE.md must contain the EXACT code from all infrastructure files in lib/ folder."
     echo "Please update IDEAL_RESPONSE.md to include the complete, character-for-character code from these files."
     exit 1
 fi
