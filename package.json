@@ -19,7 +19,7 @@
     "check-pipenv": "bash -c \"req='2025.0.4'; curr=$(pipenv --version 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' || echo 'not installed'); if [ \\\"\\$curr\\\" != \\\"\\$req\\\" ]; then echo \\\"❌ Pipenv version mismatch! Required: \\$req, Current: \\$curr\\\"; exit 1; fi; echo \\\"✅ Pipenv version is correct: \\$curr\\\"\"",
     "check-versions": "npm run check-node && npm run check-python && npm run check-pipenv",
     "preinstall": "echo 'Skipping version checks for CI/CD'",
-    "build": "bash -c 'if find lib bin -name \"*.ts\" 2>/dev/null | grep -q .; then tsc --skipLibCheck; else echo \"No TypeScript files in lib/ or bin/, skipping build\"; fi'",
+    "build": "bash -c 'if find lib bin -name \"*.ts\" 2>/dev/null | grep -q .; then echo \"Building TypeScript files...\" && tsc --skipLibCheck; elif find lib bin -name \"*.js\" -o -name \"*.mjs\" 2>/dev/null | grep -q .; then echo \"Building JavaScript files...\" && node --check lib/*.mjs bin/*.mjs && echo \"✓ JavaScript syntax validation passed\"; else echo \"No source files found in lib/ or bin/\"; exit 1; fi'",
     "build:strict": "tsc",
     "start": "ts-node cli/create-task.ts",
     "lint": "bash -c 'if find lib bin -name \"*.ts\" -o -name \"*.js\" -o -name \"*.tsx\" -o -name \"*.jsx\" 2>/dev/null | grep -q .; then eslint . --ignore-pattern \".claude/**\"; else echo \"No JavaScript/TypeScript files in lib/ or bin/, skipping lint\"; fi'",
