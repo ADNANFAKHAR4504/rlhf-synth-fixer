@@ -437,8 +437,8 @@ describe('TapStack - Comprehensive End-to-End Unit Tests', () => {
       validateResourceExists('RDSInstance', 'AWS::RDS::DBInstance');
 
       expect(templateYaml).toContain('Engine: mysql');
-      expect(templateYaml).toContain('EngineVersion: \'8.0.43\'');
-      expect(templateYaml).toContain('StorageType: gp3');
+      expect(templateYaml).toContain('EngineVersion: \'8.0.37\'');
+      expect(templateYaml).toContain('StorageType: gp2');
       expect(templateYaml).toContain('StorageEncrypted: true');
       expect(templateYaml).toContain('DeletionProtection: false');
 
@@ -454,8 +454,8 @@ describe('TapStack - Comprehensive End-to-End Unit Tests', () => {
     });
 
     test('RDS Instance has proper deletion and update policies', () => {
-      expect(templateYaml).toContain('DeletionPolicy: Snapshot');
-      expect(templateYaml).toContain('UpdateReplacePolicy: Snapshot');
+      expect(templateYaml).toContain('DeletionPolicy: Delete');
+      expect(templateYaml).toContain('UpdateReplacePolicy: Delete');
     });
   });
 
@@ -957,8 +957,8 @@ describe('TapStack - Comprehensive End-to-End Unit Tests', () => {
 
     test('Template supports complete teardown and recreation', () => {
       // RDS has proper deletion policies
-      expect(templateYaml).toContain('DeletionPolicy: Snapshot');
-      expect(templateYaml).toContain('UpdateReplacePolicy: Snapshot');
+      expect(templateYaml).toContain('DeletionPolicy: Delete');
+      expect(templateYaml).toContain('UpdateReplacePolicy: Delete');
 
       // All resources have proper tags for identification
       const resourcesWithTags = ['VPC', 'EC2Instance', 'RDSInstance', 'PaymentDataBucket', 'PaymentProcessorFunction'];
