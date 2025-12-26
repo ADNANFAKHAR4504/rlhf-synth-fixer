@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr915",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T00:00:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "AWS CloudWatch",
+    "AWS X-Ray",
+    "Amazon SQS",
+    "AWS IAM",
+    "AWS CloudFormation",
+    "AWS SAM"
+  ],
+  "provider": "localstack",
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "barun-turing",
+    "pr": "Pr1918"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}
