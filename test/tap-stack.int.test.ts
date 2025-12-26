@@ -124,21 +124,32 @@ describe('TapStack Integration Tests', () => {
     apiKeysSecretArn = stackOutputs['api_keys_secret_arn'];
     kmsKeyIds = stackOutputs['kms_key_ids'];
 
-    if (
-      !vpcId ||
-      !publicSubnetIds ||
-      !privateSubnetIds ||
-      !webSecurityGroupId ||
-      !sshSecurityGroupId ||
-      !ec2RoleArn ||
-      !appDataBucketName ||
-      !cloudtrailBucketName ||
-      !cloudtrailArn ||
-      !databaseSecretArn ||
-      !apiKeysSecretArn ||
-      !kmsKeyIds
-    ) {
-      throw new Error('Missing required stack outputs for integration test.');
+    // Debug: Log what outputs we have
+    const missingOutputs: string[] = [];
+    if (!vpcId) missingOutputs.push('vpc_id');
+    if (!vpcCidrBlock) missingOutputs.push('vpc_cidr_block');
+    if (!publicSubnetIds) missingOutputs.push('public_subnet_ids');
+    if (!privateSubnetIds) missingOutputs.push('private_subnet_ids');
+    if (!webSecurityGroupId) missingOutputs.push('web_security_group_id');
+    if (!sshSecurityGroupId) missingOutputs.push('ssh_security_group_id');
+    if (!ec2RoleArn) missingOutputs.push('ec2_role_arn');
+    if (!ec2RoleName) missingOutputs.push('ec2_role_name');
+    if (!cloudtrailRoleArn) missingOutputs.push('cloudtrail_role_arn');
+    if (!appDataBucketName) missingOutputs.push('app_data_bucket_name');
+    if (!appDataBucketArn) missingOutputs.push('app_data_bucket_arn');
+    if (!cloudtrailBucketName) missingOutputs.push('cloudtrail_bucket_name');
+    if (!accessLogsBucketName) missingOutputs.push('access_logs_bucket_name');
+    if (!cloudtrailArn) missingOutputs.push('cloudtrail_arn');
+    if (!databaseSecretArn) missingOutputs.push('database_secret_arn');
+    if (!apiKeysSecretArn) missingOutputs.push('api_keys_secret_arn');
+    if (!kmsKeyIds) missingOutputs.push('kms_key_ids');
+
+    if (missingOutputs.length > 0) {
+      console.error('Available outputs:', Object.keys(stackOutputs));
+      console.error('Missing outputs:', missingOutputs);
+      throw new Error(
+        `Missing required stack outputs: ${missingOutputs.join(', ')}`
+      );
     }
   });
 
