@@ -812,8 +812,8 @@ class TestTapStack(unittest.TestCase):
                 tags={}
             )
             # Should have processing Lambda and output bucket
-            self.assertIsNotNone(data_processing.lambda_function)
-            self.assertIsNotNone(data_processing.output_bucket)
+            self.assertIsNotNone(data_processing.data_processor)
+            self.assertIsNotNone(data_processing.processed_data_bucket)
     
     def test_data_processing_lambda_permissions(self):
         """Test data processing Lambda has S3 permissions"""
@@ -829,7 +829,7 @@ class TestTapStack(unittest.TestCase):
                 tags={}
             )
             # Lambda role should exist
-            self.assertTrue(hasattr(data_processing, 'lambda_role'))
+            self.assertTrue(hasattr(data_processing, 'processor_role'))
     
     def test_network_vpc_configuration(self):
         """Test network creates VPC with correct CIDR"""
@@ -864,8 +864,8 @@ class TestTapStack(unittest.TestCase):
             environment='test',
             tags={}
         )
-        # Should have vpc_endpoint_sg_id
-        self.assertTrue(hasattr(network, 'vpc_endpoint_sg_id'))
+        # Should have vpc_endpoint_security_group
+        self.assertTrue(hasattr(network, 'vpc_endpoint_security_group'))
     
     def test_backend_iam_policy_statements(self):
         """Test backend Lambda IAM role has necessary permissions"""

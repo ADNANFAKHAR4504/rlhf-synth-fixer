@@ -20,6 +20,7 @@ is_localstack = os.environ.get('AWS_ENDPOINT_URL', '').find('localhost') != -1 o
 class MonitoringInfrastructure(pulumi.ComponentResource):
     def __init__(self, name: str, tags: dict, opts=None):
         super().__init__("custom:monitoring:Infrastructure", name, None, opts)
+        self._name = name  # Store name for use in setup_alarms
 
         # SNS is NOT available in LocalStack Community - create mock ARN
         # In a real LocalStack Pro or AWS deployment, this would be a real SNS topic
