@@ -321,7 +321,7 @@ Resources:
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: 'ami-0c55b159cbfafe1f0'
+      ImageId: 'ami-03cf127a'
       InstanceType: 't2.micro'
       SubnetId: !Ref PrivateSubnet1
       SecurityGroupIds:
@@ -369,7 +369,7 @@ Resources:
   EC2Instance2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: 'ami-0c55b159cbfafe1f0'
+      ImageId: 'ami-03cf127a'
       InstanceType: 't2.micro'
       SubnetId: !Ref PrivateSubnet2
       SecurityGroupIds:
