@@ -221,29 +221,33 @@ export class TapStack extends TerraformStack {
       );
 
       // --- Compute (Encrypted EBS) ---
-      // Hardcoded AMI for LocalStack compatibility
-      const amiId = 'ami-0c55b159cbfafe1f0';
+      // Note: EC2 instances are not supported in LocalStack Community edition
+      // They are only created when deploying to real AWS
+      if (!isLocalStack) {
+        const amiId = 'ami-0c55b159cbfafe1f0';
 
-      const instance = new Instance(this, `Instance${constructIdSuffix}`, {
-        ami: amiId,
-        instanceType: config.instanceType,
-        subnetId: subnetA.id,
-        vpcSecurityGroupIds: [instanceSg.id],
-        iamInstanceProfile: instanceProfile.name,
-        rootBlockDevice: {
-          encrypted: true,
-          kmsKeyId: kmsKey.id,
-        },
-        userData: `#!/bin/bash
+        const instance = new Instance(this, `Instance${constructIdSuffix}`, {
+          ami: amiId,
+          instanceType: config.instanceType,
+          subnetId: subnetA.id,
+          vpcSecurityGroupIds: [instanceSg.id],
+          iamInstanceProfile: instanceProfile.name,
+          rootBlockDevice: {
+            encrypted: true,
+            kmsKeyId: kmsKey.id,
+          },
+          userData: `#!/bin/bash
 yum update -y && yum install -y httpd && systemctl start httpd && systemctl enable httpd
 echo "<h1>Deployed in ${config.envName}</h1>" > /var/www/html/index.html`,
-        tags: { ...config.tags, Name: `${resourceNamePrefix}-instance` },
-      });
+          tags: { ...config.tags, Name: `${resourceNamePrefix}-instance` },
+        });
 
-      // --- Outputs ---
-      new TerraformOutput(this, `InstancePublicIp${constructIdSuffix}`, {
-        value: instance.publicIp,
-      });
+        // --- Outputs ---
+        new TerraformOutput(this, `InstancePublicIp${constructIdSuffix}`, {
+          value: instance.publicIp,
+        });
+      }
+
       new TerraformOutput(this, `LogGroupName${constructIdSuffix}`, {
         value: logGroup.name,
       });
