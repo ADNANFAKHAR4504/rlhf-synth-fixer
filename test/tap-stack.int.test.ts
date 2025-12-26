@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
 import fs from 'fs';
 import path from 'path';
+import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -44,7 +44,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
     test('should validate VPC and networking foundation', () => {
       if (outputs[`VpcId${environmentSuffix}`]) {
         expect(outputs[`VpcId${environmentSuffix}`]).toMatch(/^vpc-/);
-        console.log('✅ VPC infrastructure validated from deployment outputs');
+        console.log('  VPC infrastructure validated from deployment outputs');
       } else {
         // Template validation fallback
         template.hasResourceProperties('AWS::EC2::VPC', {
@@ -56,7 +56,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
           ],
         });
         console.log(
-          '✅ VPC infrastructure validated from CloudFormation template'
+          '  VPC infrastructure validated from CloudFormation template'
         );
       }
     });
@@ -64,24 +64,24 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
     test('should validate API Gateway configuration', () => {
       if (outputs[`ApiUrl${environmentSuffix}`]) {
         expect(outputs[`ApiUrl${environmentSuffix}`]).toMatch(
-          /^https:\/\/[a-zA-Z0-9]+\.execute-api\..*\.amazonaws\.com/
+          /^https:\/\/[a-zA-Z0-9]+\.execute-api\.(.*\.amazonaws\.com|localhost\.localstack\.cloud)/
         );
-        console.log('✅ API Gateway validated from deployment outputs');
+        console.log('  API Gateway validated from deployment outputs');
       } else {
         template.hasResourceProperties('AWS::ApiGateway::RestApi', {
           Name: `payment-processing-api-${environmentSuffix}`,
         });
-        console.log('✅ API Gateway validated from CloudFormation template');
+        console.log('  API Gateway validated from CloudFormation template');
       }
     });
 
     test('should validate Aurora PostgreSQL database cluster', () => {
       if (outputs[`DatabaseEndpoint${environmentSuffix}`]) {
         expect(outputs[`DatabaseEndpoint${environmentSuffix}`]).toMatch(
-          /\.rds\.amazonaws\.com$/
+          /(\.rds\.amazonaws\.com|localhost\.localstack\.cloud)$/
         );
         console.log(
-          '✅ Aurora PostgreSQL database validated from deployment outputs'
+          '  Aurora PostgreSQL database validated from deployment outputs'
         );
       } else {
         template.hasResourceProperties('AWS::RDS::DBCluster', {
@@ -89,7 +89,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
           DatabaseName: 'paymentdb',
         });
         console.log(
-          '✅ Aurora PostgreSQL database validated from CloudFormation template'
+          '  Aurora PostgreSQL database validated from CloudFormation template'
         );
       }
     });
@@ -100,7 +100,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
           /\.fifo$/
         );
         console.log(
-          '✅ Payment processing queue validated from deployment outputs'
+          '  Payment processing queue validated from deployment outputs'
         );
       } else {
         template.hasResourceProperties('AWS::SQS::Queue', {
@@ -108,7 +108,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
           FifoQueue: true,
         });
         console.log(
-          '✅ Payment processing queue validated from CloudFormation template'
+          '  Payment processing queue validated from CloudFormation template'
         );
       }
     });
@@ -118,7 +118,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
         StateMachineName: `payment-processing-workflow-${environmentSuffix}`,
         StateMachineType: 'EXPRESS',
       });
-      console.log('✅ Step Functions workflow validated');
+      console.log('  Step Functions workflow validated');
     });
 
     test('should validate EventBridge integration', () => {
@@ -128,7 +128,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
 
       // Should have rules for payment events (EventBusName will be a Ref in template)
       template.resourceCountIs('AWS::Events::Rule', 1);
-      console.log('✅ EventBridge integration validated');
+      console.log('  EventBridge integration validated');
     });
 
     test('should validate CloudWatch monitoring setup', () => {
@@ -152,7 +152,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
         MetricName: 'ApproximateNumberOfMessagesVisible',
         Namespace: 'AWS/SQS',
       });
-      console.log('✅ CloudWatch monitoring validated');
+      console.log('  CloudWatch monitoring validated');
     });
 
     test('should validate SNS alert topics', () => {
@@ -163,7 +163,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
         TopicName: `payment-system-alerts-${environmentSuffix}`,
       });
-      console.log('✅ SNS alert topics validated');
+      console.log('  SNS alert topics validated');
     });
   });
 
@@ -190,7 +190,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
       expect(dbInstances.length).toBeGreaterThanOrEqual(2); // Cluster instances
       expect(queues.length).toBeGreaterThanOrEqual(2); // Queue + DLQ
 
-      console.log('✅ Cross-stack references validated');
+      console.log('  Cross-stack references validated');
     });
 
     test('should validate IAM permissions across stacks', () => {
@@ -225,7 +225,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
       );
 
       expect(lambdaRoles.length).toBeGreaterThanOrEqual(1);
-      console.log('✅ IAM permissions validated across stacks');
+      console.log('  IAM permissions validated across stacks');
     });
   });
 
@@ -246,7 +246,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
       expect(typeCounts['AWS::CloudWatch::Alarm']).toBeGreaterThanOrEqual(3);
       expect(typeCounts['AWS::SQS::Queue']).toBeGreaterThanOrEqual(2);
 
-      console.log('✅ Multi-stack architecture compliance validated');
+      console.log('  Multi-stack architecture compliance validated');
     });
 
     test('should validate CDK aspects are applied', () => {
@@ -255,7 +255,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
       expect(stack).toBeDefined();
 
       console.log(
-        '✅ CDK aspects validation confirmed (stack creation successful)'
+        '  CDK aspects validation confirmed (stack creation successful)'
       );
     });
 
@@ -273,7 +273,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
         expect(func.Properties.FunctionName).toContain(environmentSuffix);
       });
 
-      console.log('✅ Resource naming consistency validated');
+      console.log('  Resource naming consistency validated');
     });
   });
 
@@ -292,7 +292,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
         expect(templateOutputs).toHaveProperty(outputKey);
       });
 
-      console.log('✅ All required CloudFormation outputs validated');
+      console.log('  All required CloudFormation outputs validated');
     });
 
     test('should validate infrastructure is deployment-ready', () => {
@@ -311,7 +311,7 @@ describe('Payment Processing Multi-Stack Integration Tests', () => {
 
       expect(resourcesWithDependsOn.length).toBeGreaterThan(0);
 
-      console.log('✅ Infrastructure deployment readiness validated');
+      console.log('  Infrastructure deployment readiness validated');
     });
   });
 });
