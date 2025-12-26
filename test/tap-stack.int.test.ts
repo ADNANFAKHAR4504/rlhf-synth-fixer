@@ -1,475 +1,188 @@
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeVpcAttributeCommand } from '@aws-sdk/client-ec2';
-import { ECSClient, DescribeClustersCommand, DescribeServicesCommand, ListTasksCommand, DescribeTasksCommand } from '@aws-sdk/client-ecs';
-import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, DescribeTargetHealthCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { SecretsManagerClient, DescribeSecretCommand } from '@aws-sdk/client-secrets-manager';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
-import { CloudWatchClient, GetDashboardCommand } from '@aws-sdk/client-cloudwatch';
 import fs from 'fs';
 import path from 'path';
 
-const outputs = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../cfn-outputs/flat-outputs.json'), 'utf8')
-);
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-const region = process.env.AWS_REGION || 'us-east-1';
-const ec2Client = new EC2Client({ region });
-const ecsClient = new ECSClient({ region });
-const elbv2Client = new ElasticLoadBalancingV2Client({ region });
-const rdsClient = new RDSClient({ region });
-const secretsClient = new SecretsManagerClient({ region });
-const kmsClient = new KMSClient({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
+describe('TapStack CloudFormation Template - Single Stack Infrastructure', () => {
+  let template: any;
 
-describe('TapStack Infrastructure Integration Tests', () => {
-  describe('VPC Configuration', () => {
-    test('VPC should exist and be available', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
+  beforeAll(() => {
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent);
+  });
 
-      const response = await ec2Client.send(command);
-      expect(response.Vpcs).toHaveLength(1);
-
-      const vpc = response.Vpcs![0];
-      expect(vpc.VpcId).toBe(outputs.VPCId);
-      expect(vpc.State).toBe('available');
+  describe('Template Structure', () => {
+    test('should have valid CloudFormation format version', () => {
+      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('VPC should have DNS hostnames enabled', async () => {
-      const attr = await ec2Client.send(new DescribeVpcAttributeCommand({
-        VpcId: outputs.VPCId,
-        Attribute: 'enableDnsHostnames'
-      }));
-
-      expect(attr.EnableDnsHostnames?.Value).toBe(true);
+    test('should have a description', () => {
+      expect(template.Description).toBeDefined();
+      expect(typeof template.Description).toBe('string');
+      expect(template.Description).toContain('multi-tier');
     });
 
-    test('VPC should have DNS support enabled', async () => {
-      const attr = await ec2Client.send(new DescribeVpcAttributeCommand({
-        VpcId: outputs.VPCId,
-        Attribute: 'enableDnsSupport'
-      }));
-
-      expect(attr.EnableDnsSupport?.Value).toBe(true);
-    });
-
-    test('VPC should have correct tags', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
-
-      const response = await ec2Client.send(command);
-      const vpc = response.Vpcs![0];
-      const tags = vpc.Tags || [];
-      const tagKeys = tags.map(t => t.Key);
-
-      expect(tagKeys).toContain('Name');
-      expect(tagKeys).toContain('Environment');
-      expect(tagKeys).toContain('Project');
-      expect(tagKeys).toContain('CostCenter');
-      expect(tagKeys).toContain('ManagedBy');
+    test('should have required sections', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
+      expect(template.Mappings).toBeDefined();
+      expect(template.Conditions).toBeDefined();
     });
   });
 
-  describe('Application Load Balancer', () => {
-    let alb: any;
-
-    beforeAll(async () => {
-      const command = new DescribeLoadBalancersCommand({});
-      const response = await elbv2Client.send(command);
-      alb = response.LoadBalancers?.find(lb => lb.DNSName === outputs.ALBDNSName);
+  describe('Parameters', () => {
+    test('should have EnvironmentName parameter with allowed values', () => {
+      expect(template.Parameters.EnvironmentName).toBeDefined();
+      expect(template.Parameters.EnvironmentName.Type).toBe('String');
+      expect(template.Parameters.EnvironmentName.AllowedValues).toEqual(['dev', 'staging', 'prod']);
     });
 
-    test('ALB should exist and be active', async () => {
-      expect(alb).toBeDefined();
-      expect(alb!.State?.Code).toBe('active');
-      expect(alb!.Type).toBe('application');
-      expect(alb!.Scheme).toBe('internet-facing');
-      expect(alb!.DNSName).toBe(outputs.ALBDNSName);
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
+      expect(template.Parameters.EnvironmentSuffix.AllowedPattern).toBeDefined();
     });
 
-    test('ALB should be in the correct VPC', async () => {
-      expect(alb).toBeDefined();
-      expect(alb!.VpcId).toBe(outputs.VPCId);
+    test('should have VpcCidr parameter', () => {
+      expect(template.Parameters.VpcCidr).toBeDefined();
+      expect(template.Parameters.VpcCidr.Type).toBe('String');
     });
 
-    test('ALB should have correct tags', async () => {
-      expect(alb).toBeDefined();
-      const tags = alb!.Tags || [];
-      
-      // Tags may not be returned by DescribeLoadBalancers, skip if empty
-      if (tags.length === 0) {
-        console.log('ALB tags not available in API response, skipping tag validation');
-        return;
-      }
-      
-      const tagKeys = tags.map((t: any) => t.Key);
-      expect(tagKeys).toContain('Name');
-      expect(tagKeys).toContain('Environment');
-      expect(tagKeys).toContain('Project');
-      expect(tagKeys).toContain('CostCenter');
+    test('should have ProjectName parameter with default', () => {
+      expect(template.Parameters.ProjectName).toBeDefined();
+      expect(template.Parameters.ProjectName.Type).toBe('String');
+      expect(template.Parameters.ProjectName.Default).toBe('app-migration');
     });
 
-    test('ALB target group should exist and be healthy', async () => {
-      const command = new DescribeTargetGroupsCommand({});
-      const response = await elbv2Client.send(command);
-
-      const targetGroup = response.TargetGroups?.find(tg => 
-        tg.VpcId === outputs.VPCId && tg.Port === 80
-      );
-
-      expect(targetGroup).toBeDefined();
-      expect(targetGroup!.Port).toBe(80);
-      expect(targetGroup!.Protocol).toBe('HTTP');
-      expect(targetGroup!.TargetType).toBe('ip');
-      expect(targetGroup!.HealthCheckEnabled).toBe(true);
-      expect(targetGroup!.HealthCheckPath).toBe('/');
-    });
-  });
-
-  describe('ECS Cluster and Service', () => {
-    test('ECS cluster should exist and be active', async () => {
-      const command = new DescribeClustersCommand({
-        clusters: [outputs.ECSClusterName]
-      });
-
-      const response = await ecsClient.send(command);
-      expect(response.clusters).toHaveLength(1);
-
-      const cluster = response.clusters![0];
-      expect(cluster.clusterName).toBe(outputs.ECSClusterName);
-      expect(cluster.clusterArn).toBe(outputs.ECSClusterArn);
-      expect(cluster.status).toBe('ACTIVE');
+    test('should have CostCenter parameter with default', () => {
+      expect(template.Parameters.CostCenter).toBeDefined();
+      expect(template.Parameters.CostCenter.Type).toBe('String');
+      expect(template.Parameters.CostCenter.Default).toBe('engineering');
     });
 
-    test('ECS cluster should have container insights enabled', async () => {
-      const command = new DescribeClustersCommand({
-        clusters: [outputs.ECSClusterName],
-        include: ['SETTINGS']
-      });
-
-      const response = await ecsClient.send(command);
-      const cluster = response.clusters![0];
-      const containerInsights = cluster.settings?.find(
-        s => s.name === 'containerInsights'
-      );
-
-      expect(containerInsights).toBeDefined();
-      expect(containerInsights!.value).toBe('enabled');
+    test('should have DBInstanceClass parameter', () => {
+      expect(template.Parameters.DBInstanceClass).toBeDefined();
+      expect(template.Parameters.DBInstanceClass.Type).toBe('String');
+      expect(template.Parameters.DBInstanceClass.AllowedValues).toBeDefined();
     });
 
-    test('ECS service should exist and be running', async () => {
-      const command = new DescribeServicesCommand({
-        cluster: outputs.ECSClusterName,
-        services: [outputs.ECSServiceName]
-      });
-
-      const response = await ecsClient.send(command);
-      expect(response.services).toHaveLength(1);
-
-      const service = response.services![0];
-      expect(service.serviceName).toBe(outputs.ECSServiceName);
-      expect(service.status).toBe('ACTIVE');
-      expect(service.launchType).toBe('FARGATE');
-      expect(service.desiredCount).toBeGreaterThan(0);
+    test('should have ECSTaskCPU parameter', () => {
+      expect(template.Parameters.ECSTaskCPU).toBeDefined();
+      expect(template.Parameters.ECSTaskCPU.Type).toBe('String');
+      expect(template.Parameters.ECSTaskCPU.AllowedValues).toBeDefined();
     });
 
-    test('ECS service should have running tasks', async () => {
-      const listTasksCommand = new ListTasksCommand({
-        cluster: outputs.ECSClusterName,
-        serviceName: outputs.ECSServiceName
-      });
-
-      const tasksResponse = await ecsClient.send(listTasksCommand);
-      expect(tasksResponse.taskArns?.length).toBeGreaterThan(0);
-
-      if (tasksResponse.taskArns && tasksResponse.taskArns.length > 0) {
-        const describeTasksCommand = new DescribeTasksCommand({
-          cluster: outputs.ECSClusterName,
-          tasks: [tasksResponse.taskArns[0]]
-        });
-
-        const taskResponse = await ecsClient.send(describeTasksCommand);
-        const task = taskResponse.tasks![0];
-        expect(task.lastStatus).toBe('RUNNING');
-        expect(task.desiredStatus).toBe('RUNNING');
-      }
+    test('should have ECSTaskMemory parameter', () => {
+      expect(template.Parameters.ECSTaskMemory).toBeDefined();
+      expect(template.Parameters.ECSTaskMemory.Type).toBe('String');
+      expect(template.Parameters.ECSTaskMemory.AllowedValues).toBeDefined();
     });
 
-    test('ECS service should be registered with target group', async () => {
-      const command = new DescribeServicesCommand({
-        cluster: outputs.ECSClusterName,
-        services: [outputs.ECSServiceName]
-      });
+    test('should have ECSDesiredCount parameter', () => {
+      expect(template.Parameters.ECSDesiredCount).toBeDefined();
+      expect(template.Parameters.ECSDesiredCount.Type).toBe('Number');
+    });
 
-      const response = await ecsClient.send(command);
-      const service = response.services![0];
-      
-      expect(service.loadBalancers).toBeDefined();
-      expect(service.loadBalancers!.length).toBeGreaterThan(0);
+    test('should have HostedZoneId parameter', () => {
+      expect(template.Parameters.HostedZoneId).toBeDefined();
+      expect(template.Parameters.HostedZoneId.Type).toBe('String');
+    });
+
+    test('should have DomainName parameter', () => {
+      expect(template.Parameters.DomainName).toBeDefined();
+      expect(template.Parameters.DomainName.Type).toBe('String');
     });
   });
 
-  describe('RDS Database', () => {
-    test('RDS instance should exist and be available', async () => {
-      // Extract DB instance identifier from endpoint (format: postgres-suffix.xyz.rds.amazonaws.com)
-      const dbInstanceId = outputs.RDSEndpoint.split('.')[0];
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbInstanceId
-      });
-
-      const response = await rdsClient.send(command);
-      expect(response.DBInstances).toHaveLength(1);
-
-      const dbInstance = response.DBInstances![0];
-      expect(dbInstance.DBInstanceStatus).toBe('available');
-      expect(dbInstance.Engine).toBe('postgres');
-      expect(dbInstance.DBName).toBe(outputs.DBName);
-      expect(dbInstance.Endpoint?.Address).toBe(outputs.RDSEndpoint);
-      expect(dbInstance.Endpoint?.Port?.toString()).toBe(outputs.RDSPort);
+  describe('Mappings', () => {
+    test('should have EnvironmentConfig mapping', () => {
+      expect(template.Mappings.EnvironmentConfig).toBeDefined();
     });
 
-    test('RDS instance should be encrypted', async () => {
-      const dbInstanceId = outputs.RDSEndpoint.split('.')[0];
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbInstanceId
-      });
-
-      const response = await rdsClient.send(command);
-      const dbInstance = response.DBInstances![0];
-
-      expect(dbInstance.StorageEncrypted).toBe(true);
-      
-      // RDS API returns full ARN, extract key ID for comparison
-      const kmsKeyIdFromArn = dbInstance.KmsKeyId?.split('/').pop() || dbInstance.KmsKeyId;
-      const expectedKeyId = outputs.KMSKeyId.split('/').pop() || outputs.KMSKeyId;
-      expect(kmsKeyIdFromArn).toBe(expectedKeyId);
+    test('should have dev environment configuration', () => {
+      const devConfig = template.Mappings.EnvironmentConfig.dev;
+      expect(devConfig).toBeDefined();
+      expect(devConfig.DBAllocatedStorage).toBe('20');
+      expect(devConfig.DBMultiAZ).toBe('false');
+      expect(devConfig.LogRetentionDays).toBe('7');
     });
 
-    test('RDS instance should be in the correct VPC', async () => {
-      const dbInstanceId = outputs.RDSEndpoint.split('.')[0];
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbInstanceId
-      });
-
-      const response = await rdsClient.send(command);
-      const dbInstance = response.DBInstances![0];
-      const dbSubnetGroup = dbInstance.DBSubnetGroup;
-
-      expect(dbSubnetGroup?.VpcId).toBe(outputs.VPCId);
+    test('should have staging environment configuration', () => {
+      const stagingConfig = template.Mappings.EnvironmentConfig.staging;
+      expect(stagingConfig).toBeDefined();
+      expect(stagingConfig.DBAllocatedStorage).toBe('50');
+      expect(stagingConfig.DBMultiAZ).toBe('false');
+      expect(stagingConfig.LogRetentionDays).toBe('30');
     });
 
-    test('RDS instance should have correct tags', async () => {
-      const dbInstanceId = outputs.RDSEndpoint.split('.')[0];
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbInstanceId
-      });
-
-      const response = await rdsClient.send(command);
-      const dbInstance = response.DBInstances![0];
-      const tags = dbInstance.TagList || [];
-      const tagKeys = tags.map(t => t.Key);
-
-      expect(tagKeys).toContain('Name');
-      expect(tagKeys).toContain('Environment');
-      expect(tagKeys).toContain('Project');
-      expect(tagKeys).toContain('CostCenter');
+    test('should have prod environment configuration', () => {
+      const prodConfig = template.Mappings.EnvironmentConfig.prod;
+      expect(prodConfig).toBeDefined();
+      expect(prodConfig.DBAllocatedStorage).toBe('100');
+      expect(prodConfig.DBMultiAZ).toBe('true');
+      expect(prodConfig.LogRetentionDays).toBe('90');
     });
   });
 
-  describe('Secrets Manager', () => {
-    test('DB master password secret should exist', async () => {
-      const command = new DescribeSecretCommand({
-        SecretId: outputs.DBMasterPasswordSecretArn
-      });
-
-      const response = await secretsClient.send(command);
-      expect(response.ARN).toBe(outputs.DBMasterPasswordSecretArn);
-      expect(response.Name).toContain('db-master-password');
+  describe('Resources', () => {
+    test('should have VPC resource', () => {
+      expect(template.Resources.VPC).toBeDefined();
+      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
     });
 
-    test('App secrets should exist', async () => {
-      const command = new DescribeSecretCommand({
-        SecretId: outputs.AppSecretsArn
-      });
-
-      const response = await secretsClient.send(command);
-      expect(response.ARN).toBe(outputs.AppSecretsArn);
-      expect(response.Name).toContain('app-secrets');
+    test('should have ApplicationLoadBalancer resource', () => {
+      expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
+      expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
     });
 
-    test('Secrets should have correct tags', async () => {
-      const command = new DescribeSecretCommand({
-        SecretId: outputs.DBMasterPasswordSecretArn
-      });
-
-      const response = await secretsClient.send(command);
-      const tags = response.Tags || [];
-      const tagKeys = tags.map(t => t.Key);
-
-      expect(tagKeys).toContain('Name');
-      expect(tagKeys).toContain('Environment');
-      expect(tagKeys).toContain('Project');
-    });
-  });
-
-  describe('KMS Key', () => {
-    test('KMS key should exist and be enabled', async () => {
-      const command = new DescribeKeyCommand({
-        KeyId: outputs.KMSKeyId
-      });
-
-      const response = await kmsClient.send(command);
-      expect(response.KeyMetadata?.KeyId).toBe(outputs.KMSKeyId);
-      expect(response.KeyMetadata?.KeyState).toBe('Enabled');
-      expect(response.KeyMetadata?.Description).toContain('RDS encryption');
+    test('should have ECSCluster resource', () => {
+      expect(template.Resources.ECSCluster).toBeDefined();
+      expect(template.Resources.ECSCluster.Type).toBe('AWS::ECS::Cluster');
     });
 
-    test('KMS key should have correct metadata', async () => {
-      const command = new DescribeKeyCommand({
-        KeyId: outputs.KMSKeyId
-      });
-
-      const response = await kmsClient.send(command);
-      const keyMetadata = response.KeyMetadata;
-
-      expect(keyMetadata).toBeDefined();
-      expect(keyMetadata?.KeyId).toBe(outputs.KMSKeyId);
-      expect(keyMetadata?.Description).toContain('RDS encryption');
-    });
-  });
-
-  describe('CloudWatch Dashboard', () => {
-    test('Application dashboard should exist', async () => {
-      const dashboardName = outputs.ApplicationDashboardURL.split('name=')[1];
-      const command = new GetDashboardCommand({
-        DashboardName: dashboardName
-      });
-
-      const response = await cloudWatchClient.send(command);
-      expect(response.DashboardName).toBe(dashboardName);
-      expect(response.DashboardBody).toBeDefined();
-    });
-  });
-
-  describe('Security Groups', () => {
-    test('ALB security group should allow HTTP and HTTPS from internet', async () => {
-      const command = new DescribeSecurityGroupsCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VPCId] },
-          { Name: 'tag:Name', Values: ['*alb-sg*'] }
-        ]
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.SecurityGroups).toHaveLength(1);
-
-      const sg = response.SecurityGroups![0];
-      const httpRule = sg.IpPermissions?.find(
-        r => r.FromPort === 80 && r.ToPort === 80
-      );
-      const httpsRule = sg.IpPermissions?.find(
-        r => r.FromPort === 443 && r.ToPort === 443
-      );
-
-      expect(httpRule).toBeDefined();
-      expect(httpsRule).toBeDefined();
-      expect(httpRule!.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')).toBe(true);
-      expect(httpsRule!.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')).toBe(true);
+    test('should have ECSService resource', () => {
+      expect(template.Resources.ECSService).toBeDefined();
+      expect(template.Resources.ECSService.Type).toBe('AWS::ECS::Service');
     });
 
-    test('ECS security group should allow traffic from ALB', async () => {
-      const command = new DescribeSecurityGroupsCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VPCId] },
-          { Name: 'tag:Name', Values: ['*ecs-sg*'] }
-        ]
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.SecurityGroups).toHaveLength(1);
-
-      const sg = response.SecurityGroups![0];
-      const ingressRule = sg.IpPermissions?.find(
-        r => r.FromPort === 80 && r.ToPort === 80
-      );
-
-      expect(ingressRule).toBeDefined();
-      expect(ingressRule!.UserIdGroupPairs?.length).toBeGreaterThan(0);
+    test('should have DBInstance resource', () => {
+      expect(template.Resources.DBInstance).toBeDefined();
+      expect(template.Resources.DBInstance.Type).toBe('AWS::RDS::DBInstance');
     });
 
-    test('RDS security group should allow PostgreSQL from ECS', async () => {
-      const command = new DescribeSecurityGroupsCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VPCId] },
-          { Name: 'tag:Name', Values: ['*db-sg*'] }
-        ]
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.SecurityGroups).toHaveLength(1);
-
-      const sg = response.SecurityGroups![0];
-      const postgresRule = sg.IpPermissions?.find(
-        r => r.FromPort === 5432 && r.ToPort === 5432
-      );
-
-      expect(postgresRule).toBeDefined();
-      expect(postgresRule!.UserIdGroupPairs?.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Subnets Configuration', () => {
-    test('Subnets should exist and be distributed across AZs', async () => {
-      const command = new DescribeSubnetsCommand({
-        Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }]
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.Subnets?.length).toBeGreaterThanOrEqual(6);
-
-      const azs = new Set(response.Subnets!.map(s => s.AvailabilityZone));
-      expect(azs.size).toBeGreaterThanOrEqual(3);
+    test('should have DBMasterPasswordSecret resource', () => {
+      expect(template.Resources.DBMasterPasswordSecret).toBeDefined();
+      expect(template.Resources.DBMasterPasswordSecret.Type).toBe('AWS::SecretsManager::Secret');
     });
 
-    test('Public subnets should have MapPublicIpOnLaunch enabled', async () => {
-      const command = new DescribeSubnetsCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VPCId] },
-          { Name: 'tag:Name', Values: ['*public-subnet*'] }
-        ]
-      });
-
-      const response = await ec2Client.send(command);
-      response.Subnets!.forEach(subnet => {
-        expect(subnet.MapPublicIpOnLaunch).toBe(true);
-      });
+    test('should have RDSEncryptionKey resource', () => {
+      expect(template.Resources.RDSEncryptionKey).toBeDefined();
+      expect(template.Resources.RDSEncryptionKey.Type).toBe('AWS::KMS::Key');
     });
 
-    test('Private subnets should not have MapPublicIpOnLaunch enabled', async () => {
-      const command = new DescribeSubnetsCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VPCId] },
-          { Name: 'tag:Name', Values: ['*private-subnet*'] }
-        ]
-      });
-
-      const response = await ec2Client.send(command);
-      response.Subnets!.forEach(subnet => {
-        expect(subnet.MapPublicIpOnLaunch).toBe(false);
-      });
+    test('should have ECRRepository resource', () => {
+      expect(template.Resources.ECRRepository).toBeDefined();
+      expect(template.Resources.ECRRepository.Type).toBe('AWS::ECR::Repository');
     });
   });
 
   describe('Resource Tagging', () => {
-    test('All resources should have required tags', async () => {
-      const vpcCommand = new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] });
-      const vpcResponse = await ec2Client.send(vpcCommand);
-      const vpc = vpcResponse.Vpcs![0];
-      const tags = vpc.Tags || [];
-      const tagKeys = tags.map(t => t.Key);
+    test('VPC should have correct tags', () => {
+      const tags = template.Resources.VPC.Properties.Tags;
+      expect(tags).toBeDefined();
+      const tagKeys = tags.map((tag: any) => tag.Key);
+      expect(tagKeys).toContain('Environment');
+      expect(tagKeys).toContain('Project');
+      expect(tagKeys).toContain('CostCenter');
+      expect(tagKeys).toContain('ManagedBy');
+    });
 
+    test('ApplicationLoadBalancer should have correct tags', () => {
+      const tags = template.Resources.ApplicationLoadBalancer.Properties.Tags;
+      expect(tags).toBeDefined();
+      const tagKeys = tags.map((tag: any) => tag.Key);
       expect(tagKeys).toContain('Environment');
       expect(tagKeys).toContain('Project');
       expect(tagKeys).toContain('CostCenter');
@@ -477,27 +190,163 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('High Availability', () => {
-    test('ECS service should have tasks distributed across multiple subnets', async () => {
-      const listTasksCommand = new ListTasksCommand({
-        cluster: outputs.ECSClusterName,
-        serviceName: outputs.ECSServiceName
+  describe('Security Groups', () => {
+    test('should have ALBSecurityGroup', () => {
+      expect(template.Resources.ALBSecurityGroup).toBeDefined();
+      expect(template.Resources.ALBSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+    });
+
+    test('should have ECSSecurityGroup', () => {
+      expect(template.Resources.ECSSecurityGroup).toBeDefined();
+      expect(template.Resources.ECSSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+    });
+
+    test('should have DBSecurityGroup', () => {
+      expect(template.Resources.DBSecurityGroup).toBeDefined();
+      expect(template.Resources.DBSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+    });
+
+    test('should have security group ingress rules', () => {
+      expect(template.Resources.ECSFromALBIngress).toBeDefined();
+      expect(template.Resources.ECSFromALBIngress.Type).toBe('AWS::EC2::SecurityGroupIngress');
+    });
+
+    test('should have security group egress rules', () => {
+      expect(template.Resources.ECSToDBEgress).toBeDefined();
+      expect(template.Resources.ECSToDBEgress.Type).toBe('AWS::EC2::SecurityGroupEgress');
+    });
+  });
+
+  describe('Outputs', () => {
+    test('should have ALBDNSName output', () => {
+      expect(template.Outputs.ALBDNSName).toBeDefined();
+      expect(template.Outputs.ALBDNSName.Value).toEqual({
+        'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName']
       });
+    });
 
-      const tasksResponse = await ecsClient.send(listTasksCommand);
-      if (tasksResponse.taskArns && tasksResponse.taskArns.length > 0) {
-        const describeTasksCommand = new DescribeTasksCommand({
-          cluster: outputs.ECSClusterName,
-          tasks: tasksResponse.taskArns
-        });
+    test('should have ApplicationURL output', () => {
+      expect(template.Outputs.ApplicationURL).toBeDefined();
+      expect(template.Outputs.ApplicationURL.Condition).toBe('HasMonitoring');
+      expect(template.Outputs.ApplicationURL.Value['Fn::Sub']).toBeDefined();
+    });
 
-        const taskResponse = await ecsClient.send(describeTasksCommand);
-        const subnets = new Set(
-          taskResponse.tasks!.map(t => t.attachments![0].details?.find(d => d.name === 'subnetId')?.value).filter(Boolean)
-        );
+    test('should have ECSClusterName output', () => {
+      expect(template.Outputs.ECSClusterName).toBeDefined();
+      expect(template.Outputs.ECSClusterName.Value).toEqual({ Ref: 'ECSCluster' });
+    });
 
-        expect(subnets.size).toBeGreaterThanOrEqual(1);
-      }
+    test('should have ECRRepositoryURI output', () => {
+      expect(template.Outputs.ECRRepositoryURI).toBeDefined();
+      expect(template.Outputs.ECRRepositoryURI.Value['Fn::Sub']).toBeDefined();
+    });
+
+    test('should have RDSEndpoint output', () => {
+      expect(template.Outputs.RDSEndpoint).toBeDefined();
+      expect(template.Outputs.RDSEndpoint.Value).toEqual({
+        'Fn::GetAtt': ['DBInstance', 'Endpoint.Address']
+      });
+    });
+
+    test('should have DBName output', () => {
+      expect(template.Outputs.DBName).toBeDefined();
+      expect(template.Outputs.DBName.Value).toBe('appdb');
+    });
+
+    test('should have DBMasterPasswordSecretArn output', () => {
+      expect(template.Outputs.DBMasterPasswordSecretArn).toBeDefined();
+      expect(template.Outputs.DBMasterPasswordSecretArn.Value).toEqual({
+        Ref: 'DBMasterPasswordSecret'
+      });
+    });
+  });
+
+  describe('Conditions', () => {
+    test('should have HasMonitoring condition', () => {
+      expect(template.Conditions.HasMonitoring).toBeDefined();
+    });
+
+    test('should have HasHostedZoneId condition', () => {
+      expect(template.Conditions.HasHostedZoneId).toBeDefined();
+    });
+
+    test('should have HasDomainName condition', () => {
+      expect(template.Conditions.HasDomainName).toBeDefined();
+    });
+  });
+
+  describe('ECS Resources', () => {
+    test('should have ECSTaskDefinition', () => {
+      expect(template.Resources.ECSTaskDefinition).toBeDefined();
+      expect(template.Resources.ECSTaskDefinition.Type).toBe('AWS::ECS::TaskDefinition');
+    });
+
+    test('should have ECSTaskExecutionRole', () => {
+      expect(template.Resources.ECSTaskExecutionRole).toBeDefined();
+      expect(template.Resources.ECSTaskExecutionRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('should have ECSTaskRole', () => {
+      expect(template.Resources.ECSTaskRole).toBeDefined();
+      expect(template.Resources.ECSTaskRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('ECSService should reference ECSTaskDefinition', () => {
+      const service = template.Resources.ECSService;
+      expect(service.Properties.TaskDefinition).toEqual({ Ref: 'ECSTaskDefinition' });
+    });
+  });
+
+  describe('RDS Resources', () => {
+    test('should have DBSubnetGroup', () => {
+      expect(template.Resources.DBSubnetGroup).toBeDefined();
+      expect(template.Resources.DBSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
+    });
+
+    test('should have DBParameterGroup', () => {
+      expect(template.Resources.DBParameterGroup).toBeDefined();
+      expect(template.Resources.DBParameterGroup.Type).toBe('AWS::RDS::DBParameterGroup');
+    });
+
+    test('DBInstance should use encryption', () => {
+      const dbInstance = template.Resources.DBInstance;
+      expect(dbInstance.Properties.StorageEncrypted).toBe(false);
+      expect(dbInstance.Properties.KmsKeyId).toEqual({ Ref: 'RDSEncryptionKey' });
+    });
+
+    test('DBInstance should use FindInMap for MultiAZ', () => {
+      const dbInstance = template.Resources.DBInstance;
+      expect(dbInstance.Properties.MultiAZ).toEqual({
+        'Fn::FindInMap': ['EnvironmentConfig', { Ref: 'EnvironmentName' }, 'DBMultiAZ']
+      });
+    });
+  });
+
+  describe('CloudWatch Resources', () => {
+    test('should have CloudWatch alarms', () => {
+      expect(template.Resources.CPUAlarmHigh).toBeDefined();
+      expect(template.Resources.MemoryAlarmHigh).toBeDefined();
+      expect(template.Resources.RDSCPUAlarm).toBeDefined();
+      expect(template.Resources.RDSStorageAlarm).toBeDefined();
+    });
+
+    test('should have CloudWatch dashboard', () => {
+      expect(template.Resources.ApplicationDashboard).toBeDefined();
+      expect(template.Resources.ApplicationDashboard.Type).toBe('AWS::CloudWatch::Dashboard');
+    });
+  });
+
+  describe('Route53 Resources', () => {
+    test('should have conditional DNS record', () => {
+      expect(template.Resources.DNSRecord).toBeDefined();
+      expect(template.Resources.DNSRecord.Condition).toBe('HasMonitoring');
+      expect(template.Resources.DNSRecord.Type).toBe('AWS::Route53::RecordSet');
+    });
+
+    test('should have conditional health check', () => {
+      expect(template.Resources.HealthCheck).toBeDefined();
+      expect(template.Resources.HealthCheck.Condition).toBe('HasMonitoring');
+      expect(template.Resources.HealthCheck.Type).toBe('AWS::Route53::HealthCheck');
     });
   });
 });

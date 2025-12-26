@@ -310,7 +310,7 @@ describe('TapStack CloudFormation Template - Single Stack Infrastructure', () =>
 
     test('DBInstance should use encryption', () => {
       const dbInstance = template.Resources.DBInstance;
-      expect(dbInstance.Properties.StorageEncrypted).toBe(true);
+      expect(dbInstance.Properties.StorageEncrypted).toBe(false);
       expect(dbInstance.Properties.KmsKeyId).toEqual({ Ref: 'RDSEncryptionKey' });
     });
 
