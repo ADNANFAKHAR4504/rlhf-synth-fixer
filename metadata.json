@@ -8,8 +8,8 @@
   "startedAt": "2025-08-06T20:13:37.828Z",
   "aws_services": ["VPC", "EC2", "S3", "IAM"],
   "wave": "P0",
-  "subtask": "CI/CD Pipeline Integration",
-  "subject_labels": ["Infrastructure Analysis/Monitoring"],
+  "subtask": "Application Deployment",
+  "subject_labels": ["Web Application Deployment"],
   "provider": "localstack",
   "migrated_from": {
     "po_id": "291351",
