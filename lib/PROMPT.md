@@ -1,26 +1,30 @@
-Create an AWS CloudFormation template in JSON format to deploy a secure web application infrastructure.
+Create an AWS CloudFormation template in JSON format to deploy a secure web application infrastructure with integrated content delivery and serverless processing.
 
-The template must provision the following resources and configurations in the us-east-1 region:
+The template must provision these resources in the us-east-1 region with clear integration patterns:
 
 S3 Bucket:
- Create an S3 bucket for storing application assets.
+ Create an S3 bucket for storing application assets that CloudFront will serve.
  Enable versioning on the bucket.
  Encrypt the bucket using a customer-managed AWS KMS key.
+ Configure the bucket policy to allow CloudFront Origin Access Control to read objects.
 
 IAM & Lambda:
- Define a Lambda function and a corresponding IAM execution role.
- The IAM role must follow the principle of least privilege, granting only the permissions the function absolutely needs.
- The function should be configured to access sensitive data (like an API key) stored in AWS Secrets Manager.
+ Define a Lambda function and a corresponding IAM execution role with least privilege access.
+ The IAM role must grant only the permissions needed for the function to retrieve secrets from AWS Secrets Manager and write logs to CloudWatch.
+ Configure the function to access sensitive data such as API keys stored in Secrets Manager.
+ The function should integrate with API Gateway to process incoming requests.
 
 CloudFront and WAF:
- Set up a CloudFront distribution to serve content from the S3 bucket.
- The distribution must use an SSL certificate from AWS Certificate Manager (ACM).
- Protect the distribution by attaching an AWS WAF WebACL to guard against common web exploits.
+ Set up a CloudFront distribution that serves content from the S3 bucket using Origin Access Control.
+ The distribution must use an SSL certificate from AWS Certificate Manager for HTTPS connections.
+ Protect the distribution by attaching an AWS WAF WebACL to guard against common web exploits like SQL injection and XSS attacks.
+ Configure CloudFront to forward appropriate headers to the origin.
 
 API Gateway:
- Include an API Gateway with logging enabled for all stages.
+ Create an API Gateway REST API that triggers the Lambda function for backend processing.
+ Enable CloudWatch logging for all stages to track API usage and errors.
 
 Tagging:
- Apply the following tags to all created resources: Environment, Project, and Owner.
+ Apply Environment, Project, and Owner tags to all created resources for proper resource management.
 
-Finally, please make sure the CloudFormation JSON is well-structured and includes comments explaining the security-related resources. The final template should be valid and pass a check using the AWS CLI command aws cloudformation validate-template.
+Make sure the CloudFormation JSON is well-structured with clear resource dependencies. The template should be valid and pass validation using the AWS CLI command aws cloudformation validate-template.
