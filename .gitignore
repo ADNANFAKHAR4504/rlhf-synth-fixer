@@ -24,6 +24,7 @@ cdk.out.test/
 # IDE/Editor files
 .vscode/settings.local.json
 .claude/settings.local.json
+.cursor/mcp.json
 .idea/
 *.swp
 *.swo
@@ -88,6 +89,10 @@ imports/*
 cdktf.out
 cdktf.log
 *terraform.*.tfstate*
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.*
 .gen
 bin/.terraform.lock.hcl
 .genpackage-lock.json
@@ -159,3 +164,4 @@ tasks.csv
 ci_checks.json
 # Root reports folder (use .claude/reports/ instead)
 reports/
+cdk-outputs/

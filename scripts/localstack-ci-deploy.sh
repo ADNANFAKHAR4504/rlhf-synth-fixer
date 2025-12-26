@@ -467,6 +467,35 @@ deploy_cdktf() {
         exit 1
     fi
 
+    # Free up disk space before CDKTF synth (especially for Go which downloads large AWS provider)
+    if [[ -n "${CI:-}" ]]; then
+        print_status $YELLOW "🧹 Freeing up disk space before CDKTF synth..."
+
+        # Show disk usage before cleanup
+        df -h / || true
+
+        # Clean up common space-consuming directories in CI
+        print_status $BLUE "   Removing unused packages and caches..."
+        sudo rm -rf /usr/share/dotnet 2>/dev/null || true
+        sudo rm -rf /usr/local/lib/android 2>/dev/null || true
+        sudo rm -rf /opt/ghc 2>/dev/null || true
+        sudo rm -rf /usr/local/.ghcup 2>/dev/null || true
+        sudo rm -rf "$HOME/.cache/pip" 2>/dev/null || true
+        sudo rm -rf "$HOME/.npm/_cacache" 2>/dev/null || true
+
+        # Clean apt cache
+        sudo apt-get clean 2>/dev/null || true
+        sudo rm -rf /var/lib/apt/lists/* 2>/dev/null || true
+
+        # Clean docker images and containers (if any)
+        docker system prune -af 2>/dev/null || true
+
+        # Show disk usage after cleanup
+        print_status $GREEN "   Disk cleanup completed"
+        df -h / || true
+        echo ""
+    fi
+
     # Synthesize and deploy based on language
     print_status $YELLOW "🔧 Synthesizing CDKTF..."
     
