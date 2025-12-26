@@ -15,8 +15,8 @@ Parameters:
     Default: ''
     AllowedPattern: '^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
   LatestAmiId:
-    Type: String
-    Default: ami-0c55b159cbfafe1f0
+    Type: AWS::EC2::Image::Id
+    Default: ami-04681a1dbd79675a5
     Description: AMI ID for EC2 instances (defaults to Amazon Linux 2)
 
 Conditions:

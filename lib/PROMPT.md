@@ -1,38 +1,27 @@
-# CloudFormation YAML Requirement – Production Secure Environment
+# Production Secure Environment - CloudFormation YAML
 
-You are acting as a cloud infrastructure engineer who needs to write a CloudFormation template in YAML.  
-The stack should set up a secure AWS environment for production use in the `us-east-1` region.  
-Every resource name or logical ID must start with the prefix **ProdEnv** to clearly identify that it belongs to the production environment.
+Create a CloudFormation template in YAML that sets up a secure AWS environment for production use in us-east-1. All resource names should start with the prefix ProdEnv.
 
-## Requirements
+## VPC Configuration
 
-### 1. VPC Configuration
-- Create a VPC that uses only private subnets — absolutely no public subnets or Internet Gateways.
-- Include at least two private subnets across two different Availability Zones for high availability.
-- Do **not** attach any NAT Gateway or Internet Gateway, as there should be **no direct internet access**.
+Set up a VPC with only private subnets - no public subnets or Internet Gateways. The VPC connects to AWS services through VPC Endpoints instead of internet access. Include at least two private subnets across two different Availability Zones for high availability. The private subnets route traffic through the VPC Endpoints to reach S3 and CloudWatch.
 
-### 2. EC2 Instances
-- Launch EC2 instances inside this private VPC.
-- EC2 instances must use **IAM Roles** to access specific S3 buckets (e.g., `ProdEnvDataBucket`).
-- Hardcoding access keys or secret keys is **not allowed** — use IAM roles to grant required permissions.
+## EC2 Instances
 
-### 3. CloudWatch Monitoring
-- Configure CloudWatch Alarms for each EC2 instance.
-- The alarm should monitor **CPUUtilization** and trigger when it exceeds **80%**.
-- When triggered, the alarm should send a notification to an SNS topic (e.g., `ProdEnvCpuAlertTopic`) that you define in the template.
+Launch EC2 instances inside the private VPC. The EC2 instances connect to S3 using an IAM Role attached via Instance Profile. The role grants GetObject and PutObject permissions on the ProdEnvDataBucket. Do not hardcode any access keys - the instances authenticate using the IAM role.
 
-### 4. SNS Topic
-- Create an SNS topic that CloudWatch alarms will publish to.
-- Optionally, allow the template to accept an email subscription endpoint as a parameter to subscribe to the SNS topic.
+## CloudWatch Monitoring
 
-## General Standards
-- Follow AWS security best practices (least privilege, no public access, clear naming).
-- Use **Parameters** for configurable values (like instance type or email).
-- Tag resources with environment and project details.
-- The final YAML should be valid CloudFormation and deploy without syntax errors.
+Configure CloudWatch Alarms that monitor each EC2 instance. The alarms track CPUUtilization and trigger when it exceeds 80 percent. When triggered, the alarm publishes a notification to an SNS topic called ProdEnvCpuAlertTopic. The CloudWatch agent on EC2 sends metrics through the VPC Endpoint.
 
-## Output Expectations
-- Output must be **YAML only**, no JSON.
-- Output **only the YAML code** (no comments or extra description).
-- All resources and logical IDs must be prefixed with `ProdEnv`.
-- Must strictly avoid any public subnet or internet gateway resources.
+## SNS Topic
+
+Create an SNS topic that receives alerts from CloudWatch alarms. The topic subscribes to an email endpoint that can be passed as a parameter. When CPU threshold is breached, SNS delivers the alert to the subscribed email address.
+
+## Security Requirements
+
+Follow AWS security best practices with least privilege access. The security group allows only internal VPC traffic on ports 22, 80, and 443. All S3 buckets must have encryption enabled and public access blocked. Tag all resources with environment and project details.
+
+## Output
+
+The template should output the VPC ID, S3 bucket name, SNS topic ARN, and both EC2 instance IDs.
