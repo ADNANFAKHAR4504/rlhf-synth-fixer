@@ -10,10 +10,7 @@
   "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Security Configuration as Code",
-    "General Infrastructure Tooling QA",
-    "IaC Optimization",
-    "Infrastructure Analysis/Monitoring"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "CloudWatch",
