@@ -10,8 +10,7 @@
   "startedAt": "2025-12-26T02:00:00.000Z",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security Configuration as Code",
-    "General Infrastructure Tooling QA"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "EC2",
