@@ -1,0 +1,23 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291828_ls",
+  "team": "2",
+  "startedAt": "2025-12-26T05:37:07.491Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "RDS",
+    "CloudWatch",
+    "VPC"
+  ],
+  "wave": "P0"
+}
