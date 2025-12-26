@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-101912398",
+  "team": "synth-2",
+  "startedAt": "2025-11-17T12:10:21+00:00",
+  "subtask": "Failure Recovery and High Availability",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "DynamoDB",
+    "SQS",
+    "Lambda",
+    "API Gateway",
+    "Application Load Balancer",
+    "Route53",
+    "CloudFront",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "CloudTrail"
+  ],
+  "wave": "P1"
+}

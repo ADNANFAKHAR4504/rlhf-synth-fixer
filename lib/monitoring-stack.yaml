@@ -1,0 +1,437 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Monitoring and Alerting for Multi-Region DR Payment Processing'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for resource naming
+
+  DBClusterIdentifier:
+    Type: String
+    Description: RDS Cluster Identifier
+
+  ALBFullName:
+    Type: String
+    Description: ALB Full Name
+
+  APIGatewayId:
+    Type: String
+    Description: API Gateway ID
+
+  TransactionProcessorFunctionName:
+    Type: String
+    Description: Transaction Processor Lambda Function Name
+    Default: ''
+
+  PaymentGatewayFunctionName:
+    Type: String
+    Description: Payment Gateway Lambda Function Name
+    Default: ''
+
+  TransactionQueueName:
+    Type: String
+    Description: Transaction Queue Name
+    Default: ''
+
+Conditions:
+  HasDBCluster: !Not [!Equals [!Ref DBClusterIdentifier, '']]
+  HasTransactionProcessor: !Not [!Equals [!Ref TransactionProcessorFunctionName, '']]
+  HasPaymentGateway: !Not [!Equals [!Ref PaymentGatewayFunctionName, '']]
+  HasTransactionQueue: !Not [!Equals [!Ref TransactionQueueName, '']]
+
+Resources:
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'payment-alerts-${EnvironmentSuffix}'
+      DisplayName: Payment Processing Alerts
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DBConnectionCountAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasDBCluster
+    Properties:
+      AlarmName: !Sub 'payment-db-connections-high-${EnvironmentSuffix}'
+      AlarmDescription: Alert when database connections are high
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref DBClusterIdentifier
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  DBCPUUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasDBCluster
+    Properties:
+      AlarmName: !Sub 'payment-db-cpu-high-${EnvironmentSuffix}'
+      AlarmDescription: Alert when database CPU is high
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref DBClusterIdentifier
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  ALBResponseTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-alb-response-time-high-${EnvironmentSuffix}'
+      AlarmDescription: Alert when ALB response time is high
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref ALBFullName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  ALBHealthyHostCountAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-alb-healthy-hosts-low-${EnvironmentSuffix}'
+      AlarmDescription: Alert when healthy host count is low
+      MetricName: HealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref ALBFullName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: breaching
+
+  API5XXErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-api-5xx-errors-${EnvironmentSuffix}'
+      AlarmDescription: Alert when API 5XX error rate is high
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref APIGatewayId
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  APILatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-api-latency-high-${EnvironmentSuffix}'
+      AlarmDescription: Alert when API latency is high
+      MetricName: Latency
+      Namespace: AWS/ApiGateway
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 500
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref APIGatewayId
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  # Lambda Function Monitoring
+  TransactionProcessorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasTransactionProcessor
+    Properties:
+      AlarmName: !Sub 'payment-lambda-processor-errors-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Transaction Processor Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TransactionProcessorFunctionName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  TransactionProcessorThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasTransactionProcessor
+    Properties:
+      AlarmName: !Sub 'payment-lambda-processor-throttles-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Transaction Processor Lambda is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TransactionProcessorFunctionName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  PaymentGatewayErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasPaymentGateway
+    Properties:
+      AlarmName: !Sub 'payment-lambda-gateway-errors-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Payment Gateway Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PaymentGatewayFunctionName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  PaymentGatewayDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasPaymentGateway
+    Properties:
+      AlarmName: !Sub 'payment-lambda-gateway-duration-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Payment Gateway Lambda duration is high
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 3000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PaymentGatewayFunctionName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  # SQS Queue Monitoring
+  TransactionQueueDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasTransactionQueue
+    Properties:
+      AlarmName: !Sub 'payment-queue-depth-high-${EnvironmentSuffix}'
+      AlarmDescription: Alert when transaction queue depth is high
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref TransactionQueueName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  TransactionQueueOldMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasTransactionQueue
+    Properties:
+      AlarmName: !Sub 'payment-queue-old-messages-${EnvironmentSuffix}'
+      AlarmDescription: Alert when messages are too old in queue
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 600
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref TransactionQueueName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  TransactionQueueDLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasTransactionQueue
+    Properties:
+      AlarmName: !Sub 'payment-queue-dlq-messages-${EnvironmentSuffix}'
+      AlarmDescription: Alert when messages appear in DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Sub '${TransactionQueueName}-dlq'
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  CloudWatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/payment-processing/${EnvironmentSuffix}'
+      RetentionInDays: 30
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub 'payment-audit-trail-${EnvironmentSuffix}'
+      S3BucketName: !Ref AuditLogBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AuditLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'payment-audit-logs-${AWS::Region}-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AuditLogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AuditLogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt AuditLogBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${AuditLogBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  DashboardMain:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'payment-processing-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/RDS", "DatabaseConnections", {"stat": "Average", "label": "DB Connections"}],
+                  [".", "CPUUtilization", {"stat": "Average", "label": "DB CPU"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Database Metrics",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/ApplicationELB", "TargetResponseTime", {"stat": "Average"}],
+                  [".", "RequestCount", {"stat": "Sum"}]
+                ],
+                "period": 60,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Load Balancer Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", {"stat": "Sum", "label": "API Requests"}],
+                  [".", "Latency", {"stat": "Average", "label": "Latency (ms)"}],
+                  [".", "5XXError", {"stat": "Sum", "label": "5XX Errors"}],
+                  [".", "4XXError", {"stat": "Sum", "label": "4XX Errors"}]
+                ],
+                "period": 60,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "API Gateway Metrics"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  SNSTopicArn:
+    Description: SNS Topic ARN for Alerts
+    Value: !Ref SNSTopic
+
+  CloudWatchLogGroupName:
+    Description: CloudWatch Log Group Name
+    Value: !Ref CloudWatchLogGroup
+
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${DashboardMain}'
