@@ -504,20 +504,23 @@ export class Infrastructure extends pulumi.ComponentResource {
     );
 
     // Associate private subnets with private NACL
-    privateSubnets.forEach((subnet, index) => {
-      new aws.ec2.NetworkAclAssociation(
-        createResourceName(
-          `private-nacl-assoc-${index + 1}`,
-          region,
-          environment
-        ),
-        {
-          networkAclId: privateNetworkAcl.id,
-          subnetId: subnet.id,
-        },
-        { provider, parent: this }
-      );
-    });
+    // Skip for LocalStack as NetworkAclAssociation filter is not supported in Moto
+    if (!isLocalStack) {
+      privateSubnets.forEach((subnet, index) => {
+        new aws.ec2.NetworkAclAssociation(
+          createResourceName(
+            `private-nacl-assoc-${index + 1}`,
+            region,
+            environment
+          ),
+          {
+            networkAclId: privateNetworkAcl.id,
+            subnetId: subnet.id,
+          },
+          { provider, parent: this }
+        );
+      });
+    }
 
     // Application Security Groups with proper tier separation
     const webSecurityGroup = new aws.ec2.SecurityGroup(
