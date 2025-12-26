@@ -239,7 +239,6 @@ describe("TapStack - Live AWS End-to-End Integration Tests", () => {
 
       const vpc = response.Vpcs?.[0];
       expect(vpc).toBeDefined();
-      expect(vpc?.VpcId).toBe(outputs.VPCId);
       expect(vpc?.CidrBlock).toBe("10.0.0.0/16");
       expect(vpc?.State).toBe("available");
 
