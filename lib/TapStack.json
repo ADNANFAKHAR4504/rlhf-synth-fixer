@@ -32,6 +32,45 @@
             "Type": "String",
             "Default": "Production",
             "Description": "Environment tag"
+        },
+        "KeyPairName": {
+            "Type": "String",
+            "Default": "localstack-key",
+            "Description": "EC2 key pair name for SSH access"
+        },
+        "UseLocalStack": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Whether deploying to LocalStack (uses dummy AMI)"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Suffix to append to resource names for unique identification"
+        }
+    },
+    "Conditions": {
+        "IsLocalStack": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseLocalStack"
+                },
+                "true"
+            ]
+        }
+    },
+    "Mappings": {
+        "EnvironmentConfig": {
+            "LocalStack": {
+                "AMI": "ami-00000000000000000"
+            },
+            "AWS": {
+                "AMI": "ami-00ca32bbc84273381"
+            }
         }
     },
     "Resources": {
@@ -47,7 +86,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-VPC"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-VPC"
                         }
                     }
                 ]
@@ -244,7 +283,28 @@
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
-                    "ImageId": "ami-00ca32bbc84273381",
+                    "ImageId": {
+                        "Fn::If": [
+                            "IsLocalStack",
+                            {
+                                "Fn::FindInMap": [
+                                    "EnvironmentConfig",
+                                    "LocalStack",
+                                    "AMI"
+                                ]
+                            },
+                            {
+                                "Fn::FindInMap": [
+                                    "EnvironmentConfig",
+                                    "AWS",
+                                    "AMI"
+                                ]
+                            }
+                        ]
+                    },
+                    "KeyName": {
+                        "Ref": "KeyPairName"
+                    },
                     "SecurityGroupIds": [
                         {
                             "Ref": "InstanceSecurityGroup"
@@ -366,15 +426,29 @@
                     "LaunchTemplateId": {
                         "Ref": "LaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
-                "MinSize": "2",
-                "MaxSize": "10",
+                "MinSize": {
+                    "Fn::If": [
+                        "IsLocalStack",
+                        "1",
+                        "2"
+                    ]
+                },
+                "MaxSize": {
+                    "Fn::If": [
+                        "IsLocalStack",
+                        "2",
+                        "10"
+                    ]
+                },
+                "DesiredCapacity": {
+                    "Fn::If": [
+                        "IsLocalStack",
+                        "1",
+                        "2"
+                    ]
+                },
                 "TargetGroupARNs": [
                     {
                         "Ref": "TargetGroup"

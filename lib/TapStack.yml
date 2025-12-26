@@ -33,11 +33,6 @@ Parameters:
     Default: Production
     Description: Environment tag
 
-  EnvironmentSuffix:
-    Type: String
-    Default: dev
-    Description: Environment suffix for resource naming
-
   KeyPairName:
     Type: String
     Default: localstack-key
@@ -50,6 +45,11 @@ Parameters:
       - 'true'
       - 'false'
     Description: Whether deploying to LocalStack (uses dummy AMI)
+
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Suffix to append to resource names for unique identification
 
 Conditions:
   IsLocalStack: !Equals [!Ref UseLocalStack, 'true']
@@ -72,7 +72,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-VPC'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-VPC'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -252,7 +252,7 @@ Resources:
         - !Ref PublicSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: '$Latest'
       MinSize: !If [IsLocalStack, '1', '2']
       MaxSize: !If [IsLocalStack, '2', '10']
       DesiredCapacity: !If [IsLocalStack, '1', '2']
