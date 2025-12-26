@@ -25,5 +25,11 @@
     "SNS",
     "IAM",
     "VPCEndpoint"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
