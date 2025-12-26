@@ -169,10 +169,11 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
     });
 
-    test('DynamoDB table should have point-in-time recovery enabled', () => {
+    // LocalStack Compatibility: Point-in-time recovery is not supported in LocalStack Community Edition
+    // This feature is removed for LocalStack compatibility and can be re-enabled for AWS production
+    test('DynamoDB table should NOT have point-in-time recovery (LocalStack compatibility)', () => {
       const table = template.Resources.PriceAlertsTable;
-      expect(table.Properties.PointInTimeRecoverySpecification).toBeDefined();
-      expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+      expect(table.Properties.PointInTimeRecoverySpecification).toBeUndefined();
     });
 
     test('DynamoDB table should have tags', () => {
@@ -193,9 +194,11 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(topic.Properties.TopicName).toEqual({ 'Fn::Sub': 'PriceAlertNotifications-${EnvironmentSuffix}' });
     });
 
-    test('SNS topic should use KMS encryption', () => {
+    // LocalStack Compatibility: KMS encryption for SNS has limited support in LocalStack
+    // This feature is removed for LocalStack compatibility and can be re-enabled for AWS production
+    test('SNS topic should NOT have KMS encryption (LocalStack compatibility)', () => {
       const topic = template.Resources.PriceAlertNotificationsTopic;
-      expect(topic.Properties.KmsMasterKeyId).toEqual({ Ref: 'PriceAlertsKMSKey' });
+      expect(topic.Properties.KmsMasterKeyId).toBeUndefined();
     });
 
     test('SNS topic should have tags', () => {
@@ -324,10 +327,20 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(lambda.Properties.Handler).toBe('index.handler');
     });
 
-    test('Lambda should use arm64 architecture', () => {
+    // LocalStack Compatibility: nodejs22.x has limited support in LocalStack Community Edition
+    // Changed to nodejs18.x for full LocalStack compatibility
+    test('Lambda should use nodejs18.x runtime (LocalStack compatibility)', () => {
+      const lambda = template.Resources.ProcessPriceChecksFunction;
+      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
+    });
+
+    // LocalStack Compatibility: ARM64/Graviton2 architecture is not supported in LocalStack Community Edition
+    // Changed to x86_64 for LocalStack compatibility
+    test('Lambda should use x86_64 architecture (LocalStack compatibility)', () => {
       const lambda = template.Resources.ProcessPriceChecksFunction;
       expect(Array.isArray(lambda.Properties.Architectures)).toBe(true);
-      expect(lambda.Properties.Architectures).toContain('arm64');
+      expect(lambda.Properties.Architectures).toContain('x86_64');
+      expect(lambda.Properties.Architectures).not.toContain('arm64');
     });
 
     test('Lambda should have correct memory size', () => {
@@ -367,9 +380,11 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(lambda.Properties.Environment.Variables.KMS_KEY_ID).toEqual({ Ref: 'PriceAlertsKMSKey' });
     });
 
-    test('Lambda should use KMS encryption', () => {
+    // LocalStack Compatibility: KMS encryption for Lambda environment variables has limited support in LocalStack
+    // This feature is removed for LocalStack compatibility and can be re-enabled for AWS production
+    test('Lambda should NOT have KMS encryption (LocalStack compatibility)', () => {
       const lambda = template.Resources.ProcessPriceChecksFunction;
-      expect(lambda.Properties.KmsKeyArn).toEqual({ 'Fn::GetAtt': ['PriceAlertsKMSKey', 'Arn'] });
+      expect(lambda.Properties.KmsKeyArn).toBeUndefined();
     });
 
     test('Lambda should have tags', () => {
@@ -487,19 +502,21 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(kmsPolicy.PolicyDocument.Statement[0].Resource).toEqual({ 'Fn::GetAtt': ['PriceAlertsKMSKey', 'Arn'] });
     });
 
-    test('SNS topic should be encrypted', () => {
+    // LocalStack Compatibility: KMS encryption features are simplified for LocalStack
+    // These features can be re-enabled for AWS production deployment
+    test('SNS topic should NOT be encrypted with KMS (LocalStack compatibility)', () => {
       const topic = template.Resources.PriceAlertNotificationsTopic;
-      expect(topic.Properties.KmsMasterKeyId).toBeDefined();
+      expect(topic.Properties.KmsMasterKeyId).toBeUndefined();
     });
 
-    test('Lambda environment variables should be encrypted', () => {
+    test('Lambda environment variables should NOT be KMS encrypted (LocalStack compatibility)', () => {
       const lambda = template.Resources.ProcessPriceChecksFunction;
-      expect(lambda.Properties.KmsKeyArn).toBeDefined();
+      expect(lambda.Properties.KmsKeyArn).toBeUndefined();
     });
 
-    test('DynamoDB table should have point-in-time recovery', () => {
+    test('DynamoDB table should NOT have point-in-time recovery (LocalStack compatibility)', () => {
       const table = template.Resources.PriceAlertsTable;
-      expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+      expect(table.Properties.PointInTimeRecoverySpecification).toBeUndefined();
     });
   });
 });
