@@ -755,4 +755,10 @@ This production-ready Terraform infrastructure includes:
 9. **Testing Support**: Comprehensive outputs for integration testing
 10. **Production Features**: Includes optional custom domain support and proper tagging strategy
 
+## File: tap_stack.tf
+
+```hcl
+# Main serverless infrastructure stack
+```
+
 The infrastructure is fully deployable, testable, and maintainable following Terraform best practices.
