@@ -82,16 +82,30 @@ describe('TapStack CloudFormation Integration Tests', () => {
   };
 
   beforeAll(async () => {
+    // LocalStack endpoint configuration
+    const endpoint = process.env.AWS_ENDPOINT_URL || undefined;
+    const clientConfig = endpoint
+      ? {
+          region,
+          endpoint,
+          forcePathStyle: true,
+          credentials: {
+            accessKeyId: 'test',
+            secretAccessKey: 'test',
+          },
+        }
+      : { region };
+
     // Initialize AWS clients
-    cfnClient = new CloudFormationClient({ region });
-    dynamoClient = new DynamoDBClient({ region });
-    lambdaClient = new LambdaClient({ region });
-    apiGatewayClient = new APIGatewayClient({ region });
-    snsClient = new SNSClient({ region });
-    kmsClient = new KMSClient({ region });
-    iamClient = new IAMClient({ region });
-    eventBridgeClient = new EventBridgeClient({ region });
-    cloudWatchClient = new CloudWatchClient({ region });
+    cfnClient = new CloudFormationClient(clientConfig);
+    dynamoClient = new DynamoDBClient(clientConfig);
+    lambdaClient = new LambdaClient(clientConfig);
+    apiGatewayClient = new APIGatewayClient(clientConfig);
+    snsClient = new SNSClient(clientConfig);
+    kmsClient = new KMSClient(clientConfig);
+    iamClient = new IAMClient(clientConfig);
+    eventBridgeClient = new EventBridgeClient(clientConfig);
+    cloudWatchClient = new CloudWatchClient(clientConfig);
 
     // Dynamically discover stack name
     console.log(`🔍 Discovering TapStack in region: ${region}`);
