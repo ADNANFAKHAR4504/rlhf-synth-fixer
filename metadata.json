@@ -1,0 +1,22 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291498",
+  "team": "synth-2",
+  "startedAt": "2025-08-21T12:17:56.443Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "ecs",
+    "iam",
+    "kms",
+    "cloudwatch",
+    "sns"
+  ],
+  "wave": "P0"
+}
