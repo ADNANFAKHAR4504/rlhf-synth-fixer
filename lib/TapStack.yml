@@ -65,17 +65,6 @@ Conditions:
   UseRDSSecrets: !Equals [!Ref EnableRDSSecrets, 'true']
   HasTimestamp: !Not [!Equals [!Ref ResourceTimestamp, '']]
 
-Mappings:
-  RegionMap:
-    ap-northeast-1:
-      AZs:
-        - ap-northeast-1a
-        - ap-northeast-1c
-    us-east-1:
-      AZs:
-        - us-east-1a
-        - us-east-1b
-
 Resources:
   # ========================================
   # VPC and Network Resources
@@ -111,7 +100,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 6, 8]]
       MapPublicIpOnLaunch: true
       Tags:
@@ -122,7 +111,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 6, 8]]
       MapPublicIpOnLaunch: true
       Tags:
@@ -134,7 +123,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 6, 8]]
       Tags:
         - Key: Name
@@ -144,7 +133,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 6, 8]]
       Tags:
         - Key: Name
