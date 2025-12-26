@@ -6,10 +6,10 @@
   "po_id": "LS-284220",
   "team": "synth-2",
   "startedAt": "2025-07-31T01:08:20.337Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Web Application Deployment"
   ],
   "aws_services": [],
   "wave": "P0"
