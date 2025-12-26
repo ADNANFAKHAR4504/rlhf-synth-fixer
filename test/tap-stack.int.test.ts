@@ -10,7 +10,7 @@ import * as S3 from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const REGION = 'us-east-2';
+const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-2';
 const TIMEOUT = 30000;
 
 // Load deployment outputs
