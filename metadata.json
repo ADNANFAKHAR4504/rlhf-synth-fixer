@@ -16,7 +16,7 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "training_quality": "high",
+  "training_quality": 8,
   "aws_services": [
     "EC2",
     "VPC",
@@ -24,13 +24,6 @@
     "CloudWatch",
     "SNS",
     "IAM",
-    "SSM",
     "VPCEndpoint"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "chtarun32",
-  "dockerS3Location": ""
+  ]
 }
