@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291554",
+  "team": "synth-2",
+  "wave": "P1",
+  "startedAt": "2025-08-20T14:35:40.236Z",
+  "subtask": "CI/CD Pipeline Infrastructure",
+  "subject_labels": [
+    "CI/CD Pipeline Infrastructure",
+    "Security Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "SNS",
+    "IAM",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "CloudWatch Events"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "claude-localstack-migration",
+  "dockerS3Location": ""
+}
