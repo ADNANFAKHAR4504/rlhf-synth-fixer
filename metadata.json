@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-101912939",
+  "team": "synth-2",
+  "startedAt": "2025-12-01T05:50:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "provider": "localstack",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Aurora",
+    "ECS",
+    "Fargate",
+    "ElasticLoadBalancing",
+    "ApplicationLoadBalancer",
+    "Route53",
+    "AutoScaling",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "IAM",
+    "SystemsManager",
+    "CloudFormation"
+  ],
+  "wave": "P1"
+}
