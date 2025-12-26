@@ -20,8 +20,8 @@ Create a secure AWS environment for a web application hosting use case using Ter
 3. **IAM Roles and Policies**
    - Use IAM roles and policies that follow the principle of least privilege.
    - Ensure appropriate access restrictions are applied to resources based on roles.
-   - Avoid using wildcards in Resource ARNs - specify exact resource ARNs instead.
-   - Do not use Action wildcards like s3:* or iam:* - list specific actions needed.
+   - Specify exact ARNs for all resources - no wildcards allowed.
+   - List specific permissions needed - no blanket access patterns.
 
 4. **Security Groups Configuration**
    - Configure security groups to allow only incoming traffic over HTTPS on port 443.
@@ -40,7 +40,7 @@ Create a secure AWS environment for a web application hosting use case using Ter
 
 2. **Security Configurations**
    - Use AWS KMS to encrypt S3 buckets.
-   - Implement IAM roles and policies with least privilege access - no wildcards for Resources or Actions.
+   - Implement IAM roles and policies with least privilege access - specify exact ARNs and permissions.
    - Enforce HTTPS traffic only via security groups on port 443.
    - Enforce encryption in transit for communications between AWS services.
    - Create CloudWatch alarms for unauthorized access and IAM policy violations.
