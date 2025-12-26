@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291641",
+  "team": "synth-2",
+  "startedAt": "2025-08-12T12:26:29.410Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "dynamodb",
+    "ec2",
+    "autoscaling",
+    "iam",
+    "cloudwatch"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291641",
+    "pr": "Pr999"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}

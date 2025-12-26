@@ -1,0 +1,400 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS WAF Security Controls for API Protection with ALB Integration",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to prevent conflicts (e.g., dev-12345, test-67890)",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "ALBArn": {
+      "Type": "String",
+      "Description": "ARN of the existing Application Load Balancer to associate with the WAF Web ACL (leave empty to skip association)",
+      "Default": ""
+    }
+  },
+  "Conditions": {
+    "HasALB": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ALBArn"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "OfficeIPSet": {
+      "Type": "AWS::WAFv2::IPSet",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "office-ip-allowlist-${EnvironmentSuffix}"
+        },
+        "Description": "IP set for allowlisting trusted office IPs",
+        "Scope": "REGIONAL",
+        "IPAddressVersion": "IPV4",
+        "Addresses": [
+          "10.0.0.0/24",
+          "192.168.1.0/24"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "WAFSecurity"
+          }
+        ]
+      }
+    },
+    "WAFWebACL": {
+      "Type": "AWS::WAFv2::WebACL",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "api-protection-web-acl-${EnvironmentSuffix}"
+        },
+        "Description": "WAF Web ACL for API protection with rate limiting, SQL injection protection, and geo-blocking",
+        "Scope": "REGIONAL",
+        "DefaultAction": {
+          "Allow": {}
+        },
+        "VisibilityConfig": {
+          "SampledRequestsEnabled": true,
+          "CloudWatchMetricsEnabled": true,
+          "MetricName": {
+            "Fn::Sub": "api-protection-web-acl-${EnvironmentSuffix}"
+          }
+        },
+        "Rules": [
+          {
+            "Name": "AllowOfficeIPs",
+            "Priority": 0,
+            "Statement": {
+              "IPSetReferenceStatement": {
+                "Arn": {
+                  "Fn::GetAtt": [
+                    "OfficeIPSet",
+                    "Arn"
+                  ]
+                }
+              }
+            },
+            "Action": {
+              "Allow": {}
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": {
+                "Fn::Sub": "allow-office-ips-${EnvironmentSuffix}"
+              }
+            }
+          },
+          {
+            "Name": "GeoBlockHighRiskCountries",
+            "Priority": 1,
+            "Statement": {
+              "GeoMatchStatement": {
+                "CountryCodes": [
+                  "KP",
+                  "IR"
+                ]
+              }
+            },
+            "Action": {
+              "Block": {}
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": {
+                "Fn::Sub": "geo-block-high-risk-${EnvironmentSuffix}"
+              }
+            }
+          },
+          {
+            "Name": "RateLimitRule",
+            "Priority": 2,
+            "Statement": {
+              "RateBasedStatement": {
+                "Limit": 2000,
+                "AggregateKeyType": "IP"
+              }
+            },
+            "Action": {
+              "Block": {}
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": {
+                "Fn::Sub": "rate-limit-rule-${EnvironmentSuffix}"
+              }
+            }
+          },
+          {
+            "Name": "SQLInjectionProtection",
+            "Priority": 3,
+            "Statement": {
+              "ManagedRuleGroupStatement": {
+                "VendorName": "AWS",
+                "Name": "AWSManagedRulesSQLiRuleSet"
+              }
+            },
+            "OverrideAction": {
+              "None": {}
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": {
+                "Fn::Sub": "sql-injection-protection-${EnvironmentSuffix}"
+              }
+            }
+          },
+          {
+            "Name": "KnownBadInputsProtection",
+            "Priority": 4,
+            "Statement": {
+              "ManagedRuleGroupStatement": {
+                "VendorName": "AWS",
+                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+              }
+            },
+            "OverrideAction": {
+              "None": {}
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": {
+                "Fn::Sub": "known-bad-inputs-${EnvironmentSuffix}"
+              }
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "WAFSecurity"
+          }
+        ]
+      }
+    },
+    "WAFLogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "aws-waf-logs-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "WAFSecurity"
+          }
+        ]
+      }
+    },
+    "WAFLogsBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "WAFLogsBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSLogDeliveryWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "delivery.logs.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${WAFLogsBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            },
+            {
+              "Sid": "AWSLogDeliveryAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "delivery.logs.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "WAFLogsBucket",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "WAFLoggingConfiguration": {
+      "Type": "AWS::WAFv2::LoggingConfiguration",
+      "DependsOn": [
+        "WAFLogsBucketPolicy"
+      ],
+      "Properties": {
+        "ResourceArn": {
+          "Fn::GetAtt": [
+            "WAFWebACL",
+            "Arn"
+          ]
+        },
+        "LogDestinationConfigs": [
+          {
+            "Fn::GetAtt": [
+              "WAFLogsBucket",
+              "Arn"
+            ]
+          }
+        ],
+        "LoggingFilter": {
+          "DefaultBehavior": "KEEP",
+          "Filters": [
+            {
+              "Behavior": "KEEP",
+              "Conditions": [
+                {
+                  "ActionCondition": {
+                    "Action": "BLOCK"
+                  }
+                }
+              ],
+              "Requirement": "MEETS_ANY"
+            }
+          ]
+        }
+      }
+    },
+    "WebACLAssociation": {
+      "Type": "AWS::WAFv2::WebACLAssociation",
+      "Condition": "HasALB",
+      "Properties": {
+        "ResourceArn": {
+          "Ref": "ALBArn"
+        },
+        "WebACLArn": {
+          "Fn::GetAtt": [
+            "WAFWebACL",
+            "Arn"
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "WebACLArn": {
+      "Description": "ARN of the WAF Web ACL",
+      "Value": {
+        "Fn::GetAtt": [
+          "WAFWebACL",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WebACLArn"
+        }
+      }
+    },
+    "WebACLId": {
+      "Description": "ID of the WAF Web ACL",
+      "Value": {
+        "Fn::GetAtt": [
+          "WAFWebACL",
+          "Id"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WebACLId"
+        }
+      }
+    },
+    "WAFLogsBucketName": {
+      "Description": "Name of the S3 bucket for WAF logs",
+      "Value": {
+        "Ref": "WAFLogsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WAFLogsBucketName"
+        }
+      }
+    },
+    "WAFLogsBucketArn": {
+      "Description": "ARN of the S3 bucket for WAF logs",
+      "Value": {
+        "Fn::GetAtt": [
+          "WAFLogsBucket",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WAFLogsBucketArn"
+        }
+      }
+    },
+    "OfficeIPSetArn": {
+      "Description": "ARN of the office IP allowlist IP set",
+      "Value": {
+        "Fn::GetAtt": [
+          "OfficeIPSet",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OfficeIPSetArn"
+        }
+      }
+    }
+  }
+}

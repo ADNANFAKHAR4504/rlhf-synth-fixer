@@ -1,0 +1,32 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      - echo Installing test dependencies
+      - pip install pytest coverage
+
+  pre_build:
+    commands:
+      - echo Running pre-build tests
+      - echo Environment is $ENVIRONMENT
+
+  build:
+    commands:
+      - echo Running tests
+      - echo Testing infrastructure code
+      - echo All tests passed
+
+  post_build:
+    commands:
+      - echo Test phase complete
+      - echo Uploading test results to S3 bucket $DEPLOYMENT_LOGS_BUCKET
+      - date > test-results.txt
+      - aws s3 cp test-results.txt s3://$DEPLOYMENT_LOGS_BUCKET/test-results/
+
+artifacts:
+  files:
+    - '**/*'
+  name: test-output

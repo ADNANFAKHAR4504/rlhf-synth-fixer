@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291170",
+  "team": "synth-2",
+  "startedAt": "2025-12-24T10:30:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "S3",
+    "KMS"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291170",
+    "pr": "Pr555"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}

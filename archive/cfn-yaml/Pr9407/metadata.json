@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000195",
+  "team": "synth",
+  "startedAt": "2025-10-30T04:53:11.501Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "VPC",
+    "Subnet",
+    "SecurityGroup",
+    "SQS",
+    "CloudWatch Log Group",
+    "IAM Role",
+    "IAM Policy",
+    "SSM Parameter Store",
+    "CloudFormation"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,677 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-ready serverless infrastructure with Lambda, API Gateway, S3, and CloudWatch - LocalStack Compatible",
+    "Parameters": {
+        "ApplicationName": {
+            "Type": "String",
+            "Default": "serverless-app",
+            "Description": "Application name for resource naming"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "prod",
+            "Description": "Environment name for resource naming (e.g., dev, staging, prod)",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ]
+        },
+        "EnableProvisionedConcurrency": {
+            "Type": "String",
+            "Default": "true",
+            "Description": "Enable provisioned concurrency for Lambda function (note: may not work in LocalStack Community)",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "LambdaProvisionedConcurrency": {
+            "Type": "Number",
+            "Default": 100,
+            "Description": "Number of provisioned concurrent executions for Lambda",
+            "MinValue": 1,
+            "MaxValue": 1000
+        }
+    },
+    "Conditions": {
+        "EnableProvisionedConcurrency": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableProvisionedConcurrency"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "S3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ApplicationName}-${Environment}-${AWS::AccountId}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ApplicationName}-${Environment}-${AWS::AccountId}"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams",
+                                        "logs:DescribeLogGroups"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayCloudWatchRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "apigateway.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams",
+                                        "logs:DescribeLogGroups"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "S3AccessLogsBucket"
+                    },
+                    "LogFilePrefix": "access-logs/"
+                }
+            }
+        },
+        "S3AccessLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-access-logs"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        }
+                    ]
+                }
+            }
+        },
+        "MainLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-main-function"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 1024,
+                "ReservedConcurrentExecutions": 500,
+                "Environment": {
+                    "Variables": {
+                        "BUCKET_NAME": {
+                            "Fn::Sub": "${ApplicationName}-${Environment}-${AWS::AccountId}"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ndef lambda_handler(event, context):\n    try:\n        # High-performance request processing\n        bucket_name = os.environ['BUCKET_NAME']\n\n        # Process the request\n        response_data = {\n            'statusCode': 200,\n            'message': 'Request processed successfully',\n            'timestamp': datetime.utcnow().isoformat(),\n            'requestId': context.aws_request_id\n        }\n\n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(response_data)\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json'\n            },\n            'body': json.dumps({\n                'error': str(e),\n                'requestId': context.aws_request_id\n            })\n        }\n"
+                }
+            }
+        },
+        "LambdaAlias": {
+            "Type": "AWS::Lambda::Alias",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "MainLambdaFunction"
+                },
+                "FunctionVersion": "$LATEST",
+                "Name": "prod",
+                "ProvisionedConcurrencyConfig": {
+                    "Fn::If": [
+                        "EnableProvisionedConcurrency",
+                        {
+                            "ProvisionedConcurrentExecutions": {
+                                "Ref": "LambdaProvisionedConcurrency"
+                            }
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaApiGatewayPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "LambdaAlias"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/POST/*"
+                }
+            }
+        },
+        "RestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-api"
+                },
+                "Description": "High-performance serverless API",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Policy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": "execute-api:Invoke",
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "ApiResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "RestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "api"
+            }
+        },
+        "ApiMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaAlias}/invocations"
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DeletionPolicy": "Delete",
+            "DependsOn": "ApiMethod",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "Description": "Production deployment"
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                },
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "LoggingLevel": "INFO",
+                        "DataTraceEnabled": true,
+                        "MetricsEnabled": true,
+                        "ThrottlingRateLimit": 1000,
+                        "ThrottlingBurstLimit": 2000
+                    }
+                ]
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${MainLambdaFunction}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "ApiGatewayLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "API-Gateway-Execution-Logs_${RestApi}/${Environment}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "LambdaErrorRateAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-lambda-errors"
+                },
+                "AlarmDescription": "Lambda function error rate",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "MainLambdaFunction"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaDurationAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-lambda-duration"
+                },
+                "AlarmDescription": "Lambda function duration",
+                "MetricName": "Duration",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 10000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "MainLambdaFunction"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-lambda-throttles"
+                },
+                "AlarmDescription": "Lambda function throttles",
+                "MetricName": "Throttles",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "MainLambdaFunction"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ApiGateway4XXErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-api-4xx-errors"
+                },
+                "AlarmDescription": "API Gateway 4XX errors",
+                "MetricName": "4XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 50,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Fn::Sub": "${ApplicationName}-${Environment}-api"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ApiGateway5XXErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-api-5xx-errors"
+                },
+                "AlarmDescription": "API Gateway 5XX errors",
+                "MetricName": "5XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Fn::Sub": "${ApplicationName}-${Environment}-api"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ApiGatewayLatencyAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-api-latency"
+                },
+                "AlarmDescription": "API Gateway latency",
+                "MetricName": "Latency",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 5000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Fn::Sub": "${ApplicationName}-${Environment}-api"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ApiGatewayAccount": {
+            "Type": "AWS::ApiGateway::Account",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "CloudWatchRoleArn": {
+                    "Fn::GetAtt": [
+                        "ApiGatewayCloudWatchRole",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ApiGatewayUrl": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/api"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-api-url"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "S3 bucket name for application data",
+            "Value": {
+                "Ref": "S3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-s3-bucket"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Lambda function name",
+            "Value": {
+                "Ref": "MainLambdaFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-lambda-function"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MainLambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ApplicationName}-${Environment}-lambda-arn"
+                }
+            }
+        },
+        "CloudWatchLogGroups": {
+            "Description": "CloudWatch Log Groups created",
+            "Value": {
+                "Fn::Sub": "${LambdaLogGroup}, ${ApiGatewayLogGroup}"
+            }
+        },
+        "SecurityFeatures": {
+            "Description": "Security features enabled",
+            "Value": "S3 AES-256 encryption, IAM least privilege, Access logging"
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "Environment": {
+            "Description": "Environment name used for this deployment",
+            "Value": {
+                "Ref": "Environment"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Environment"
+                }
+            }
+        }
+    }
+}
