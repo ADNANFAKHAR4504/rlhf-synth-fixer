@@ -104,6 +104,20 @@ This document outlines the issues found in the initially generated infrastructur
 - Included testing procedures for both unit and integration tests
 - Documented environment setup requirements
 
+## LocalStack Compatibility Adjustments
+
+This implementation has been adapted for LocalStack Community Edition compatibility. The following adjustments were made to ensure successful deployment and testing in the LocalStack environment:
+
+| Feature | LocalStack Limitation | Solution Applied | Production Status |
+|---------|----------------------|------------------|-------------------|
+| KMS Encryption | LocalStack KMS has basic support | Using default alias/aws/sns for SNS encryption | Full KMS in AWS production |
+| SES Email Templates | Limited template rendering in LocalStack | Basic SES send_email fallback implemented | Full SES templating in AWS |
+| CloudWatch Metric Math | Basic metric math support | Simplified alarm expressions validated | Full metric math in AWS |
+| SNS SMS | SMS sending not available in LocalStack Community | Mock responses for integration tests | Full SMS capability in AWS |
+| Reserved Concurrency | Limited concurrency management | Set to 10 for LocalStack testing | Adjustable for AWS production |
+
+All core services (Lambda, DynamoDB, SNS, CloudWatch, IAM) are fully functional in LocalStack Community Edition, enabling comprehensive local testing before AWS deployment.
+
 ## Summary of Achievements
 
 After applying all fixes:
