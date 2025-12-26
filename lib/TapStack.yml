@@ -39,8 +39,8 @@ Parameters:
     Description: 'EC2 Key Pair for SSH access (leave empty to disable SSH)'
 
   AmiId:
-    Type: String
-    Default: 'ami-12345678'
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     Description: 'AMI ID for EC2 instances (automatically gets latest Amazon Linux 2)'
 
   VpcCidr:
@@ -585,7 +585,7 @@ Resources:
         - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref WebLaunchTemplate
-        Version: !GetAtt WebLaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 1
       MaxSize: 2
       DesiredCapacity: 1

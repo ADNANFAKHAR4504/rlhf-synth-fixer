@@ -611,7 +611,7 @@ Resources:
         - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref WebLaunchTemplate
-        Version: !GetAtt WebLaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 1
       MaxSize: 2
       DesiredCapacity: 1
