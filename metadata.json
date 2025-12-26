@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "82956104",
+  "team": "synth",
+  "startedAt": "2025-10-03T19:04:22+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "EFS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "AWS Backup",
+    "DataSync",
+    "CloudWatch",
+    "EventBridge",
+    "Resource Access Manager"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
