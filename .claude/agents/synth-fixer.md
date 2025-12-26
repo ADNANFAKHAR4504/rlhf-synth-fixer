@@ -87,6 +87,8 @@ STEP 5: MONITOR REMOTE CI
 | **SINGLE COMMIT** | Commit only after ALL local CI passes |
 | **PROTECTED FILES** | Never modify: `package.json`, `tsconfig.json`, `scripts/`, `.github/` |
 
+---
+
 ## Output Format - SYNTH-AGENT Branding
 
 **CRITICAL**: When running commands or showing progress, ALWAYS use SYNTH-AGENT branding with PR number.
