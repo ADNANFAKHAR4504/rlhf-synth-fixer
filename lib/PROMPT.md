@@ -20,8 +20,8 @@ Create a secure AWS environment for a web application hosting use case using Ter
 3. **IAM Roles and Policies**
    - Use IAM roles and policies that follow the principle of least privilege.
    - Ensure appropriate access restrictions are applied to resources based on roles.
-   - Specify exact ARNs for all resources - no wildcards allowed.
-   - List specific permissions needed - no blanket access patterns.
+   - Use full ARN paths - avoid catch-all patterns in policy definitions.
+   - List each specific permission required instead of broad grants.
 
 4. **Security Groups Configuration**
    - Configure security groups to allow only incoming traffic over HTTPS on port 443.
@@ -49,10 +49,10 @@ Create a secure AWS environment for a web application hosting use case using Ter
    - The Terraform configuration should emit useful outputs for integration with CI/CD pipelines and testing. Outputs should not include secrets.
 
 4. **Terraform File Structure**
-   - **Variables**: Declare the necessary variables like aws_region in main.tf or tap_stack.tf.
-   - **Resources**: Define all AWS resources such as S3 buckets, IAM roles, and security groups directly in main.tf or tap_stack.tf.
-   - **Outputs**: Emit useful outputs for CI/CD integration and testing.
-   - **No secrets in outputs**: Avoid including any sensitive information in outputs.
+   - Variables: Declare the necessary variables like aws_region in main.tf or tap_stack.tf.
+   - Infrastructure Components: Define all AWS components such as S3 buckets, IAM roles, and security groups directly in main.tf or tap_stack.tf.
+   - Outputs: Emit useful outputs for CI/CD integration and testing.
+   - Secrets Protection: Avoid including any sensitive information in outputs.
 
 5. **Non-Negotiables**
    - Keep all Terraform logic in lib/main.tf or lib/tap_stack.tf.
