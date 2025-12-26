@@ -1,0 +1,290 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Healthcare appointment reminder system with SMS notifications",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming",
+      "AllowedPattern": "^[a-zA-Z0-9]+$"
+    },
+    "SenderEmail": {
+      "Type": "String",
+      "Description": "Verified SES email for fallback notifications",
+      "Default": "noreply@healthcare.example.com"
+    }
+  },
+  "Resources": {
+    "AppointmentReminderTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "appointment-reminders-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Healthcare Appointment Reminders",
+        "KmsMasterKeyId": "alias/aws/sns"
+      }
+    },
+    "DeliveryLogsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "sms-delivery-logs-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "patientId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "patientId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "TimeToLiveSpecification": {
+          "AttributeName": "ttl",
+          "Enabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "NotificationHandlerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "NotificationHandlerPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish",
+                    "sns:SetSMSAttributes",
+                    "sns:GetSMSAttributes"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "DeliveryLogsTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ses:SendEmail",
+                    "ses:SendTemplatedEmail"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "NotificationHandlerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "appointment-notification-handler-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport time\nfrom datetime import datetime, timedelta\nfrom decimal import Decimal\n\n# Use the region where the Lambda function is deployed\naws_region = os.environ.get('AWS_REGION', 'us-east-1')\n\nsns = boto3.client('sns', region_name=aws_region)\ndynamodb = boto3.resource('dynamodb', region_name=aws_region)\nses = boto3.client('ses', region_name=aws_region)\ncloudwatch = boto3.client('cloudwatch', region_name=aws_region)\n\ndef lambda_handler(event, context):\n    table = dynamodb.Table(os.environ['TABLE_NAME'])\n    results = {'successful': 0, 'failed': 0, 'fallback': 0}\n    \n    appointments = event.get('appointments', [])\n    \n    for appointment in appointments:\n        success = send_notification(appointment, table)\n        if success:\n            results['successful'] += 1\n        else:\n            results['failed'] += 1\n    \n    send_metrics(results)\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps(results)\n    }\n\ndef send_notification(appointment, table):\n    patient_id = appointment.get('patient_id')\n    phone = appointment.get('phone_number')\n    message = appointment.get('message')\n    \n    for attempt in range(3):\n        try:\n            response = sns.publish(\n                PhoneNumber=phone,\n                Message=message,\n                MessageAttributes={\n                    'AWS.SNS.SMS.SMSType': {\n                        'DataType': 'String',\n                        'StringValue': 'Transactional'\n                    }\n                }\n            )\n            \n            log_delivery(table, patient_id, phone, message, 'SUCCESS', attempt + 1)\n            return True\n            \n        except Exception as e:\n            print(f'SMS attempt {attempt + 1} failed: {str(e)}')\n            \n            if attempt == 2:\n                send_email_fallback(appointment)\n                log_delivery(table, patient_id, phone, message, 'FAILED_WITH_FALLBACK', attempt + 1)\n                return False\n            \n            time.sleep(2 ** attempt)\n    \n    return False\n\ndef log_delivery(table, patient_id, phone, message, status, retry_count):\n    timestamp = int(datetime.now().timestamp())\n    ttl = int((datetime.now() + timedelta(days=90)).timestamp())\n    \n    table.put_item(\n        Item={\n            'patientId': patient_id,\n            'timestamp': timestamp,\n            'phoneNumber': phone,\n            'messageContent': message,\n            'deliveryStatus': status,\n            'retryCount': retry_count,\n            'ttl': ttl\n        }\n    )\n\ndef send_email_fallback(appointment):\n    try:\n        ses.send_email(\n            Source=os.environ['SENDER_EMAIL'],\n            Destination={'ToAddresses': [appointment.get('email', '')]},\n            Message={\n                'Subject': {'Data': 'Appointment Reminder'},\n                'Body': {'Text': {'Data': appointment.get('message', '')}}\n            }\n        )\n    except Exception as e:\n        print(f'Email fallback failed: {str(e)}')\n\ndef send_metrics(results):\n    cloudwatch.put_metric_data(\n        Namespace='AppointmentReminders',\n        MetricData=[\n            {\n                'MetricName': 'SuccessfulSMS',\n                'Value': results['successful'],\n                'Unit': 'Count'\n            },\n            {\n                'MetricName': 'FailedSMS',\n                'Value': results['failed'],\n                'Unit': 'Count'\n            }\n        ]\n    )\n"
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "NotificationHandlerRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "DeliveryLogsTable"
+            },
+            "SENDER_EMAIL": {
+              "Ref": "SenderEmail"
+            },
+            "TOPIC_ARN": {
+              "Ref": "AppointmentReminderTopic"
+            }
+          }
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "ReservedConcurrentExecutions": 10
+      }
+    },
+    "NotificationLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/appointment-notification-handler-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "FailureRateAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "sms-failure-rate-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when SMS failure rate exceeds 5%",
+        "MetricName": "FailedSMS",
+        "Namespace": "AppointmentReminders",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 0.05,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DeliveryMetricQueryAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "sms-delivery-metrics-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Monitor individual SMS delivery metrics",
+        "Metrics": [
+          {
+            "Id": "m1",
+            "MetricStat": {
+              "Metric": {
+                "Namespace": "AppointmentReminders",
+                "MetricName": "SuccessfulSMS"
+              },
+              "Period": 300,
+              "Stat": "Sum"
+            },
+            "ReturnData": false
+          },
+          {
+            "Id": "m2",
+            "MetricStat": {
+              "Metric": {
+                "Namespace": "AppointmentReminders",
+                "MetricName": "FailedSMS"
+              },
+              "Period": 300,
+              "Stat": "Sum"
+            },
+            "ReturnData": false
+          },
+          {
+            "Id": "e1",
+            "Expression": "m2/(m1+m2)*100",
+            "Label": "Failure Rate Percentage",
+            "ReturnData": true
+          }
+        ],
+        "EvaluationPeriods": 2,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "SESEmailTemplate": {
+      "Type": "AWS::SES::Template",
+      "Properties": {
+        "Template": {
+          "TemplateName": {
+            "Fn::Sub": "appointment-reminder-${EnvironmentSuffix}"
+          },
+          "SubjectPart": "Appointment Reminder - {{appointment_date}}",
+          "TextPart": "Dear {{patient_name}},\n\nThis is a reminder for your appointment on {{appointment_date}} at {{appointment_time}}.\n\nLocation: {{location}}\n\nPlease arrive 15 minutes early.\n\nThank you,\nHealthcare Team",
+          "HtmlPart": "<html><body><h2>Appointment Reminder</h2><p>Dear {{patient_name}},</p><p>This is a reminder for your appointment on <b>{{appointment_date}}</b> at <b>{{appointment_time}}</b>.</p><p>Location: {{location}}</p><p>Please arrive 15 minutes early.</p><p>Thank you,<br>Healthcare Team</p></body></html>"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "LambdaFunctionArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "NotificationHandlerFunction",
+          "Arn"
+        ]
+      },
+      "Description": "ARN of the notification handler Lambda function"
+    },
+    "DynamoDBTableName": {
+      "Value": {
+        "Ref": "DeliveryLogsTable"
+      },
+      "Description": "Name of the DynamoDB delivery logs table"
+    },
+    "SNSTopicArn": {
+      "Value": {
+        "Ref": "AppointmentReminderTopic"
+      },
+      "Description": "ARN of the SNS topic for SMS notifications"
+    }
+  }
+}
