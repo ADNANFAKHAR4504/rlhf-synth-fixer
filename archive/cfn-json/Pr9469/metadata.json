@@ -25,5 +25,12 @@
   "migrated_from": {
     "po_id": "101912919",
     "pr": "Pr7560"
-  }
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
