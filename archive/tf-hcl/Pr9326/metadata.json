@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291717",
+  "team": "synth-2",
+  "startedAt": "2025-08-12T23:30:38.604Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "CloudTrail",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "S3",
+    "VPC"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291717",
+    "pr": "Pr1166"
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}
