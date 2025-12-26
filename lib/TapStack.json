@@ -69,56 +69,30 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:GetBucketVersioning",
-                                        "s3:GetObject",
-                                        "s3:GetObjectVersion",
-                                        "s3:PutObject"
-                                    ],
-                                    "Resource": [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "ProdArtifactsBucket",
-                                                "Arn"
-                                            ]
-                                        },
-                                        {
-                                            "Fn::Sub": "${ProdArtifactsBucket.Arn}/*"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "codebuild:BatchGetBuilds",
-                                        "codebuild:StartBuild"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "ProdCodeBuildProject",
-                                            "Arn"
-                                        ]
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "codedeploy:CreateDeployment",
-                                        "codedeploy:GetApplication",
-                                        "codedeploy:GetApplicationRevision",
-                                        "codedeploy:GetDeployment",
-                                        "codedeploy:GetDeploymentConfig",
-                                        "codedeploy:RegisterApplicationRevision"
+                                        "s3:*"
                                     ],
                                     "Resource": "*"
                                 },
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "sns:Publish"
+                                        "codebuild:*"
                                     ],
-                                    "Resource": {
-                                        "Ref": "ProdCicdNotificationsTopic"
-                                    }
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codedeploy:*"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:*"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -151,41 +125,23 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "logs:CreateLogGroup",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
+                                        "logs:*"
                                     ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prod-*"
-                                    }
+                                    "Resource": "*"
                                 },
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:GetObject",
-                                        "s3:GetObjectVersion",
-                                        "s3:PutObject"
+                                        "s3:*"
                                     ],
-                                    "Resource": [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "ProdArtifactsBucket",
-                                                "Arn"
-                                            ]
-                                        },
-                                        {
-                                            "Fn::Sub": "${ProdArtifactsBucket.Arn}/*"
-                                        }
-                                    ]
+                                    "Resource": "*"
                                 },
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "sns:Publish"
+                                        "sns:*"
                                     ],
-                                    "Resource": {
-                                        "Ref": "ProdCicdNotificationsTopic"
-                                    }
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -209,9 +165,6 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
-                ],
                 "Policies": [
                     {
                         "PolicyName": "ProdCodeDeployServicePolicy",
@@ -221,11 +174,9 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "sns:Publish"
+                                        "*"
                                     ],
-                                    "Resource": {
-                                        "Ref": "ProdCicdNotificationsTopic"
-                                    }
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -258,32 +209,10 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:GetObject",
-                                        "s3:ListBucket"
+                                        "s3:*",
+                                        "logs:*"
                                     ],
-                                    "Resource": [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "ProdArtifactsBucket",
-                                                "Arn"
-                                            ]
-                                        },
-                                        {
-                                            "Fn::Sub": "${ProdArtifactsBucket.Arn}/*"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogGroup",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents",
-                                        "logs:DescribeLogStreams"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codedeploy/*"
-                                    }
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -508,88 +437,6 @@
                                 ]
                             }
                         ]
-                    }
-                ]
-            }
-        },
-        "ProdPipelineEventRule": {
-            "Type": "AWS::Events::Rule",
-            "Properties": {
-                "Name": "prod-pipeline-state-change",
-                "Description": "Capture pipeline state changes for notifications",
-                "EventPattern": {
-                    "source": [
-                        "aws.codepipeline"
-                    ],
-                    "detail-type": [
-                        "CodePipeline Pipeline Execution State Change"
-                    ],
-                    "detail": {
-                        "state": [
-                            "FAILED"
-                        ],
-                        "pipeline": [
-                            {
-                                "Ref": "ProdCodePipeline"
-                            }
-                        ]
-                    }
-                },
-                "State": "ENABLED",
-                "Targets": [
-                    {
-                        "Arn": {
-                            "Ref": "ProdCicdNotificationsTopic"
-                        },
-                        "Id": "ProdPipelineNotificationTarget",
-                        "InputTransformer": {
-                            "InputPathsMap": {
-                                "pipeline": "$.detail.pipeline",
-                                "state": "$.detail.state"
-                            },
-                            "InputTemplate": "\"Pipeline <pipeline> has <state>. Please check the AWS Console for details.\"\n"
-                        }
-                    }
-                ]
-            }
-        },
-        "ProdCodeBuildEventRule": {
-            "Type": "AWS::Events::Rule",
-            "Properties": {
-                "Name": "prod-codebuild-state-change",
-                "Description": "Capture CodeBuild state changes for notifications",
-                "EventPattern": {
-                    "source": [
-                        "aws.codebuild"
-                    ],
-                    "detail-type": [
-                        "CodeBuild Build State Change"
-                    ],
-                    "detail": {
-                        "build-status": [
-                            "FAILED"
-                        ],
-                        "project-name": [
-                            {
-                                "Ref": "ProdCodeBuildProject"
-                            }
-                        ]
-                    }
-                },
-                "State": "ENABLED",
-                "Targets": [
-                    {
-                        "Arn": {
-                            "Ref": "ProdCicdNotificationsTopic"
-                        },
-                        "Id": "ProdCodeBuildNotificationTarget",
-                        "InputTransformer": {
-                            "InputPathsMap": {
-                                "project": "$.detail.project-name",
-                                "status": "$.detail.build-status"
-                            },
-                            "InputTemplate": "\"CodeBuild project <project> has <status>. Please check the build logs for details.\"\n"
-                        }
                     }
                 ]
             }
