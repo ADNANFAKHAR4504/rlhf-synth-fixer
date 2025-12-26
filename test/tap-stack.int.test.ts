@@ -29,21 +29,47 @@ import {
 /* ------------------------------ Setup ------------------------------ */
 /* ------------------------------------------------------------------ */
 
-const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-if (!fs.existsSync(p)) {
+// Try both possible output file locations
+const possiblePaths = [
+  path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
+  path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
+];
+
+let p: string | null = null;
+for (const candidate of possiblePaths) {
+  if (fs.existsSync(candidate)) {
+    p = candidate;
+    break;
+  }
+}
+
+if (!p) {
   throw new Error(
-    `Expected outputs file at ${p} — deploy the stack and export outputs before running integration tests.`,
+    `Expected outputs file at one of: ${possiblePaths.join(", ")} — deploy the stack and export outputs before running integration tests.`,
   );
 }
+
 const raw = JSON.parse(fs.readFileSync(p, "utf8"));
 
-const topKey = Object.keys(raw)[0];
-const arr = Array.isArray(raw?.Outputs) ? raw.Outputs : raw[topKey];
-if (!Array.isArray(arr)) {
-  throw new Error("Could not find an array of outputs in cfn-outputs/all-outputs.json");
-}
+// Handle both formats: array format and flat object format
 const outputs: Record<string, string> = {};
-for (const o of arr) outputs[o.OutputKey] = o.OutputValue;
+if (Array.isArray(raw)) {
+  // Format: [{ "OutputKey": "...", "OutputValue": "..." }]
+  for (const o of raw) outputs[o.OutputKey] = o.OutputValue;
+} else if (raw?.Outputs && Array.isArray(raw.Outputs)) {
+  // Format: { "Outputs": [{ "OutputKey": "...", "OutputValue": "..." }] }
+  for (const o of raw.Outputs) outputs[o.OutputKey] = o.OutputValue;
+} else {
+  // Check if it's a nested stack format: { "StackName": [{ "OutputKey": "...", "OutputValue": "..." }] }
+  const topKey = Object.keys(raw)[0];
+  const arr = raw[topKey];
+  if (Array.isArray(arr)) {
+    for (const o of arr) outputs[o.OutputKey] = o.OutputValue;
+  } else {
+    // Flat format: { "OutputKey1": "value1", "OutputKey2": "value2" }
+    Object.assign(outputs, raw);
+  }
+}
 
 const region =
   process.env.AWS_REGION ||
