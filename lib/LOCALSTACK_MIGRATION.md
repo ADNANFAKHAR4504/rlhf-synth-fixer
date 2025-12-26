@@ -134,14 +134,14 @@ Contains:
 ## LocalStack Limitations
 
 ### What Works in LocalStack:
-- IAM role creation ✅
-- IAM policy creation ✅
-- IAM policy attachments ✅
-- Basic assume role policies ✅
-- Simple Allow/Deny statements ✅
-- Resource-level permissions ✅
-- Inline policies ✅
-- Tags on IAM resources ✅
+- IAM role creation
+- IAM policy creation
+- IAM policy attachments
+- Basic assume role policies
+- Simple Allow/Deny statements
+- Resource-level permissions
+- Inline policies
+- Tags on IAM resources
 
 ### What's Simplified for LocalStack:
 - Complex IAM conditions (removed/commented)
