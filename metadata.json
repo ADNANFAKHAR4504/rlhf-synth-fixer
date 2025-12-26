@@ -1,0 +1,22 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291570",
+  "team": "synth-2",
+  "startedAt": "2025-08-19T15:51:21.426Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ELB",
+    "AutoScaling",
+    "S3"
+  ],
+  "wave": "P0"
+}
