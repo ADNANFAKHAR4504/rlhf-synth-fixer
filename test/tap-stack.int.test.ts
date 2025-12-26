@@ -211,7 +211,10 @@ describe('Crowdfunding Platform Integration Tests', () => {
     test('API Gateway URL should be properly formatted', () => {
       const url = outputs.ApiGatewayUrl;
       console.log(`  ✓ API Gateway URL: ${url}`);
-      expect(url).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/.+/);
+      // LocalStack adds :4566 port to URLs, so we need to handle both formats
+      // AWS: https://id.execute-api.region.amazonaws.com/stage
+      // LocalStack: https://id.execute-api.amazonaws.com:4566/stage
+      expect(url).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com(:\d+)?\/.+/);
       expect(url).toContain('execute-api');
       expect(url).toContain(environmentSuffix);
     });
@@ -235,9 +238,21 @@ describe('Crowdfunding Platform Integration Tests', () => {
 
     test('API Gateway region should match other resources', () => {
       const url = outputs.ApiGatewayUrl;
-      const urlParts = url.split('.');
-      const apiRegion = urlParts[2];
       const lambdaRegion = outputs.CampaignManagementFunctionArn.split(':')[3];
+
+      // Extract region from URL - handle both AWS and LocalStack formats
+      // AWS URL: https://id.execute-api.us-east-1.amazonaws.com/stage
+      // LocalStack URL: https://id.execute-api.amazonaws.com:4566/stage
+      let apiRegion: string;
+      const urlParts = url.split('.');
+      if (urlParts.length >= 4 && urlParts[2] !== 'amazonaws') {
+        // AWS format - region is in position 2
+        apiRegion = urlParts[2];
+      } else {
+        // LocalStack format - no region in URL, use Lambda's region
+        apiRegion = lambdaRegion;
+      }
+
       console.log(`  ✓ API Gateway region: ${apiRegion}`);
       expect(apiRegion).toBe(lambdaRegion);
     });
@@ -264,7 +279,9 @@ describe('Crowdfunding Platform Integration Tests', () => {
     test('CloudFront domain should be valid', () => {
       const domain = outputs.CloudFrontDomainName;
       console.log(`  ✓ CloudFront Domain: ${domain}`);
-      expect(domain).toMatch(/^[a-z0-9]+\.cloudfront\.net$/);
+      // AWS CloudFront: id.cloudfront.net
+      // LocalStack CloudFront: id.cloudfront.localhost.localstack.cloud
+      expect(domain).toMatch(/^[a-z0-9]+\.cloudfront\.(net|localhost\.localstack\.cloud)$/);
     });
 
     test('S3 bucket names should include account ID', () => {

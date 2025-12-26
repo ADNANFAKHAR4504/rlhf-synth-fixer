@@ -1171,7 +1171,7 @@ Outputs:
   # CloudWatch Output
   FundingMetricsDashboardName:
     Description: 'CloudWatch Dashboard name for funding metrics'
-    Value: !Ref FundingMetricsDashboard
+    Value: !Sub 'CrowdfundingMetrics${EnvironmentSuffix}'
     Export:
       Name: !Sub '${AWS::StackName}-FundingMetricsDashboardName'
   
