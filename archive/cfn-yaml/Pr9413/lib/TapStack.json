@@ -1,0 +1,909 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Scientific Computing Shared Storage Infrastructure with EFS, VPC, Lambda cleanup, and backup",
+    "Parameters": {
+        "EnvironmentName": {
+            "Description": "An environment name that is prefixed to resource names",
+            "Type": "String",
+            "Default": "ScientificComputing"
+        },
+        "EnvironmentSuffix": {
+            "Description": "A suffix to append to resource names for uniqueness",
+            "Type": "String",
+            "Default": "dev"
+        },
+        "VpcCIDR": {
+            "Description": "CIDR block for the VPC",
+            "Type": "String",
+            "Default": "10.0.0.0/16"
+        },
+        "PrivateSubnet1CIDR": {
+            "Description": "CIDR block for the private subnet in AZ1",
+            "Type": "String",
+            "Default": "10.0.1.0/24"
+        },
+        "PrivateSubnet2CIDR": {
+            "Description": "CIDR block for the private subnet in AZ2",
+            "Type": "String",
+            "Default": "10.0.2.0/24"
+        },
+        "PartnerAccountIds": {
+            "Description": "Comma-separated list of partner AWS account IDs for cross-account sharing",
+            "Type": "CommaDelimitedList",
+            "Default": ""
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-east-2": {
+                "AZ1": "us-east-2a",
+                "AZ2": "us-east-2b"
+            }
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCIDR"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-VPC"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AZ1"
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet1CIDR"
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-Private-Subnet-AZ1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AZ2"
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet2CIDR"
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-Private-Subnet-AZ2"
+                        }
+                    }
+                ]
+            }
+        },
+        "EFSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for EFS mount targets",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 2049,
+                        "ToPort": 2049,
+                        "CidrIp": {
+                            "Ref": "VpcCIDR"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-EFS-SG"
+                        }
+                    }
+                ]
+            }
+        },
+        "EFSFileSystem": {
+            "Type": "AWS::EFS::FileSystem",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BackupPolicy": {
+                    "Status": "ENABLED"
+                },
+                "Encrypted": true,
+                "FileSystemTags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-EFS"
+                        }
+                    }
+                ],
+                "LifecyclePolicies": [
+                    {
+                        "TransitionToIA": "AFTER_30_DAYS"
+                    },
+                    {
+                        "TransitionToPrimaryStorageClass": "AFTER_1_ACCESS"
+                    }
+                ],
+                "PerformanceMode": "maxIO",
+                "ThroughputMode": "provisioned",
+                "ProvisionedThroughputInMibps": 100
+            }
+        },
+        "EFSMountTarget1": {
+            "Type": "AWS::EFS::MountTarget",
+            "Properties": {
+                "FileSystemId": {
+                    "Ref": "EFSFileSystem"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "SecurityGroups": [
+                    {
+                        "Ref": "EFSSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "EFSMountTarget2": {
+            "Type": "AWS::EFS::MountTarget",
+            "Properties": {
+                "FileSystemId": {
+                    "Ref": "EFSFileSystem"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "SecurityGroups": [
+                    {
+                        "Ref": "EFSSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "ArchivalBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tap-archival-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldArchives",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 365
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Archival-Bucket"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "EFSAndS3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "elasticfilesystem:ClientMount",
+                                        "elasticfilesystem:ClientWrite",
+                                        "elasticfilesystem:DescribeFileSystems"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "EFSFileSystem",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ArchivalBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ArchivalBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CleanupLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-EFS-Cleanup"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 900,
+                "MemorySize": 1024,
+                "Environment": {
+                    "Variables": {
+                        "EFS_MOUNT_PATH": "/mnt/efs",
+                        "S3_BUCKET": {
+                            "Ref": "ArchivalBucket"
+                        },
+                        "DAYS_THRESHOLD": "180"
+                    }
+                },
+                "VpcConfig": {
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ],
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "EFSSecurityGroup"
+                        }
+                    ]
+                },
+                "FileSystemConfigs": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EFSAccessPoint",
+                                "Arn"
+                            ]
+                        },
+                        "LocalMountPath": "/mnt/efs"
+                    }
+                ],
+                "Code": {
+                    "ZipFile": "import os\nimport boto3\nimport json\nfrom datetime import datetime, timedelta\nimport shutil\n\ns3_client = boto3.client('s3')\n\ndef lambda_handler(event, context):\n    efs_mount_path = os.environ['EFS_MOUNT_PATH']\n    s3_bucket = os.environ['S3_BUCKET']\n    days_threshold = int(os.environ['DAYS_THRESHOLD'])\n\n    threshold_date = datetime.now() - timedelta(days=days_threshold)\n    archived_count = 0\n\n    for root, dirs, files in os.walk(efs_mount_path):\n        for file in files:\n            file_path = os.path.join(root, file)\n            file_stat = os.stat(file_path)\n            file_mtime = datetime.fromtimestamp(file_stat.st_mtime)\n\n            if file_mtime < threshold_date:\n                # Archive to S3\n                relative_path = os.path.relpath(file_path, efs_mount_path)\n                s3_key = f\"archived/{relative_path}\"\n\n                try:\n                    with open(file_path, 'rb') as f:\n                        s3_client.put_object(\n                            Bucket=s3_bucket,\n                            Key=s3_key,\n                            Body=f,\n                            Metadata={\n                                'original_mtime': str(file_mtime),\n                                'archived_date': str(datetime.now())\n                            }\n                        )\n                    os.remove(file_path)\n                    archived_count += 1\n                except Exception as e:\n                    print(f\"Error archiving {file_path}: {str(e)}\")\n\n    return {\n        'statusCode': 200,\n        'body': json.dumps(f'Archived {archived_count} files')\n    }\n"
+                }
+            }
+        },
+        "EFSAccessPoint": {
+            "Type": "AWS::EFS::AccessPoint",
+            "Properties": {
+                "FileSystemId": {
+                    "Ref": "EFSFileSystem"
+                },
+                "PosixUser": {
+                    "Uid": 1000,
+                    "Gid": 1000
+                },
+                "RootDirectory": {
+                    "CreationInfo": {
+                        "OwnerGid": 1000,
+                        "OwnerUid": 1000,
+                        "Permissions": "755"
+                    },
+                    "Path": "/research-data"
+                }
+            }
+        },
+        "CleanupScheduleRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Description": "Daily trigger for EFS cleanup",
+                "ScheduleExpression": "cron(0 2 * * ? *)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "CleanupLambdaFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "CleanupTarget"
+                    }
+                ]
+            }
+        },
+        "LambdaInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "CleanupLambdaFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "CleanupScheduleRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ResearchTeamRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-Research-Team-Role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "EFSAccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "elasticfilesystem:ClientMount",
+                                        "elasticfilesystem:ClientWrite",
+                                        "elasticfilesystem:DescribeMountTargets"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "EFSFileSystem",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "EFSStorageAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-EFS-Storage-Usage"
+                },
+                "AlarmDescription": "Alert when EFS storage exceeds threshold",
+                "MetricName": "StorageBytes",
+                "Namespace": "AWS/EFS",
+                "Statistic": "Average",
+                "Period": 3600,
+                "EvaluationPeriods": 1,
+                "Threshold": 1099511627776,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FileSystemId",
+                        "Value": {
+                            "Ref": "EFSFileSystem"
+                        }
+                    }
+                ]
+            }
+        },
+        "BackupVault": {
+            "Type": "AWS::Backup::BackupVault",
+            "Properties": {
+                "BackupVaultName": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-EFS-Backup-Vault"
+                },
+                "EncryptionKeyArn": "alias/aws/backup"
+            }
+        },
+        "BackupPlan": {
+            "Type": "AWS::Backup::BackupPlan",
+            "Properties": {
+                "BackupPlan": {
+                    "BackupPlanName": {
+                        "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-EFS-Backup-Plan"
+                    },
+                    "BackupPlanRule": [
+                        {
+                            "RuleName": "DailyBackup",
+                            "TargetBackupVault": {
+                                "Ref": "BackupVault"
+                            },
+                            "ScheduleExpression": "cron(0 5 * * ? *)",
+                            "StartWindowMinutes": 60,
+                            "CompletionWindowMinutes": 120,
+                            "Lifecycle": {
+                                "DeleteAfterDays": 30
+                            },
+                            "RecoveryPointTags": {
+                                "Environment": {
+                                    "Ref": "EnvironmentName"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "BackupSelection": {
+            "Type": "AWS::Backup::BackupSelection",
+            "Properties": {
+                "BackupPlanId": {
+                    "Ref": "BackupPlan"
+                },
+                "BackupSelection": {
+                    "SelectionName": {
+                        "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-EFS-Selection"
+                    },
+                    "IamRoleArn": {
+                        "Fn::GetAtt": [
+                            "BackupRole",
+                            "Arn"
+                        ]
+                    },
+                    "Resources": [
+                        {
+                            "Fn::GetAtt": [
+                                "EFSFileSystem",
+                                "Arn"
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "BackupRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "backup.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
+                ]
+            }
+        },
+        "DataSyncRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "datasync.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "DataSyncEFSS3Policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "elasticfilesystem:ClientMount",
+                                        "elasticfilesystem:ClientWrite"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "EFSFileSystem",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketLocation",
+                                        "s3:ListBucket",
+                                        "s3:ListBucketMultipartUploads"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ArchivalBucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:AbortMultipartUpload",
+                                        "s3:DeleteObject",
+                                        "s3:GetObject",
+                                        "s3:ListMultipartUploadParts",
+                                        "s3:PutObject",
+                                        "s3:GetObjectTagging",
+                                        "s3:PutObjectTagging"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${ArchivalBucket.Arn}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DataSyncEFSLocation": {
+            "Type": "AWS::DataSync::LocationEFS",
+            "DependsOn": [
+                "EFSMountTarget1",
+                "EFSMountTarget2"
+            ],
+            "Properties": {
+                "EfsFilesystemArn": {
+                    "Fn::GetAtt": [
+                        "EFSFileSystem",
+                        "Arn"
+                    ]
+                },
+                "Ec2Config": {
+                    "SecurityGroupArns": [
+                        {
+                            "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${EFSSecurityGroup}"
+                        }
+                    ],
+                    "SubnetArn": {
+                        "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${PrivateSubnet1}"
+                    }
+                }
+            }
+        },
+        "DataSyncS3Location": {
+            "Type": "AWS::DataSync::LocationS3",
+            "Properties": {
+                "S3BucketArn": {
+                    "Fn::GetAtt": [
+                        "ArchivalBucket",
+                        "Arn"
+                    ]
+                },
+                "S3Config": {
+                    "BucketAccessRoleArn": {
+                        "Fn::GetAtt": [
+                            "DataSyncRole",
+                            "Arn"
+                        ]
+                    }
+                },
+                "S3StorageClass": "STANDARD_IA",
+                "Subdirectory": "/datasync-archive"
+            }
+        },
+        "DataSyncTask": {
+            "Type": "AWS::DataSync::Task",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-EFS-S3-Archive-Task"
+                },
+                "SourceLocationArn": {
+                    "Ref": "DataSyncEFSLocation"
+                },
+                "DestinationLocationArn": {
+                    "Ref": "DataSyncS3Location"
+                },
+                "Options": {
+                    "VerifyMode": "ONLY_FILES_TRANSFERRED",
+                    "PreserveDeletedFiles": "REMOVE",
+                    "TransferMode": "CHANGED"
+                },
+                "Schedule": {
+                    "ScheduleExpression": "cron(0 3 * * ? *)"
+                }
+            }
+        },
+        "ResourceShare": {
+            "Type": "AWS::RAM::ResourceShare",
+            "Condition": "HasPartnerAccounts",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-EFS-Share"
+                },
+                "ResourceArns": [
+                    {
+                        "Fn::GetAtt": [
+                            "EFSFileSystem",
+                            "Arn"
+                        ]
+                    }
+                ],
+                "Principals": {
+                    "Ref": "PartnerAccountIds"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Conditions": {
+        "HasPartnerAccounts": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Fn::Join": [
+                                "",
+                                {
+                                    "Ref": "PartnerAccountIds"
+                                }
+                            ]
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VPC-ID"
+                }
+            }
+        },
+        "EFSFileSystemId": {
+            "Description": "EFS File System ID",
+            "Value": {
+                "Ref": "EFSFileSystem"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EFS-ID"
+                }
+            }
+        },
+        "EFSFileSystemArn": {
+            "Description": "EFS File System ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EFSFileSystem",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EFS-ARN"
+                }
+            }
+        },
+        "EFSDnsName": {
+            "Description": "EFS DNS Name for mounting",
+            "Value": {
+                "Fn::Sub": "${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EFS-DNS"
+                }
+            }
+        },
+        "ArchivalBucketName": {
+            "Description": "S3 Archival Bucket Name",
+            "Value": {
+                "Ref": "ArchivalBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Archival-Bucket"
+                }
+            }
+        },
+        "ArchivalBucketArn": {
+            "Description": "S3 Archival Bucket ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ArchivalBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Archival-Bucket-ARN"
+                }
+            }
+        },
+        "CleanupLambdaArn": {
+            "Description": "Cleanup Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CleanupLambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Cleanup-Lambda-ARN"
+                }
+            }
+        },
+        "ResearchTeamRoleArn": {
+            "Description": "Research Team IAM Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ResearchTeamRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Research-Role-ARN"
+                }
+            }
+        },
+        "BackupVaultArn": {
+            "Description": "Backup Vault ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "BackupVault",
+                    "BackupVaultArn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Backup-Vault-ARN"
+                }
+            }
+        },
+        "DataSyncTaskArn": {
+            "Description": "DataSync Task ARN",
+            "Value": {
+                "Ref": "DataSyncTask"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-DataSync-Task-ARN"
+                }
+            }
+        },
+        "ResourceShareArn": {
+            "Condition": "HasPartnerAccounts",
+            "Description": "Resource Share ARN for cross-account access",
+            "Value": {
+                "Ref": "ResourceShare"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Resource-Share-ARN"
+                }
+            }
+        }
+    }
+}
