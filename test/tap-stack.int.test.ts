@@ -370,7 +370,10 @@ describe('Document Automation System Integration Tests', () => {
       expect(apiUrl).toBeDefined();
       expect(apiUrl).toContain('https://');
       expect(apiUrl).toContain('execute-api');
-      expect(apiUrl).toContain(region);
+      // LocalStack API Gateway URLs don't include region in standard AWS format
+      if (!isLocalStack) {
+        expect(apiUrl).toContain(region);
+      }
       expect(apiUrl).toContain(environmentSuffix);
     });
   });
