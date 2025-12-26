@@ -353,9 +353,9 @@ Resources:
     Properties:
       BackupPlan:
         BackupPlanName: !Sub tap-${EnvironmentSuffix}-backup-plan
-        Rules:
+        BackupPlanRule:
           - RuleName: DailyBackup
-            TargetBackupVault: !Ref BackupVault
+            TargetBackupVaultName: !Ref BackupVault
             ScheduleExpression: 'cron(0 5 * * ? *)'
             StartWindowMinutes: 60
             CompletionWindowMinutes: 120
