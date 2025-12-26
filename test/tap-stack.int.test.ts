@@ -59,7 +59,7 @@ const outputs = JSON.parse(
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'Pr856';
-const stackName = `tap-stack-${environmentSuffix}`;  // Fixed: Use kebab-case for LocalStack
+const stackName = `TapStack${environmentSuffix}`;  // Use PascalCase matching deploy script
 
 // Extract outputs for testing
 const VPC_ID = outputs[`${stackName}-VPC-ID`] || outputs['VPCId'];
@@ -165,7 +165,7 @@ describe('TapStack Integration Tests - Production Ready', () => {
 
     test('should have valid Auto Scaling Group name', () => {
       expect(ASG_NAME).toBeDefined();
-      expect(ASG_NAME).toMatch(/^tap-stack-.*-asg$/);  // Fixed for LocalStack kebab-case naming
+      expect(ASG_NAME).toMatch(/^TapStack.*-asg$/);  // Match PascalCase stack naming
     });
 
     test('should have valid Security Group IDs', () => {
