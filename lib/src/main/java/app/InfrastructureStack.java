@@ -59,6 +59,11 @@ public class InfrastructureStack extends Stack {
         super(scope, id, props);
         this.environmentSuffix = environmentSuffix;
 
+        // Detect LocalStack environment
+        String awsEndpoint = System.getenv("AWS_ENDPOINT_URL");
+        boolean isLocalStack = awsEndpoint != null &&
+            (awsEndpoint.contains("localhost") || awsEndpoint.contains("4566"));
+
         // Create VPC with specified CIDR
         this.vpc = Vpc.Builder.create(this, "WebAppVPC")
                 .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
@@ -124,11 +129,9 @@ public class InfrastructureStack extends Stack {
 
         // Create EC2 instances
         UserData userData = createUserData();
-        // Use a specific AMI to avoid lookups (Amazon Linux 2023 in us-east-1)
-        // For other regions, this would need to be parameterized
-        IMachineImage amzLinux = MachineImage.genericLinux(
-            java.util.Map.of("us-east-1", "ami-0453ec754f44f9a4a")
-        );
+        // Use Amazon Linux 2023 AMI - LocalStack compatible
+        // For LocalStack, the actual AMI ID doesn't matter as it uses mock instances
+        IMachineImage amzLinux = MachineImage.latestAmazonLinux2023();
 
         // Create first EC2 instance in first public subnet
         this.webInstance1 = Instance.Builder.create(this, "WebInstance1")
@@ -159,9 +162,20 @@ public class InfrastructureStack extends Stack {
                 .build();
 
         // Create SNS topic for alarm notifications
-        this.snsAlarmTopic = Topic.Builder.create(this, "AlarmNotificationTopic")
-                .displayName("Infrastructure Alarm Notifications")
-                .build();
+        Topic.Builder topicBuilder = Topic.Builder.create(this, "AlarmNotificationTopic")
+                .displayName("Infrastructure Alarm Notifications");
+
+        // Add RemovalPolicy for LocalStack cleanup
+        if (isLocalStack) {
+            topicBuilder = topicBuilder;
+        }
+
+        this.snsAlarmTopic = topicBuilder.build();
+
+        // Apply removal policy to SNS topic for LocalStack
+        if (isLocalStack) {
+            this.snsAlarmTopic.applyRemovalPolicy(RemovalPolicy.DESTROY);
+        }
 
         // Add email subscription to SNS topic (placeholder email)
         snsAlarmTopic.addSubscription(
