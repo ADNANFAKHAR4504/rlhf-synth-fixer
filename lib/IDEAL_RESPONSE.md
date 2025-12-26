@@ -644,16 +644,16 @@ cat << EOF > /var/www/html/index.html
     </style>
 </head>
 <body>
-    <h1>🔒 Secure Corp Web Server</h1>
+    <h1>Secure Corp Web Server</h1>
     <p>This server implements comprehensive security best practices:</p>
-    <div class="security-item">✅ Uses approved AMI from trusted Amazon source</div>
-    <div class="security-item">✅ Follows strict least privilege IAM principles</div>
-    <div class="security-item">✅ Security groups allow only HTTP/HTTPS</div>
-    <div class="security-item">✅ All S3 buckets encrypted with AES256</div>
-    <div class="security-item">✅ CloudTrail logs all API requests</div>
-    <div class="security-item">✅ RDS storage encrypted at rest</div>
-    <div class="security-item">✅ MFA required for console access</div>
-    <div class="security-item">✅ Secrets managed via AWS Secrets Manager</div>
+    <div class="security-item">[PASS] Uses approved AMI from trusted Amazon source</div>
+    <div class="security-item">[PASS] Follows strict least privilege IAM principles</div>
+    <div class="security-item">[PASS] Security groups allow only HTTP/HTTPS</div>
+    <div class="security-item">[PASS] All S3 buckets encrypted with AES256</div>
+    <div class="security-item">[PASS] CloudTrail logs all API requests</div>
+    <div class="security-item">[PASS] RDS storage encrypted at rest</div>
+    <div class="security-item">[PASS] MFA required for console access</div>
+    <div class="security-item">[PASS] Secrets managed via AWS Secrets Manager</div>
     <p><strong>Deployment ID:</strong> ${bucket_name}</p>
     <p><strong>Region:</strong> ${region}</p>
 </body>

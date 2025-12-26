@@ -4,7 +4,7 @@ This document outlines the key infrastructure issues found in the initial MODEL_
 
 ## Critical Infrastructure Issues Identified
 
-### 1. 🚫 **VPC Creation Leading to Resource Limits**
+### 1. **VPC Creation Leading to Resource Limits**
 
 **Problem:** The original model attempted to create new VPCs, which led to VPC limit exceeded errors in AWS accounts that already had maximum VPCs.
 
@@ -39,7 +39,7 @@ locals {
 
 ---
 
-### 2. ⚠️ **CloudTrail S3 Data Resource ARN Configuration Error**
+### 2. **CloudTrail S3 Data Resource ARN Configuration Error**
 
 **Problem:** Invalid wildcard ARN in CloudTrail data resources caused deployment failures.
 
@@ -47,7 +47,7 @@ locals {
 # ORIGINAL - INVALID CONFIGURATION
 data_resource {
   type   = "AWS::S3::Object"
-  values = ["arn:aws:s3:::*/*"]  # ❌ Invalid wildcard ARN
+  values = ["arn:aws:s3:::*/*"]  # Invalid wildcard ARN
 }
 ```
 
@@ -73,7 +73,7 @@ data_resource {
 
 ---
 
-### 3. 🔧 **Missing Terraform Provider Initialization in Tests**
+### 3. **Missing Terraform Provider Initialization in Tests**
 
 **Problem:** Unit tests failed because they attempted to run `terraform validate` without initializing required providers.
 
@@ -101,7 +101,7 @@ beforeAll(() => {
 
 ---
 
-### 4. 🏗️ **Lack of Unique Resource Naming Strategy**
+### 4. **Lack of Unique Resource Naming Strategy**
 
 **Problem:** The original implementation lacked a comprehensive strategy for ensuring unique resource names across deployments, leading to potential conflicts.
 
