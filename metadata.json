@@ -1,0 +1,28 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291492",
+  "team": "synth-2",
+  "startedAt": "2025-12-26T17:13:56Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "CloudTrail",
+    "Secrets Manager",
+    "KMS"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291492",
+    "pr": "Pr1471"
+  }
+}
