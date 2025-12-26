@@ -12,8 +12,8 @@ roles = {
     description          = "SOC 2 compliance auditor with focused read-only access"
     max_session_duration = 3600
     trusted_principals   = ["arn:aws:iam::000000000000:root"] # LocalStack-compatible principal
-    require_external_id  = false # Simplified for LocalStack
-    require_mfa          = false # Simplified for LocalStack
+    require_external_id  = false                              # Simplified for LocalStack
+    require_mfa          = false                              # Simplified for LocalStack
     inline_policies = {
       audit-read-access = {
         actions = [
@@ -31,7 +31,7 @@ roles = {
           "s3:GetBucketLogging",
           "s3:GetBucketVersioning"
         ]
-        resources = ["*"]
+        resources  = ["*"]
         conditions = {} # Simplified for LocalStack - conditions not fully supported
       }
     }
@@ -42,7 +42,7 @@ roles = {
     description          = "CI/CD deployment role with resource-scoped permissions"
     max_session_duration = 3600
     trusted_principals   = ["arn:aws:iam::000000000000:root"] # LocalStack-compatible principal
-    require_external_id  = false # Simplified for LocalStack
+    require_external_id  = false                              # Simplified for LocalStack
     require_mfa          = false
     inline_policies = {
       deployment-access = {
@@ -73,8 +73,8 @@ roles = {
     require_mfa          = false # Simplified for LocalStack
     inline_policies = {
       emergency-access = {
-        actions   = ["iam:*", "ec2:*", "s3:*", "lambda:*"]
-        resources = ["*"]
+        actions    = ["iam:*", "ec2:*", "s3:*", "lambda:*"]
+        resources  = ["*"]
         conditions = {} # Simplified for LocalStack - conditions not fully supported
       }
     }

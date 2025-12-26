@@ -71,8 +71,8 @@ roles = {
     require_mfa          = false
     inline_policies = {
       emergency-access = {
-        actions   = ["iam:*", "s3:*", "lambda:*"]
-        resources = ["*"]
+        actions    = ["iam:*", "s3:*", "lambda:*"]
+        resources  = ["*"]
         conditions = {}
       }
     }

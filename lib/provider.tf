@@ -25,7 +25,7 @@ provider "aws" {
   skip_credentials_validation = local.is_localstack
   skip_metadata_api_check     = local.is_localstack
   skip_requesting_account_id  = local.is_localstack
-  s3_use_path_style          = local.is_localstack
+  s3_use_path_style           = local.is_localstack
 
   dynamic "endpoints" {
     for_each = local.is_localstack ? [1] : []
@@ -70,7 +70,7 @@ provider "aws" {
   skip_credentials_validation = local.is_localstack
   skip_metadata_api_check     = local.is_localstack
   skip_requesting_account_id  = local.is_localstack
-  s3_use_path_style          = local.is_localstack
+  s3_use_path_style           = local.is_localstack
 
   dynamic "endpoints" {
     for_each = local.is_localstack ? [1] : []
