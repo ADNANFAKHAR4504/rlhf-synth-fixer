@@ -540,11 +540,19 @@ def strip_ansi(text):
 def finalize_output():
     global current_key, current_value_lines, outputs
     if current_key:
-        value_str = ' '.join(current_value_lines).strip()
+        # For arrays, reconstruct proper JSON
+        if current_value_lines and current_value_lines[0] == '[':
+            # Build proper JSON array by concatenating lines
+            value_str = ''.join(current_value_lines)
+            # Remove trailing comma before ] (CDKTF adds trailing comma)
+            value_str = re.sub(r',\s*]', ']', value_str)
+        else:
+            value_str = ' '.join(current_value_lines).strip()
+
         # Try to parse as JSON (for arrays/objects)
         try:
             outputs[current_key] = json.loads(value_str)
-        except:
+        except Exception as e:
             # If not JSON, just use the string value (strip quotes)
             outputs[current_key] = value_str.strip('\"')
         current_key = None
