@@ -1,13 +1,18 @@
 # Overview
 
 
-## ./bin/tap.d.ts
+## CloudFormation Stack Overview
 
-```typescript
-#!/usr/bin/env node
-export {};
-
-```
+This CloudFormation template (cfn/json) creates a comprehensive document automation system with the following components:
+- DynamoDB tables for metadata and audit trails
+- S3 buckets for templates and generated documents
+- Lambda functions for document generation and analysis
+- API Gateway for REST API endpoints
+- Step Functions for approval workflows
+- SNS topics for notifications
+- EventBridge rules for scheduled tasks
+- KMS encryption for data security
+- Athena and Glue for analytics
 
 ## ./lib/TapStack.json
 
@@ -1395,31 +1400,13 @@ export {};
 }
 ```
 
-## ./lib/tap-stack.d.ts
+## CloudFormation Template Information
 
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-interface TapStackProps extends cdk.StackProps {
-    environmentSuffix?: string;
-}
-export declare class TapStack extends cdk.Stack {
-    constructor(scope: Construct, id: string, props?: TapStackProps);
-}
-export {};
-
-```
-
-## ./test/tap-stack.int.test.d.ts
-
-```typescript
-export {};
-
-```
+This is a CloudFormation JSON template that defines all infrastructure resources. The template uses CloudFormation parameters, intrinsic functions (Fn::Sub, Fn::GetAtt, Ref), and outputs to create a comprehensive document automation system.
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```javascript
 import fs from 'fs';
 import {
   DynamoDBClient,
@@ -1461,7 +1448,7 @@ import {
   GetWorkGroupCommand,
 } from '@aws-sdk/client-athena';
 
-// Configuration - These are coming from cfn-outputs after cdk deploy
+// Configuration - These are coming from cfn-outputs after CloudFormation deployment
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
@@ -1898,16 +1885,9 @@ describe('Document Automation System Integration Tests', () => {
 
 ```
 
-## ./test/tap-stack.unit.test.d.ts
-
-```typescript
-export {};
-
-```
-
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```javascript
 import fs from 'fs';
 import path from 'path';
 
