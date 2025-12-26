@@ -22,7 +22,8 @@
     "types": ["node", "jest"],
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "outDir": "dist"
   },
   "include": [
     "lib/**/*",
