@@ -17,15 +17,15 @@ type InfrastructureOutput = {
   nat_gateway_eip_id: string;
 };
 
-type TerraformOutput<T> = {
+type TerraformOutputWrapped<T> = {
   sensitive: boolean;
   type: unknown;
   value: T;
 };
 
 type FlatOutputs = {
-  us_east_2_infrastructure: TerraformOutput<InfrastructureOutput>;
-  us_west_2_infrastructure: TerraformOutput<InfrastructureOutput>;
+  us_east_2_infrastructure: TerraformOutputWrapped<InfrastructureOutput> | InfrastructureOutput;
+  us_west_2_infrastructure: TerraformOutputWrapped<InfrastructureOutput> | InfrastructureOutput;
 };
 
 function readFlatOutputs(): FlatOutputs {
@@ -35,8 +35,18 @@ function readFlatOutputs(): FlatOutputs {
   return JSON.parse(fs.readFileSync(FLAT_OUTPUTS_FILE, 'utf8'));
 }
 
-function extractInfrastructureOutput(output: TerraformOutput<InfrastructureOutput>): InfrastructureOutput {
-  return output.value;
+function isWrappedOutput<T>(output: TerraformOutputWrapped<T> | T): output is TerraformOutputWrapped<T> {
+  return output !== null &&
+         typeof output === 'object' &&
+         'value' in output &&
+         'sensitive' in output;
+}
+
+function extractInfrastructureOutput(output: TerraformOutputWrapped<InfrastructureOutput> | InfrastructureOutput): InfrastructureOutput {
+  if (isWrappedOutput(output)) {
+    return output.value;
+  }
+  return output;
 }
 
 describe('Terraform Infrastructure Integration Tests', () => {
