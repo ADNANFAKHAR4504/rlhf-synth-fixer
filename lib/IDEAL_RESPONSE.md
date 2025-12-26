@@ -1,4 +1,4 @@
-```
+```yaml
 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template to deploy a secure, reusable AWS infrastructure for a static web application.
