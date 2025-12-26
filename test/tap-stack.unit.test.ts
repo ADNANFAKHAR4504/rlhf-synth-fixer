@@ -41,10 +41,10 @@ describe('TapStack CloudFormation Template (LocalStack Community Edition)', () =
     test('Environment parameter should have correct properties', () => {
       const envParam = template.Parameters.Environment;
       expect(envParam.Type).toBe('String');
-      expect(envParam.Default).toBe('Development');
-      expect(envParam.AllowedValues).toContain('Development');
-      expect(envParam.AllowedValues).toContain('Staging');
-      expect(envParam.AllowedValues).toContain('Production');
+      expect(envParam.Default).toBe('development');
+      expect(envParam.AllowedValues).toContain('development');
+      expect(envParam.AllowedValues).toContain('staging');
+      expect(envParam.AllowedValues).toContain('production');
     });
 
     test('ApplicationName parameter should have correct properties', () => {

@@ -66,7 +66,7 @@ describe('TapStack CloudFormation Integration Tests (LocalStack Community)', () 
 
     test('should have ApplicationRoleName output', () => {
       expect(stackOutputs.ApplicationRoleName).toBeDefined();
-      expect(stackOutputs.ApplicationRoleName).toMatch(/^tap-Development-AppRole$/);
+      expect(stackOutputs.ApplicationRoleName).toMatch(/^tap-development-AppRole$/);
     });
 
     test('should have ApplicationRoleArn output', () => {
