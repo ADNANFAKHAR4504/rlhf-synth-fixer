@@ -11,6 +11,23 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": [],
-  "wave": "P0"
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "EC2",
+    "VPC",
+    "IAM",
+    "CloudWatch",
+    "CloudTrail",
+    "ElasticLoadBalancingV2",
+    "SNS"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
