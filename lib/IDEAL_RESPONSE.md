@@ -6,13 +6,13 @@ This is the ideal CloudFormation template that demonstrates best practices for t
 
 ## Template Features
 
-- ✅ Multi-AZ VPC with public subnets
-- ✅ Secure EC2 instance with parameterized SSH access
-- ✅ Encrypted S3 bucket with versioning
-- ✅ Least-privilege IAM roles and policies
-- ✅ CloudWatch monitoring and alerting
-- ✅ Consistent resource naming and tagging
-- ✅ Comprehensive outputs for integration
+-  Multi-AZ VPC with public subnets
+-  Secure EC2 instance with parameterized SSH access
+-  Encrypted S3 bucket with versioning
+-  Least-privilege IAM roles and policies
+-  CloudWatch monitoring and alerting
+-  Consistent resource naming and tagging
+-  Comprehensive outputs for integration
 
 ---
 
@@ -373,28 +373,28 @@ Outputs:
 
 ## Key Features Explained
 
-### 🔒 Security Best Practices
+### Security Best Practices
 
 - **Parameterized SSH Access**: SSH restricted to specified CIDR range, not open to the world
 - **Least Privilege IAM**: EC2 role has minimal permissions needed for S3 access
 - **Encrypted Storage**: S3 bucket uses server-side encryption with managed keys
 - **Public Access Blocked**: S3 bucket blocks all public access configurations
 
-### 🌐 Network Architecture
+### Network Architecture
 
 - **Multi-AZ Design**: Resources distributed across multiple availability zones
 - **Dynamic AZ Selection**: Uses `!GetAZs` for region-agnostic deployment
 - **Proper Routing**: Internet gateway with route tables for public subnet access
 - **DNS Enabled**: VPC configured with DNS resolution and hostnames
 
-### 📊 Monitoring & Operations
+### Monitoring & Operations
 
 - **Detailed Monitoring**: EC2 instance has CloudWatch detailed monitoring enabled
 - **CPU Alerting**: CloudWatch alarm monitors CPU usage with 70% threshold
 - **Resource Tagging**: Consistent tagging strategy for all resources
 - **Comprehensive Outputs**: All necessary resource references for integration
 
-### 🔧 Operational Excellence
+### Operational Excellence
 
 - **Parameter Validation**: Input parameters have appropriate constraints and patterns
 - **Resource Dependencies**: Proper use of `DependsOn` and implicit dependencies
