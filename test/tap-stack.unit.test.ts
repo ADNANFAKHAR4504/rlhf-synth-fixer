@@ -56,10 +56,10 @@ describe('FinanceApp CloudFormation Template', () => {
       expect(keyPairParam.Description).toBe('EC2 Key Pair for SSH access (leave empty to disable SSH)');
     });
 
-    test('should have AmiId parameter with SSM Parameter type', () => {
+    test('should have AmiId parameter with correct type', () => {
       const amiParam = template.Parameters.AmiId;
-      expect(amiParam.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
-      expect(amiParam.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
+      expect(amiParam.Type).toBe('AWS::EC2::Image::Id');
+      expect(amiParam.Default).toBe('ami-12345678');
     });
 
     test('should have VPC and subnet CIDR parameters', () => {
