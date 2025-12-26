@@ -23,5 +23,12 @@
   "migrated_from": {
     "po_id": "trainr102-new",
     "pr": "Pr2033"
-  }
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
