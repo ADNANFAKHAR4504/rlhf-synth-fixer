@@ -18,5 +18,12 @@
   "migrated_from": {
     "po_id": "291325",
     "pr": "Pr1677"
-  }
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
 }
