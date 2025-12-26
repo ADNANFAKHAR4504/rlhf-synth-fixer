@@ -15,11 +15,21 @@
     "IAM",
     "VPC",
     "EC2",
-    "CloudWatch"
+    "ECS",
+    "RDS",
+    "S3",
+    "KMS"
   ],
   "wave": "P0",
   "migrated_from": {
     "po_id": "291170",
     "pr": "Pr555"
-  }
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
 }
