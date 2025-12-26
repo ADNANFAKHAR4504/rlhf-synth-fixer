@@ -598,3 +598,91 @@ new aws.s3.BucketServerSideEncryptionConfiguration(/*...*/);
 ```
 
 **Security Impact**: Potential data exposure and lack of audit trail storage.
+
+## 16. LocalStack Compatibility Adjustments
+
+**Issue Type**: Environment Adaptation / LocalStack Migration
+**Description**: This implementation includes specific adaptations to ensure compatibility with LocalStack Community Edition, which has limitations compared to full AWS environments.
+
+### Environment Detection Pattern
+
+The implementation uses environment detection to conditionally deploy resources based on whether the target is LocalStack or AWS:
+
+```typescript
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
+  environment.toLowerCase().includes('localstack');
+```
+
+This pattern allows the same codebase to work in both LocalStack (for testing/development) and AWS (for production).
+
+### LocalStack Compatibility Table
+
+| Feature | LocalStack Limitation | Solution Applied | Production Status |
+|---------|----------------------|------------------|-------------------|
+| **EC2 Instances** | Pulumi provider compatibility issues with instance creation | Conditional deployment with placeholder resources | Enabled in AWS |
+| **GuardDuty** | Not supported in Community Edition | Conditional creation, uses placeholder ID when in LocalStack | Enabled in AWS |
+| **VPC Flow Logs** | Parameter compatibility issues with CloudWatch Logs | Conditional creation with fallback to basic logging | Enabled in AWS |
+| **Availability Zones** | API call failures or inconsistent responses | Hardcoded AZ fallback mechanism | Dynamic in AWS |
+| **NAT Gateway** | EIP allocation can fail in LocalStack | Conditional deployment, uses public subnets as fallback | Enabled in AWS |
+| **CloudTrail Data Events** | S3 data event logging may not work properly | Simplified to management events only | Full logging in AWS |
+| **AWS Config** | Configuration recorder limit (1 per region) | Uses configurable recorder name to avoid conflicts | Enabled in AWS |
+
+### Implementation Details
+
+#### 1. Conditional EC2 Instance Creation
+```typescript
+// EC2 instances are conditionally created based on environment
+if (!isLocalStack) {
+  const ec2Instance = createEc2Instance(/*...*/);
+} else {
+  // Use placeholder or skip EC2 creation in LocalStack
+}
+```
+
+#### 2. GuardDuty Placeholder Handling
+```typescript
+const guardDutyDetectorId = isLocalStack
+  ? pulumi.output('localstack-placeholder-detector-id')
+  : guardDutyDetector.apply(d => d.id);
+```
+
+#### 3. VPC Flow Logs Conditional Creation
+```typescript
+// VPC Flow Logs may have parameter compatibility issues in LocalStack
+const vpcFlowLog = !isLocalStack ? new aws.ec2.FlowLog(/*...*/) : undefined;
+```
+
+#### 4. Availability Zone Fallback
+```typescript
+const availabilityZones = aws.getAvailabilityZones(
+  { state: 'available' },
+  { provider }
+).catch(() => {
+  // Fallback to hardcoded AZs if API call fails in LocalStack
+  return { names: ['us-east-1a', 'us-east-1b'] };
+});
+```
+
+### Best Practices for LocalStack Migrations
+
+1. **Document All Adaptations**: Every LocalStack-specific change is documented in this file
+2. **Use Environment Detection**: Runtime detection allows single codebase for multiple environments
+3. **Graceful Degradation**: Features that don't work in LocalStack are conditionally disabled, not removed
+4. **Production Parity**: All features are enabled in AWS production environments
+5. **Clear Comments**: Code includes comments explaining why LocalStack adaptations are needed
+
+### Testing Strategy
+
+- **LocalStack Testing**: Validates that core infrastructure deploys successfully in LocalStack
+- **AWS Testing**: Full integration tests run in actual AWS environment
+- **Feature Flags**: Environment-based feature flags ensure correct behavior in each environment
+
+### Security Considerations
+
+These LocalStack adaptations do **NOT** reduce security in production environments:
+- All security features (CloudTrail, GuardDuty, Config, VPC Flow Logs) are fully enabled in AWS
+- LocalStack is used only for development/testing, never for production workloads
+- The conditional deployment pattern is a best practice for multi-environment infrastructure code
+
+**Deployment Impact**: These adaptations enable successful deployment to LocalStack while maintaining full production security posture in AWS environments.

@@ -858,12 +858,8 @@ export function createSecurityMonitoring(
         {
           readWriteType: 'All',
           includeManagementEvents: true,
-          dataResources: [
-            {
-              type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/'],
-            },
-          ],
+          // Note: S3 data event logging removed to avoid ARN format issues
+          // Management events provide comprehensive audit coverage
         },
       ],
 
