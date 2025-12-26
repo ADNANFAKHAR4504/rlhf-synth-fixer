@@ -774,9 +774,10 @@ Resources:
       RestApiId: !Ref RestApi
       ResourceId: !Ref ApiResource
       HttpMethod: POST
-      AuthorizationType: NONE
+      AuthorizationType: AWS_IAM
       RequestParameters:
         method.request.header.X-Exchange-Signature: true
+        method.request.header.X-Webhook-ID: true
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
