@@ -1,0 +1,27 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-284215",
+  "team": "synth-2",
+  "startedAt": "2025-07-30T08:36:10.151Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "EC2",
+    "Lambda",
+    "S3",
+    "IAM",
+    "EventBridge",
+    "CloudWatch Logs"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "284215",
+    "pr": "Pr307"
+  }
+}
