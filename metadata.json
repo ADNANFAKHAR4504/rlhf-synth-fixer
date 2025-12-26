@@ -21,7 +21,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "subtask_category": "serverless-infrastructure",
   "provider": "localstack",
   "wave": "P1"
 }
