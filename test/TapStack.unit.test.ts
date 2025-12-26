@@ -311,17 +311,17 @@ describe('TapStack CloudFormation Template', () => {
       const vpc = template.Resources.VPC;
       const alb = template.Resources.ApplicationLoadBalancer;
       const targetGroup = template.Resources.ALBTargetGroup;
-      
+
       expect(vpc.Properties.Tags[0].Value).toEqual({
         'Fn::Sub': '${AWS::StackName}-VPC-${EnvironmentSuffix}'
       });
-      
+
       expect(alb.Properties.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-ALB-${EnvironmentSuffix}'
+        'Fn::Sub': 'tap-alb-${EnvironmentSuffix}'
       });
-      
+
       expect(targetGroup.Properties.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TG-${EnvironmentSuffix}'
+        'Fn::Sub': 'tap-tg-${EnvironmentSuffix}'
       });
     });
   });
