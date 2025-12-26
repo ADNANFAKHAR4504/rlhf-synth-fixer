@@ -170,12 +170,12 @@ vpc.addInterfaceEndpoint('LambdaEndpoint', {...});
 ## Compliance Notes
 
 After fixes, the deployment successfully meets all PCI-DSS requirements:
-- ✓ Data encryption at rest (KMS with rotation)
-- ✓ Network isolation (private subnets, VPC endpoints)
-- ✓ Audit logging (CloudWatch Logs, 90-day retention, encrypted)
-- ✓ Access controls (IAM least privilege, permission boundaries, explicit denies)
-- ✓ Threat protection (WAF with SQL injection and XSS rules)
-- ✓ Monitoring (CloudWatch alarms for security events)
+- Data encryption at rest (KMS with rotation)
+- Network isolation (private subnets, VPC endpoints)
+- Audit logging (CloudWatch Logs, 90-day retention, encrypted)
+- Access controls (IAM least privilege, permission boundaries, explicit denies)
+- Threat protection (WAF with SQL injection and XSS rules)
+- Monitoring (CloudWatch alarms for security events)
 
 ## Cost Efficiency
 
