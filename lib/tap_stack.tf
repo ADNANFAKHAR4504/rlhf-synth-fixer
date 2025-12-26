@@ -8,7 +8,7 @@ variable "environment_suffix" {
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "us-east-1"  # LocalStack uses us-east-1 by default
+  default     = "us-east-1" # LocalStack uses us-east-1 by default
 }
 
 # Generate random suffix for unique resource names
@@ -667,7 +667,7 @@ resource "aws_db_instance" "main" {
 
   # Monitoring and logging (simplified for LocalStack)
   monitoring_interval             = 0  # Disable enhanced monitoring for LocalStack
-  enabled_cloudwatch_logs_exports = []  # CloudWatch log exports limited in LocalStack
+  enabled_cloudwatch_logs_exports = [] # CloudWatch log exports limited in LocalStack
 
   # Security
   deletion_protection = false # Set to true for production
