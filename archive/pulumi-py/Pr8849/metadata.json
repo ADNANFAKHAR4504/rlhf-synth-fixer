@@ -23,5 +23,11 @@
     "po_id": "291641",
     "pr": "Pr999"
   },
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
 }
