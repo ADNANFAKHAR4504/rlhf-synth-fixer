@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291350",
+  "team": "synth-2",
+  "startedAt": "2025-08-05T09:57:55.241Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "EC2",
+    "IAM",
+    "KMS"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291350",
+    "pr": "Pr505"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

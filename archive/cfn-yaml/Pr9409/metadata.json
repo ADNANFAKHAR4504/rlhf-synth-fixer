@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000296",
+  "team": "synth",
+  "startedAt": "2025-10-30T10:24:15.664Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "KMS Key",
+    "IAM Role",
+    "IAM Policy",
+    "IAM Group",
+    "IAM Instance Profile",
+    "IAM User",
+    "IAM User To Group Addition",
+    "IAM Policy Attachment",
+    "SSM Parameter",
+    "CloudWatch Logs Group",
+    "SNS Topic",
+    "SNS Subscription",
+    "Service Linked Role"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

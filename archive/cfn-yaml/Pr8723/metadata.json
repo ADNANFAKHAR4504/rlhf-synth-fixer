@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291524",
+  "team": "synth-2",
+  "startedAt": "2025-08-16T17:19:28.698Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "KMS",
+    "DynamoDB",
+    "IAM",
+    "API Gateway",
+    "Lambda",
+    "SNS",
+    "SQS",
+    "CloudWatch",
+    "Budgets"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

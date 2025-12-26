@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291554",
+  "team": "synth-2",
+  "wave": "P0",
+  "provider": "localstack",
+  "startedAt": "2025-08-20T14:35:40.236Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3",
+    "SNS",
+    "IAM",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "CloudWatch Events"
+  ],
+  "training_quality": 9,
+  "migrated_from": {
+    "po_id": "291554",
+    "pr": "Pr1782"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

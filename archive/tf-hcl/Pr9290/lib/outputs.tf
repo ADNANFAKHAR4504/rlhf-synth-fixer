@@ -1,0 +1,54 @@
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "public_subnet_ids" {
+  description = "IDs of the public subnets"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of the private subnets"
+  value       = aws_subnet.private[*].id
+}
+
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = local.is_localstack ? "" : aws_lb.main[0].dns_name
+}
+
+output "alb_zone_id" {
+  description = "Zone ID of the Application Load Balancer"
+  value       = local.is_localstack ? "" : aws_lb.main[0].zone_id
+}
+
+output "eb_application_name" {
+  description = "Name of the Elastic Beanstalk application"
+  value       = local.is_localstack ? "N/A (LocalStack Community)" : aws_elastic_beanstalk_application.main[0].name
+}
+
+output "eb_environment_name" {
+  description = "Name of the Elastic Beanstalk environment"
+  value       = local.is_localstack ? "N/A (LocalStack Community)" : aws_elastic_beanstalk_environment.main[0].name
+}
+
+output "eb_environment_url" {
+  description = "URL of the Elastic Beanstalk environment"
+  value       = local.is_localstack ? "N/A (LocalStack Community)" : aws_elastic_beanstalk_environment.main[0].endpoint_url
+}
+
+output "rds_endpoint" {
+  description = "RDS instance endpoint"
+  value       = local.is_localstack ? "localhost.localstack.cloud:4510" : aws_db_instance.main[0].endpoint
+}
+
+output "rds_port" {
+  description = "RDS instance port"
+  value       = local.is_localstack ? 4510 : aws_db_instance.main[0].port
+}
+
+output "db_secret_arn" {
+  description = "ARN of the database password secret"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
