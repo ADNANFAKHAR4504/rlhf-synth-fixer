@@ -8,11 +8,9 @@
   "wave": "P0",
   "provider": "localstack",
   "startedAt": "2025-08-20T14:35:40.236Z",
-  "subtask": "CI/CD Pipeline Integration",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "CI/CD Pipeline",
-    "Security Configuration as Code",
-    "General Infrastructure Tooling QA"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "S3",

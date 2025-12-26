@@ -1,29 +1,33 @@
-# AWS CloudFormation Template Requirements
-Design a secure and scalable CI/CD pipeline using AWS CloudFormation. The goal is to automate application build, test, and deployment processes for an EC2 environment, ensuring least privilege access and robust notification mechanisms. The template must enforce security best practices and support production-grade scalability.
+# CI/CD Pipeline for EC2 Application Deployment
 
-## Environment Setup
-- **AWS CodePipeline**: Orchestrates the CI/CD workflow as the primary service.
-- **AWS CodeBuild**: Compiles and packages application artifacts.
-- **AWS CodeDeploy**: Automates deployments to EC2 instances.
-- **Amazon S3**: Stores build artifacts from CodeBuild.
-- **Amazon SNS**: Notifies stakeholders of build or deployment failures.
-- **IAM Roles**: Enforce least privilege for all services and stages.
-- **Manual Approval Step**: Required before deployment proceeds.
-- **Resource Naming**: All production resources must be prefixed with `prod-`.
-- **Single Template**: All resources must be defined in a single YAML CloudFormation template.
+We need a CloudFormation template that creates a complete CI/CD pipeline for deploying our application to EC2 instances.
 
-## Constraints
-- Template must pass AWS CloudFormation validation and cfn-lint checks.
-- Do not hard code AWS region; region is provided as an environment variable.
-- Use dynamic references (not parameters) for secrets such as passwords.
-- Do not use 'Fn::Sub' unless variables are present (not needed here).
-- Do not include additional properties not supported by resource types (e.g., 'BackupPolicy' is not allowed).
-- 'IsLogging' is a required property for `AWS::CloudTrail::Trail` (if used).
-- All resources must comply with the 'prod-' prefix for production.
-- All IAM roles must follow least privilege principles.
+## What We Need
 
-## Output Expectations
-- The template must deploy all specified AWS resources without error.
-- All logical resource names must be descriptive and meaningful.
-- The template must follow AWS best practices and security guidelines.
-- The output must be a valid YAML CloudFormation template that passes validation and linting.
+Set up CodePipeline that orchestrates the entire workflow. The pipeline needs to pull source code from CodeCommit, send it to CodeBuild for compilation, require manual approval, then trigger CodeDeploy to push the artifacts to our EC2 fleet.
+
+CodeBuild should compile the application and store build artifacts in an S3 bucket. The bucket stores artifacts that CodeDeploy retrieves during deployment. Enable versioning on the bucket so we can roll back if needed.
+
+CodeDeploy handles the actual deployment to EC2 instances tagged with Environment=Production and Application=prod-cicd-target. Configure auto-rollback so failed deployments revert automatically.
+
+For notifications, create an SNS topic that receives alerts when the pipeline fails or when CodeBuild errors out. Wire up CloudWatch Events rules that monitor pipeline state changes and send failure notifications to the SNS topic.
+
+## IAM Requirements
+
+Each service needs its own IAM role:
+- CodePipeline role that can access S3 artifacts, start CodeBuild projects, and create CodeDeploy deployments
+- CodeBuild role that can write to CloudWatch Logs and read/write S3 artifacts
+- CodeDeploy role with the standard AWSCodeDeployRole managed policy
+- EC2 instance role that lets the CodeDeploy agent pull artifacts from S3 and write logs to CloudWatch
+
+Make sure all IAM policies follow least privilege - only grant the specific actions and resources each service actually needs.
+
+## Production Standards
+
+All resources must be prefixed with "prod-" since this is our production pipeline. Include a manual approval stage before deployment so someone reviews changes before they hit production.
+
+The template should pass cfn-lint validation and follow AWS security best practices. Block all public access on the S3 bucket and enable server-side encryption.
+
+## Outputs
+
+Export the pipeline name, artifacts bucket name, SNS topic ARN, CodeDeploy application name, and EC2 instance profile ARN so other stacks can reference them.
