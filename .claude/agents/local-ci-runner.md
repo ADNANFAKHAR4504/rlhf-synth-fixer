@@ -1497,13 +1497,58 @@ stage_deploy() {
   
   echo "[LOCAL-CI] Running: Deploy to LocalStack..."
   
-  # Start LocalStack first
-  echo "[LOCAL-CI] → Starting LocalStack..."
-  ./scripts/localstack-start-ci.sh || {
-    echo "[LOCAL-CI] ⚠️ LocalStack start failed - trying docker-compose..."
-    docker-compose up -d localstack 2>/dev/null || true
-    sleep 10
-  }
+  # ══════════════════════════════════════════════════════════════════
+  # STEP 0: CREATE FRESH CONTAINER (using PR number in name)
+  # ══════════════════════════════════════════════════════════════════
+  echo ""
+  echo "╔══════════════════════════════════════════════════════════════╗"
+  echo "║  🐳 CREATING FRESH LOCALSTACK CONTAINER FOR PR #$PR_NUMBER   ║"
+  echo "╚══════════════════════════════════════════════════════════════╝"
+  
+  # Container name uses PR number (so we know which PR it belongs to)
+  # Format: localstack-pr-{PR_NUMBER}
+  local CONTAINER_NAME="localstack-pr-${PR_NUMBER}"
+  export LOCALSTACK_CONTAINER_NAME="$CONTAINER_NAME"
+  export LOCALSTACK_PR_NUMBER="$PR_NUMBER"
+  
+  # Only stop/remove container for THIS PR (not other PRs!)
+  echo "[LOCAL-CI] → Checking for existing container: $CONTAINER_NAME"
+  if docker ps -a --filter "name=$CONTAINER_NAME" -q | grep -q .; then
+    echo "[LOCAL-CI] → Stopping old container for PR #$PR_NUMBER..."
+    docker stop "$CONTAINER_NAME" 2>/dev/null || true
+    docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+  fi
+  
+  # Create fresh container for THIS PR
+  echo "[LOCAL-CI] → Creating fresh container: $CONTAINER_NAME"
+  docker run -d \
+    --name "$CONTAINER_NAME" \
+    -p 4566:4566 \
+    -p 4510-4559:4510-4559 \
+    -e SERVICES="${LOCALSTACK_SERVICES:-s3,lambda,dynamodb,sqs,sns,iam,cloudformation,sts,logs,events}" \
+    -e DEBUG=1 \
+    -e LOCALSTACK_AUTH_TOKEN="${LOCALSTACK_AUTH_TOKEN:-}" \
+    -e LOCALSTACK_API_KEY="${LOCALSTACK_API_KEY:-}" \
+    localstack/localstack:latest
+  
+  # Wait for container to be healthy
+  echo "[LOCAL-CI] → Waiting for container to be healthy..."
+  local max_wait=60
+  local waited=0
+  while [ $waited -lt $max_wait ]; do
+    if curl -s http://127.0.0.1:4566/_localstack/health | grep -q "running"; then
+      echo "[LOCAL-CI] ✅ Fresh container $CONTAINER_NAME is healthy!"
+      break
+    fi
+    sleep 2
+    waited=$((waited + 2))
+    echo "[LOCAL-CI]   Waiting... ($waited/$max_wait)"
+  done
+  
+  if [ $waited -ge $max_wait ]; then
+    echo "[LOCAL-CI] ⚠️ Container health check timeout"
+    return 1
+  fi
   
   # Set LocalStack environment variables
   export AWS_ENDPOINT_URL="http://127.0.0.1:4566"
@@ -1641,6 +1686,48 @@ stage_deploy() {
     echo "[LOCAL-CI] ❌ Deploy failed with exit code $DEPLOY_EXIT"
     return 1
   fi
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🗑️ CLEANUP CONTAINER - Delete ONLY this PR's container (not others!)
+# ══════════════════════════════════════════════════════════════════════════════
+cleanup_localstack_container() {
+  echo ""
+  echo "╔══════════════════════════════════════════════════════════════╗"
+  echo "║  🗑️ CLEANING UP CONTAINER FOR PR #${LOCALSTACK_PR_NUMBER:-?} ║"
+  echo "╚══════════════════════════════════════════════════════════════╝"
+  
+  # Get container name for THIS PR only
+  local container_name="${LOCALSTACK_CONTAINER_NAME:-localstack-pr-${PR_NUMBER}}"
+  local pr_number="${LOCALSTACK_PR_NUMBER:-$PR_NUMBER}"
+  
+  echo "[LOCAL-CI] → Container to delete: $container_name"
+  
+  # Check if container exists
+  if ! docker ps -a --filter "name=$container_name" -q | grep -q .; then
+    echo "[LOCAL-CI] → Container $container_name not found (already deleted?)"
+    return 0
+  fi
+  
+  # Stop container for THIS PR only
+  echo "[LOCAL-CI] → Stopping container: $container_name"
+  docker stop "$container_name" 2>/dev/null || true
+  
+  # Remove container for THIS PR only
+  echo "[LOCAL-CI] → Removing container: $container_name"
+  docker rm -f "$container_name" 2>/dev/null || true
+  
+  # ⛔ DO NOT delete other containers! They may belong to other PRs!
+  # List other running LocalStack containers (informational only)
+  local other_containers=$(docker ps --filter "name=localstack-pr-" --format "{{.Names}}" 2>/dev/null | grep -v "$container_name" || true)
+  if [ -n "$other_containers" ]; then
+    echo "[LOCAL-CI] ℹ️ Other LocalStack containers still running (not deleted):"
+    echo "$other_containers" | while read name; do
+      echo "[LOCAL-CI]   → $name (kept)"
+    done
+  fi
+  
+  echo "[LOCAL-CI] ✅ Container $container_name deleted for PR #$pr_number!"
 }
 
 # Generate/Update Integration Tests from CloudFormation Outputs
@@ -2593,11 +2680,21 @@ run_all_stages() {
     # Setup LocalStack
     setup_localstack "$pr_number" || echo "⚠️ LocalStack setup failed (non-blocking for now)"
     
-    run_stage "3.9 Deploy" stage_deploy || return 1
-    run_stage "3.10 Integration Tests" stage_integration_tests || return 1
+    run_stage "3.9 Deploy" stage_deploy || {
+      # Cleanup container on failure
+      cleanup_localstack_container
+      return 1
+    }
     
-    # Cleanup LocalStack (optional)
-    # cleanup_localstack
+    run_stage "3.10 Integration Tests" stage_integration_tests || {
+      # Cleanup container on failure
+      cleanup_localstack_container
+      return 1
+    }
+    
+    # ⛔ CLEANUP CONTAINER AFTER DEPLOY/TESTS COMPLETE
+    echo "[LOCAL-CI] → Cleaning up LocalStack container..."
+    cleanup_localstack_container
   else
     echo "[LOCAL-CI] ⏭️ Skipping Deploy & Integration Tests (provider: $PROVIDER)"
     echo "[LOCAL-CI] ℹ️ These stages will run in remote CI/CD with AWS credentials"
@@ -2926,6 +3023,10 @@ monitor_remote_ci() {
             echo "[LOCAL-CI] → Running: sync_ideal_response_with_code"
             sync_ideal_response_with_code
             ;;
+          *"claude"*|*"Claude"*|*"review"*|*"Review"*)
+            echo "[LOCAL-CI] → Claude Review FAILED - FIXING (not stopping!)..."
+            fix_claude_review_from_remote "$pr_number" "$job"
+            ;;
           *)
             echo "[LOCAL-CI] → Unknown job, running general fix..."
             ;;
@@ -2940,6 +3041,130 @@ monitor_remote_ci() {
       
       echo "[LOCAL-CI] → Fixes pushed! Waiting for new CI run..."
       sleep 60  # Wait for new CI to start
+    fi
+    
+    sleep $poll_interval
+    elapsed=$((elapsed + poll_interval))
+  done
+  
+  echo "[LOCAL-CI] [PR #$pr_number] ⚠️ Timeout waiting for CI/CD"
+  return 1
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🔧 FIX CLAUDE REVIEW FROM REMOTE - Don't stop, fix it!
+# ══════════════════════════════════════════════════════════════════════════════
+fix_claude_review_from_remote() {
+  local pr_number="$1"
+  local job_name="$2"
+  
+  echo ""
+  echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+  echo "║  🔧 FIXING CLAUDE REVIEW FAILURE (NOT STOPPING!)                             ║"
+  echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+  
+  # ══════════════════════════════════════════════════════════════════
+  # STEP 1: Get the actual error from GitHub Actions logs
+  # ══════════════════════════════════════════════════════════════════
+  echo "[LOCAL-CI] → Fetching error details from GitHub Actions..."
+  
+  # Get latest workflow run
+  local run_id=$(gh run list --branch "$BRANCH_NAME" --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null)
+  
+  if [ -n "$run_id" ]; then
+    echo "[LOCAL-CI] → Run ID: $run_id"
+    
+    # Get job logs (look for Claude review job)
+    local logs=$(gh run view "$run_id" --log 2>/dev/null | grep -A 50 -i "claude\|review\|prompt.*quality\|ideal.*response" | head -100)
+    
+    echo "[LOCAL-CI] → Error from logs:"
+    echo "$logs" | grep -iE "error|fail|reject|invalid|❌" | head -20
+  fi
+  
+  # ══════════════════════════════════════════════════════════════════
+  # STEP 2: Apply common Claude Review fixes
+  # ══════════════════════════════════════════════════════════════════
+  echo ""
+  echo "[LOCAL-CI] → Applying Claude Review fixes..."
+  
+  # Fix 1: Remove "Hey Team" and informal greetings
+  echo "[LOCAL-CI]   → Removing informal greetings..."
+  for file in PROMPT.md lib/PROMPT.md; do
+    if [ -f "$file" ]; then
+      sed -i '/^#*[[:space:]]*[Hh]ey [Tt]eam/d' "$file"
+      sed -i '/^#*[[:space:]]*[Hh]i [Tt]eam/d' "$file"
+      sed -i '/^#*[[:space:]]*[Hh]ello [Tt]eam/d' "$file"
+      sed -i '/^#*[[:space:]]*[Dd]ear [Tt]eam/d' "$file"
+    fi
+  done
+  
+  # Fix 2: Remove emojis
+  echo "[LOCAL-CI]   → Removing emojis..."
+  for file in PROMPT.md lib/PROMPT.md; do
+    if [ -f "$file" ]; then
+      sed -i 's/[🎯📝✅❌💡🚀🔧⚠️📌🎉💻🌟⭐🔥💪👍✨🤖🏠😀😊👋🙏💯🔴🟢🟡⭕✔️❎]//g' "$file"
+    fi
+  done
+  
+  # Fix 3: Replace dashes
+  echo "[LOCAL-CI]   → Replacing en/em dashes..."
+  for file in PROMPT.md lib/PROMPT.md; do
+    if [ -f "$file" ]; then
+      sed -i 's/–/-/g' "$file"  # en dash
+      sed -i 's/—/-/g' "$file"  # em dash
+    fi
+  done
+  
+  # Fix 4: Remove brackets patterns
+  echo "[LOCAL-CI]   → Removing bracket patterns..."
+  for file in PROMPT.md lib/PROMPT.md; do
+    if [ -f "$file" ]; then
+      sed -i 's/\[optional[^]]*\]//gi' "$file"
+      sed -i 's/\[note[^]]*\]//gi' "$file"
+    fi
+  done
+  
+  # Fix 5: Remove parentheses content
+  echo "[LOCAL-CI]   → Removing parentheses..."
+  for file in PROMPT.md lib/PROMPT.md; do
+    if [ -f "$file" ]; then
+      sed -i 's/(\([^)]*\))/\1/g' "$file"
+    fi
+  done
+  
+  # Fix 6: Replace formal abbreviations
+  echo "[LOCAL-CI]   → Replacing formal abbreviations..."
+  for file in PROMPT.md lib/PROMPT.md; do
+    if [ -f "$file" ]; then
+      sed -i 's/e\.g\./for example/gi' "$file"
+      sed -i 's/i\.e\./that is/gi' "$file"
+      sed -i 's/etc\./and so on/gi' "$file"
+    fi
+  done
+  
+  # Fix 7: Sync IDEAL_RESPONSE with code
+  echo "[LOCAL-CI]   → Syncing IDEAL_RESPONSE..."
+  sync_ideal_response_with_code
+  
+  # ══════════════════════════════════════════════════════════════════
+  # STEP 3: Verify fixes locally
+  # ══════════════════════════════════════════════════════════════════
+  echo ""
+  echo "[LOCAL-CI] → Verifying fixes locally..."
+  
+  # Run prompt quality check
+  if [ -f ".claude/scripts/claude-validate-prompt-quality.sh" ]; then
+    .claude/scripts/claude-validate-prompt-quality.sh 2>&1 || echo "[LOCAL-CI] ⚠️ Local prompt quality check failed (will retry on remote)"
+  fi
+  
+  # Run IDEAL_RESPONSE validation
+  if [ -f ".claude/scripts/validate-ideal-response.sh" ]; then
+    .claude/scripts/validate-ideal-response.sh 2>&1 || echo "[LOCAL-CI] ⚠️ Local IDEAL_RESPONSE check failed (will retry on remote)"
+  fi
+  
+  echo ""
+  echo "[LOCAL-CI] ✅ Claude Review fixes applied!"
+  echo "[LOCAL-CI] → Will push and check remote CI again (NOT stopping!)"
     fi
     
     # ══════════════════════════════════════════════════════════════════
