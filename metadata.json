@@ -6,7 +6,7 @@
   "po_id": "LS-291351",
   "team": "synth-2",
   "startedAt": "2025-08-06T20:13:37.828Z",
-  "aws_services": ["VPC", "EC2", "S3", "IAM"],
+  "aws_services": ["VPC", "EC2", "S3", "IAM", "CodeBuild", "CodePipeline"],
   "wave": "P0",
   "subtask": "Application Deployment",
   "subject_labels": ["Web Application Deployment"],

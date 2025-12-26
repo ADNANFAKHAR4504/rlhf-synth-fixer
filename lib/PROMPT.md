@@ -1,15 +1,20 @@
 # CI/CD Pipeline Integration - Task 291351
 
-Create a complete CI/CD pipeline using Pulumi with Python to automate the deployment and testing of a web application. The system should include the following components:
+Set up a CI/CD pipeline using Pulumi with Python that automatically deploys and tests a web application when code is pushed to the main branch.
 
-1. Automated triggering on commits to the 'main' branch
-2. Infrastructure as Code using Pulumi targeting AWS
-3. Configuration of S3 buckets for storing deployment artifacts with versioning
-4. Build and test stages executed on AWS CodeBuild
-5. End-to-end orchestration using AWS CodePipeline
-6. Tagging of all resources as per company policy
-7. Proper IAM policies to restrict access
+The pipeline should work like this:
 
-Expected output: Python scripts and Pulumi configurations that set up the required CI/CD pipeline and infrastructure, passing all specified requirements.
+- S3 bucket stores deployment artifacts with versioning enabled
+- CodeBuild project runs inside a VPC in private subnets to build and test the code
+- CodeBuild pulls source from GitHub, runs tests, and uploads artifacts to the S3 bucket
+- CodePipeline orchestrates the workflow, triggering CodeBuild on commits to main branch
+- IAM roles connect CodeBuild to S3 with least-privilege policies limited to GetObject and PutObject actions
+- VPC security groups allow CodeBuild outbound internet access for package downloads
+- All resources tagged according to company policy with Environment, Project, ManagedBy, and Owner tags
 
-The infrastructure will be deployed in the us-east-1 AWS region. All AWS services must be provisioned within the same region. Use a standard VPC setup with public and private subnets.
+Network setup:
+- VPC with public and private subnets across two availability zones in us-east-1a and us-east-1b
+- Internet Gateway for public subnets
+- CodeBuild runs in private subnets for security
+
+The infrastructure should be deployable to both AWS and LocalStack. For LocalStack compatibility, include conditional logic to skip CodeBuild and CodePipeline since they're Pro-only features while keeping core infrastructure functional.
