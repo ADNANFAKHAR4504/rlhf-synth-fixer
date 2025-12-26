@@ -38,8 +38,8 @@ Follow naming conventions and formatting standards.
 
 Include metadata and comments to make the template self-explanatory.
 
-⚠️ Do not use hardcoded values for sensitive configurations.
-✅ Use pseudo parameters, mappings, or parameterized inputs for environment-specific values where necessary.
+Do not use hardcoded values for sensitive configurations.
+Use pseudo parameters, mappings, or parameterized inputs for environment-specific values where necessary.
 
 Begin with AWSTemplateFormatVersion: '2010-09-09'.
 Provide only the YAML code – no additional explanation.
