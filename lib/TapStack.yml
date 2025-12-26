@@ -68,9 +68,13 @@ Conditions:
 Mappings:
   RegionMap:
     ap-northeast-1:
-      AZs: ['ap-northeast-1a', 'ap-northeast-1c']
+      AZs:
+        - ap-northeast-1a
+        - ap-northeast-1c
     us-east-1:
-      AZs: ['us-east-1a', 'us-east-1b']
+      AZs:
+        - us-east-1a
+        - us-east-1b
 
 Resources:
   # ========================================
