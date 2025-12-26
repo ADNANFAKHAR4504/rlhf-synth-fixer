@@ -1,19 +1,19 @@
-[1] TASK_TYPE: Security Configuration as Code
-[2] TOPIC: Design a **east-privilege IAM design**
-[3] MODEL_GOAL: accuracy
-[4] PARAMS: temperature=0.5, max_tokens=5000000, top_p=1.0, frequency_penalty=0.0, presence_penalty=0.0
-[5] AUDIENCE: principal engineers, platform security, compliance officers,a **CloudFormation YAML template** that enforces **least-privilege IAM design**.
-[6] FORMAT: Numbered sections, crisp headings, code fences with filenames.
-[7] CONTEXT: treat this prompt as a standalone; no chat history used
-[8] VALIDATION: verify that all compliance and environment isolation requirements are respected
-[9] ACCESSIBILITY: Use clear language, add inline comments to explain the code
-[10] ESTIMATED_COST:
-[11] SECURITY: no hardcoded credentials; all secrets stored and rotated via AWS Secrets Manager
-[12] FALLBACK: if a resource fails to deploy, adjust dependency order and reapply
-[13] FRAMEWORK: C.R.A.F.T.M.
-[14] ITERATIVE_REFINEMENT:
+TASK_TYPE: Security Configuration as Code
+TOPIC: Design a **east-privilege IAM design**
+MODEL_GOAL: accuracy
+PARAMS: temperature=0.5, max_tokens=5000000, top_p=1.0, frequency_penalty=0.0, presence_penalty=0.0
+AUDIENCE: principal engineers, platform security, compliance officers,a **CloudFormation YAML template** that enforces **least-privilege IAM design**.
+FORMAT: Numbered sections, crisp headings, code fences with filenames.
+CONTEXT: treat this prompt as a standalone; no chat history used
+VALIDATION: verify that all compliance and environment isolation requirements are respected
+ACCESSIBILITY: Use clear language, add inline comments to explain the code
+ESTIMATED_COST:
+SECURITY: no hardcoded credentials; all secrets stored and rotated via AWS Secrets Manager
+FALLBACK: if a resource fails to deploy, adjust dependency order and reapply
+FRAMEWORK: C.R.A.F.T.M.
+ITERATIVE_REFINEMENT:
 
-### **C — CONSTRAINTS**
+### **C - CONSTRAINTS**
 
 Design a **CloudFormation YAML template** that enforces **least-privilege IAM design** and must satisfy ALL of:
 
@@ -35,13 +35,13 @@ Design a **CloudFormation YAML template** that enforces **least-privilege IAM de
 
 ---
 
-### **R — ROLES**
+### **R - ROLES**
 
 You are an **AWS CloudFormation YAML expert** focused on **IAM security and least-privilege enforcement**, ensuring no over-permissive policies and full compliance with **cfn-nag** static analysis.
 
 ---
 
-### **A — ACTION**
+### **A - ACTION**
 
 Produce a **deployable CloudFormation YAML template** that:
 
@@ -56,25 +56,25 @@ Produce a **deployable CloudFormation YAML template** that:
 
 ---
 
-### **F — FORMAT**
+### **F - FORMAT**
 
 Return the solution in **4 sections**, in this order:
 
-1. **Security Architecture (ASCII)** — visualize IAM roles, boundaries, inline policies, and their relationships.
-2. **Policy Design Rationale** — justify principle of least privilege for each service.
-3. **CloudFormation YAML Template** — fully functional, validated with `cfn-nag`.
-4. **Validation Guidance** — commands and expected results for confirming compliance (check for wildcard actions, `cfn-nag-scan` output).
+1. **Security Architecture (ASCII)** - visualize IAM roles, boundaries, inline policies, and their relationships.
+2. **Policy Design Rationale** - justify principle of least privilege for each service.
+3. **CloudFormation YAML Template** - fully functional, validated with `cfn-nag`.
+4. **Validation Guidance** - commands and expected results for confirming compliance (check for wildcard actions, `cfn-nag-scan` output).
 
 ---
 
-### **T — TONE**
+### **T - TONE**
 
 Authoritative, compliance-focused, concise, implementation-grade.  
-No placeholders — use production-safe resource naming with `!Sub` and tagging.
+No placeholders - use production-safe resource naming with `!Sub` and tagging.
 
 ---
 
-### **M — MODEL-SPECIFIC**
+### **M - MODEL-SPECIFIC**
 
 - Use **CloudFormation YAML**, not JSON.
 - Follow AWS IAM best practices (no wildcard actions or resources).
