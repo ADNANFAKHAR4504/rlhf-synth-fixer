@@ -25,5 +25,6 @@
     "AWS IAM",
     "AWS X-Ray"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 9
 }
