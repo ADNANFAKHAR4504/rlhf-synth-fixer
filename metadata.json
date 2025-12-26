@@ -28,6 +28,5 @@
     "Comprehend",
     "Translate"
   ],
-  "wave": "P1",
-  "training_quality": 8
+  "wave": "P1"
 }
