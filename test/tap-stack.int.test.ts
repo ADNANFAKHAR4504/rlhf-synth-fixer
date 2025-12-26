@@ -36,7 +36,7 @@ describe('WebApp Infrastructure Pre-Deployment Checks', () => {
 
   beforeAll(() => {
     app = new App();
-    stack = new TapStack(app, 'unified-webapp-stack-test', {
+    stack = new TapStack(app, 'UnifiedWebAppStackTest', {
       environments: testEnvironments,
     });
     synthesized = Testing.synth(stack);

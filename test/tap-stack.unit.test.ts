@@ -25,7 +25,7 @@ describe('Unified WebApp Stack Unit Tests', () => {
       },
     ];
 
-    stack = new TapStack(app, 'test-unified-stack', {
+    stack = new TapStack(app, 'TestUnifiedStack', {
       environments: testEnvironments,
     });
     synthesized = JSON.parse(Testing.synth(stack));
