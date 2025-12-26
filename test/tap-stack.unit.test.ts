@@ -163,39 +163,41 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
     });
 
     test('should create EC2 security group with HTTP, HTTPS, and SSH ingress rules', () => {
-      const sg = template.Resources.EC2SecurityGroup;
-      expect(sg.Properties.SecurityGroupIngress).toHaveLength(3);
+      // Template uses separate SecurityGroupIngress resources
+      const httpIngress = template.Resources.EC2SecurityGroupIngressHTTP;
+      expect(httpIngress.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(httpIngress.Properties.GroupId).toEqual({ Ref: 'EC2SecurityGroup' });
+      expect(httpIngress.Properties.IpProtocol).toBe('tcp');
+      expect(httpIngress.Properties.FromPort).toBe(80);
+      expect(httpIngress.Properties.ToPort).toBe(80);
+      expect(httpIngress.Properties.CidrIp).toBe('0.0.0.0/0');
+      expect(httpIngress.Properties.Description).toBe('Allow HTTP from internet');
 
-      const httpRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 80);
-      expect(httpRule.IpProtocol).toBe('tcp');
-      expect(httpRule.FromPort).toBe(80);
-      expect(httpRule.ToPort).toBe(80);
-      expect(httpRule.CidrIp).toBe('0.0.0.0/0');
-      expect(httpRule.Description).toBe('Allow HTTP from internet');
+      const httpsIngress = template.Resources.EC2SecurityGroupIngressHTTPS;
+      expect(httpsIngress.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(httpsIngress.Properties.GroupId).toEqual({ Ref: 'EC2SecurityGroup' });
+      expect(httpsIngress.Properties.IpProtocol).toBe('tcp');
+      expect(httpsIngress.Properties.FromPort).toBe(443);
+      expect(httpsIngress.Properties.ToPort).toBe(443);
+      expect(httpsIngress.Properties.CidrIp).toBe('0.0.0.0/0');
+      expect(httpsIngress.Properties.Description).toBe('Allow HTTPS from internet');
 
-      const httpsRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 443);
-      expect(httpsRule.IpProtocol).toBe('tcp');
-      expect(httpsRule.FromPort).toBe(443);
-      expect(httpsRule.ToPort).toBe(443);
-      expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
-      expect(httpsRule.Description).toBe('Allow HTTPS from internet');
-
-      const sshRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 22);
-      expect(sshRule.IpProtocol).toBe('tcp');
-      expect(sshRule.FromPort).toBe(22);
-      expect(sshRule.ToPort).toBe(22);
-      expect(sshRule.CidrIp).toEqual({ Ref: 'SSHAllowedCIDR' });
-      expect(sshRule.Description).toBe('Allow SSH from specified IP range');
+      const sshIngress = template.Resources.EC2SecurityGroupIngressSSH;
+      expect(sshIngress.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(sshIngress.Properties.GroupId).toEqual({ Ref: 'EC2SecurityGroup' });
+      expect(sshIngress.Properties.IpProtocol).toBe('tcp');
+      expect(sshIngress.Properties.FromPort).toBe(22);
+      expect(sshIngress.Properties.ToPort).toBe(22);
+      expect(sshIngress.Properties.CidrIp).toEqual({ Ref: 'SSHAllowedCIDR' });
+      expect(sshIngress.Properties.Description).toBe('Allow SSH from specified IP range');
     });
 
     test('should create EC2 security group with all outbound traffic allowed', () => {
+      // Security groups have default allow-all egress when no explicit egress rules are defined
+      // The EC2SecurityGroup resource doesn't define SecurityGroupEgress, which means AWS
+      // automatically allows all outbound traffic (default behavior)
       const sg = template.Resources.EC2SecurityGroup;
-      expect(sg.Properties.SecurityGroupEgress).toHaveLength(1);
-
-      const egressRule = sg.Properties.SecurityGroupEgress[0];
-      expect(egressRule.IpProtocol).toBe('-1');
-      expect(egressRule.CidrIp).toBe('0.0.0.0/0');
-      expect(egressRule.Description).toBe('Allow all outbound traffic');
+      expect(sg.Properties.SecurityGroupEgress).toBeUndefined();
     });
   });
 
@@ -207,22 +209,24 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
     });
 
     test('should create RDS security group allowing database access only from EC2 instances', () => {
-      const sg = template.Resources.RDSSecurityGroup;
-      expect(sg.Properties.SecurityGroupIngress).toHaveLength(2);
+      // Template uses separate SecurityGroupIngress resources
+      const mysqlIngress = template.Resources.RDSSecurityGroupIngressMySQL;
+      expect(mysqlIngress.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(mysqlIngress.Properties.GroupId).toEqual({ Ref: 'RDSSecurityGroup' });
+      expect(mysqlIngress.Properties.IpProtocol).toBe('tcp');
+      expect(mysqlIngress.Properties.FromPort).toBe(3306);
+      expect(mysqlIngress.Properties.ToPort).toBe(3306);
+      expect(mysqlIngress.Properties.SourceSecurityGroupId).toEqual({ Ref: 'EC2SecurityGroup' });
+      expect(mysqlIngress.Properties.Description).toBe('Allow MySQL/MariaDB from EC2 instances');
 
-      const mysqlRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 3306);
-      expect(mysqlRule.IpProtocol).toBe('tcp');
-      expect(mysqlRule.FromPort).toBe(3306);
-      expect(mysqlRule.ToPort).toBe(3306);
-      expect(mysqlRule.SourceSecurityGroupId).toEqual({ Ref: 'EC2SecurityGroup' });
-      expect(mysqlRule.Description).toBe('Allow MySQL/MariaDB from EC2 instances');
-
-      const postgresRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 5432);
-      expect(postgresRule.IpProtocol).toBe('tcp');
-      expect(postgresRule.FromPort).toBe(5432);
-      expect(postgresRule.ToPort).toBe(5432);
-      expect(postgresRule.SourceSecurityGroupId).toEqual({ Ref: 'EC2SecurityGroup' });
-      expect(postgresRule.Description).toBe('Allow PostgreSQL from EC2 instances');
+      const postgresIngress = template.Resources.RDSSecurityGroupIngressPostgreSQL;
+      expect(postgresIngress.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(postgresIngress.Properties.GroupId).toEqual({ Ref: 'RDSSecurityGroup' });
+      expect(postgresIngress.Properties.IpProtocol).toBe('tcp');
+      expect(postgresIngress.Properties.FromPort).toBe(5432);
+      expect(postgresIngress.Properties.ToPort).toBe(5432);
+      expect(postgresIngress.Properties.SourceSecurityGroupId).toEqual({ Ref: 'EC2SecurityGroup' });
+      expect(postgresIngress.Properties.Description).toBe('Allow PostgreSQL from EC2 instances');
     });
   });
 
@@ -404,9 +408,8 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
       const asg = template.Resources.AutoScalingGroup;
       expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
       expect(asg.Properties.LaunchTemplate.LaunchTemplateId).toEqual({ Ref: 'LaunchTemplate' });
-      expect(asg.Properties.LaunchTemplate.Version).toEqual({
-        'Fn::GetAtt': ['LaunchTemplate', 'LatestVersionNumber']
-      });
+      // Template uses $Latest string which is a valid CloudFormation approach
+      expect(asg.Properties.LaunchTemplate.Version).toBe('$Latest');
     });
 
     test('should create Auto Scaling Group with correct size configuration', () => {
