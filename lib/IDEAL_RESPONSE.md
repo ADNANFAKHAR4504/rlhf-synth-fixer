@@ -6,7 +6,7 @@ This is the ideal CloudFormation YAML template for creating a secure, scalable A
 
 ## Architecture Components
 
-### 🌐 Network Infrastructure
+###  Network Infrastructure
 - **VPC**: 10.0.0.0/16 CIDR with DNS support enabled
 - **Public Subnets**: 2 subnets (10.0.1.0/24, 10.0.2.0/24) across AZs with auto-assign public IP
 - **Private Subnets**: 2 subnets (10.0.3.0/24, 10.0.4.0/24) across AZs for backend resources
@@ -14,12 +14,12 @@ This is the ideal CloudFormation YAML template for creating a secure, scalable A
 - **NAT Gateway**: Provides controlled internet access for private subnets
 - **Route Tables**: Separate routing for public and private subnet traffic
 
-### 🔐 Security & Access Control
+###  Security & Access Control
 - **IAM Roles**: Separate least-privilege roles for EC2 and RDS services
 - **Security Group**: HTTPS-only ingress (port 443) with unrestricted egress
 - **Multi-AZ Distribution**: High availability across us-east-1a and us-east-1b
 
-### 📋 Key Features
+###  Key Features
 
 #### Networking Excellence
 - **High Availability**: Resources distributed across multiple availability zones
@@ -103,17 +103,17 @@ aws cloudformation deploy \
 
 ## Quality Assurance
 
-### ✅ Code Quality
+###  Code Quality
 - **Linting**: ESLint passes with zero issues
 - **Testing**: 44 total tests (27 unit + 17 integration) all passing
 - **Coverage**: Comprehensive test coverage of all template components
 
-### ✅ Security Compliance
+###  Security Compliance
 - **IAM**: Follows least privilege principle
 - **Networking**: Proper subnet isolation and routing
 - **Dependencies**: Explicit resource dependencies prevent race conditions
 
-### ✅ AWS Best Practices
+###  AWS Best Practices
 - **Multi-AZ**: High availability design
 - **Tagging**: Consistent resource naming
 - **Template Structure**: Clean, maintainable CloudFormation YAML
@@ -131,7 +131,7 @@ The template provides 8 essential outputs for integration with other stacks:
 
 ## Compliance Summary
 
-✅ **100% Requirements Compliance**
+ **100% Requirements Compliance**
 - VPC with 10.0.0.0/16 CIDR block
 - 2 public and 2 private subnets across 2 AZs
 - Internet Gateway and NAT Gateway configured
