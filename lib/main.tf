@@ -51,13 +51,14 @@ data "aws_subnets" "existing_private" {
   }
 }
 
-# Get internet gateway for the VPC
-data "aws_internet_gateway" "existing_igw" {
-  filter {
-    name   = "attachment.vpc-id"
-    values = [local.vpc_id]
-  }
-}
+# Note: Internet Gateway lookup removed for LocalStack compatibility
+# If needed for production, uncomment and ensure IGW exists:
+# data "aws_internet_gateway" "existing_igw" {
+#   filter {
+#     name   = "attachment.vpc-id"
+#     values = [local.vpc_id]
+#   }
+# }
 
 # Generate secure random password for RDS
 resource "random_password" "db_password" {
