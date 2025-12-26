@@ -5,26 +5,22 @@
   "turn_type": "single",
   "po_id": "LS-291592",
   "team": "synth-2",
-  "wave": "P1",
+  "wave": "P0",
   "startedAt": "2025-08-18T20:34:02.371Z",
   "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
     "Web Application Deployment",
-    "Security Configuration as Code"
+    "Serverless Infrastructure (Functions as Code)"
   ],
-  "training_quality": 8,
   "aws_services": [
-    "VPC",
-    "EC2",
-    "Auto Scaling",
-    "Application Load Balancer",
-    "RDS",
-    "S3",
-    "IAM",
-    "CloudWatch",
-    "Internet Gateway",
-    "KMS",
-    "Secrets Manager"
-  ]
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "IAM"
+  ],
+  "migrated_from": {
+    "po_id": "291592",
+    "pr": "Pr1832"
+  }
 }

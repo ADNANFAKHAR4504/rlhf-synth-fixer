@@ -17,7 +17,8 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Get environment suffix from outputs if available, otherwise from env var
+const environmentSuffix = outputs.EnvironmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // LocalStack endpoint configuration
 const isLocalStack =
