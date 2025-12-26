@@ -83,10 +83,13 @@ describe('TapStack Integration Tests', () => {
   let kmsKeyIds: string[];
 
   beforeAll(() => {
+    // For LocalStack CI, outputs are in cdk-outputs, for regular CI they're in cfn-outputs
+    const isLocalStackCI = isLocalStack && process.env.CI;
+    const outputDir = isLocalStackCI ? 'cdk-outputs' : 'cfn-outputs';
     const outputFilePath = path.join(
       __dirname,
       '..',
-      'cfn-outputs',
+      outputDir,
       'flat-outputs.json'
     );
     if (!fs.existsSync(outputFilePath)) {
