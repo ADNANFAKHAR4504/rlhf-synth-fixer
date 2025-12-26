@@ -51,11 +51,15 @@ class TapStack(TerraformStack):
         )
 
         provider_config = {
-            "region": aws_region,
-            "default_tags": [{
+            "region": aws_region
+        }
+
+        # Only add default_tags for non-LocalStack deployments
+        # LocalStack's S3 Control API has strict AccountId validation that causes errors
+        if not is_localstack:
+            provider_config["default_tags"] = [{
                 "tags": production_tags
             }]
-        }
 
         # Add LocalStack configuration if detected
         if is_localstack:
