@@ -1,0 +1,26 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291529",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T17:13:38.445Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "IAM",
+    "KMS",
+    "CloudWatch"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291529",
+    "pr": "Pr2061"
+  }
+}
