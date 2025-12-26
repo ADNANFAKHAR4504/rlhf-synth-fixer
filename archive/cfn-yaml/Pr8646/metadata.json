@@ -21,5 +21,12 @@
     "SNS",
     "CloudWatch",
     "ApiGateway"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "govardhan-turing",
+  "dockerS3Location": ""
 }
