@@ -1892,11 +1892,8 @@
             "DBAllocatedStorage"
           ]
         },
-        "StorageType": "gp3",
-        "StorageEncrypted": true,
-        "KmsKeyId": {
-          "Ref": "RDSEncryptionKey"
-        },
+        "StorageType": "gp2",
+        "StorageEncrypted": false,
         "MasterUsername": {
           "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:username}}"
         },
@@ -1924,13 +1921,7 @@
           ]
         },
         "PubliclyAccessible": false,
-        "BackupRetentionPeriod": 7,
-        "PreferredBackupWindow": "03:00-04:00",
-        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-        "EnableCloudwatchLogsExports": [
-          "postgresql",
-          "upgrade"
-        ],
+        "BackupRetentionPeriod": 0,
         "DeletionProtection": false,
         "Tags": [
           {
