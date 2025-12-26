@@ -21,13 +21,21 @@ export function createVpcResources(
   environment: string,
   provider: aws.Provider
 ): VpcResources {
-  // Get availability zones
-  const availabilityZones = aws.getAvailabilityZones(
-    {
-      state: 'available',
-    },
-    { provider }
-  );
+  // Check if deploying to LocalStack
+  const isLocalStack =
+    process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+    process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
+    environment.toLowerCase().includes('localstack');
+
+  // Get availability zones - use hardcoded values for LocalStack to avoid API call issues
+  const availabilityZones = isLocalStack
+    ? Promise.resolve({ names: ['us-east-1a', 'us-east-1b'] })
+    : aws.getAvailabilityZones(
+        {
+          state: 'available',
+        },
+        { provider }
+      );
 
   // Create VPC
   const vpc = new aws.ec2.Vpc(
@@ -298,12 +306,6 @@ export function createVpcResources(
     },
     { provider }
   );
-
-  // Check if deploying to LocalStack (VPC Flow Log has parameter compatibility issues)
-  const isLocalStack =
-    process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-    process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
-    environment.toLowerCase().includes('localstack');
 
   // Create VPC Flow Log (skip for LocalStack due to parameter compatibility issues)
   const vpcFlowLog = !isLocalStack

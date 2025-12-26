@@ -14,26 +14,34 @@ export function createEc2Instance(
   instanceType: string,
   provider: aws.Provider
 ): aws.ec2.Instance {
-  // Get the latest Amazon Linux 2023 AMI (more secure and up-to-date)
-  const amiId = aws.ec2
-    .getAmi(
-      {
-        mostRecent: true,
-        owners: ['amazon'],
-        filters: [
+  // Check if deploying to LocalStack
+  const isLocalStack =
+    process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+    process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
+    environment.toLowerCase().includes('localstack');
+
+  // Get the AMI ID - use a dummy ID for LocalStack, real AMI lookup for AWS
+  const amiId = isLocalStack
+    ? pulumi.output('ami-12345678') // Dummy AMI ID for LocalStack
+    : aws.ec2
+        .getAmi(
           {
-            name: 'name',
-            values: ['al2023-ami-*-x86_64'],
+            mostRecent: true,
+            owners: ['amazon'],
+            filters: [
+              {
+                name: 'name',
+                values: ['al2023-ami-*-x86_64'],
+              },
+              {
+                name: 'virtualization-type',
+                values: ['hvm'],
+              },
+            ],
           },
-          {
-            name: 'virtualization-type',
-            values: ['hvm'],
-          },
-        ],
-      },
-      { provider }
-    )
-    .then(ami => ami.id);
+          { provider }
+        )
+        .then(ami => ami.id);
 
   // Create IAM role for SSM access with least privilege
   const ssmRole = new aws.iam.Role(
