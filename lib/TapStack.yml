@@ -671,13 +671,13 @@ Outputs:
 
   RedisEndpoint:
     Description: 'ElastiCache Redis primary endpoint'
-    Value: !GetAtt ElastiCacheReplicationGroup.PrimaryEndPoint.Address
+    Value: !GetAtt ElastiCacheReplicationGroup.ConfigurationEndpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-RedisEndpoint'
 
   RedisPort:
     Description: 'ElastiCache Redis port'
-    Value: !GetAtt ElastiCacheReplicationGroup.PrimaryEndPoint.Port
+    Value: !GetAtt ElastiCacheReplicationGroup.ConfigurationEndpoint.Port
     Export:
       Name: !Sub '${AWS::StackName}-RedisPort'
 
