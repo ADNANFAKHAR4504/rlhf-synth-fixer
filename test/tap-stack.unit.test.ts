@@ -320,7 +320,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('backup plan should have daily schedule with 30-day retention', () => {
       const plan = template.Resources.BackupPlan.Properties.BackupPlan;
-      const rule = plan.BackupPlanRule[0];
+      const rule = plan.Rules[0];
       expect(rule.RuleName).toBe('DailyBackup');
       expect(rule.ScheduleExpression).toBe('cron(0 5 * * ? *)');
       expect(rule.Lifecycle.DeleteAfterDays).toBe(30);
