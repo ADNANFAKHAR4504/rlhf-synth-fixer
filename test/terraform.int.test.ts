@@ -1,10 +1,10 @@
+import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
+import { DescribeInstancesCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import { GetBucketEncryptionCommand, S3Client } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
-import { EC2Client, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
-import { S3Client, GetBucketEncryptionCommand } from '@aws-sdk/client-s3';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { IAMClient, GetPolicyCommand, GetRoleCommand } from '@aws-sdk/client-iam';
-import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
 
 describe('Terraform Infrastructure Integration Tests', () => {
   let outputs: any;
@@ -17,7 +17,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
   beforeAll(async () => {
     // Load outputs from deployment (these will be available after terraform apply)
     const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-    
+
     if (!fs.existsSync(outputsPath)) {
       console.warn('Deployment outputs not found. Integration tests require actual AWS deployment.');
       outputs = {};
@@ -173,7 +173,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       }
 
       const compliance = outputs.security_requirements_compliance;
-      
+
       if (!compliance.iam_policies_version_controlled) {
         console.warn('Security compliance details not available in outputs, skipping test');
         return;
@@ -272,8 +272,24 @@ describe('Terraform Infrastructure Integration Tests', () => {
         return;
       }
 
+      // Check if running against LocalStack
+      const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+        process.env.AWS_ENDPOINT_URL?.includes('4566');
+
       expect(outputs.database_connection_info.endpoint).toBeDefined();
-      expect(outputs.database_connection_info.port).toBe(3306);
+
+      // LocalStack uses random/different ports for RDS
+      if (isLocalStack) {
+        // For LocalStack, just verify port is a number and within valid range
+        expect(typeof outputs.database_connection_info.port).toBe('number');
+        expect(outputs.database_connection_info.port).toBeGreaterThan(0);
+        expect(outputs.database_connection_info.port).toBeLessThan(65536);
+        console.log(`LocalStack RDS port: ${outputs.database_connection_info.port}`);
+      } else {
+        // For real AWS, expect MySQL default port
+        expect(outputs.database_connection_info.port).toBe(3306);
+      }
+
       expect(outputs.database_connection_info.password_location).toContain('AWS Secrets Manager');
     });
 
