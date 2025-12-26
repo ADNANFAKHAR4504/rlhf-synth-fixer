@@ -194,71 +194,82 @@ export class Infrastructure extends pulumi.ComponentResource {
     );
 
     // VPC Flow Logs for network monitoring
-    const vpcFlowLogRole = new aws.iam.Role(
-      createResourceName('vpc-flow-log-role', region, environment),
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'vpc-flow-logs.amazonaws.com',
-              },
-            },
-          ],
-        }),
-        tags: resourceTags,
-      },
-      { provider, parent: this }
-    );
+    // Skip for LocalStack as Flow Log is not fully supported
+    let vpcFlowLogRole: aws.iam.Role | undefined;
+    let vpcFlowLogGroup: aws.cloudwatch.LogGroup | undefined;
+    let vpcFlowLogPolicy: aws.iam.Policy | undefined;
 
-    const vpcFlowLogGroup = new aws.cloudwatch.LogGroup(
-      createResourceName('vpc-flow-logs', region, environment),
-      {
-        name: `/aws/vpc/flowlogs/${environment}`,
-        retentionInDays: 14,
-        kmsKeyId: kmsKey.arn,
-        tags: resourceTags,
-      },
-      { provider, parent: this }
-    );
-
-    const vpcFlowLogPolicy = new aws.iam.Policy(
-      createResourceName('vpc-flow-log-policy', region, environment),
-      {
-        policy: pulumi.all([vpcFlowLogGroup.arn]).apply(([logGroupArn]) =>
-          JSON.stringify({
+    if (!isLocalStack) {
+      vpcFlowLogRole = new aws.iam.Role(
+        createResourceName('vpc-flow-log-role', region, environment),
+        {
+          assumeRolePolicy: JSON.stringify({
             Version: '2012-10-17',
             Statement: [
               {
+                Action: 'sts:AssumeRole',
                 Effect: 'Allow',
-                Action: [
-                  'logs:CreateLogGroup',
-                  'logs:CreateLogStream',
-                  'logs:PutLogEvents',
-                  'logs:DescribeLogGroups',
-                  'logs:DescribeLogStreams',
-                ],
-                Resource: [logGroupArn, `${logGroupArn}:*`],
+                Principal: {
+                  Service: 'vpc-flow-logs.amazonaws.com',
+                },
               },
             ],
-          })
-        ),
-        tags: resourceTags,
-      },
-      { provider, parent: this }
-    );
+          }),
+          tags: resourceTags,
+        },
+        { provider, parent: this }
+      );
 
-    new aws.iam.RolePolicyAttachment(
-      createResourceName('vpc-flow-log-policy-attachment', region, environment),
-      {
-        role: vpcFlowLogRole.name,
-        policyArn: vpcFlowLogPolicy.arn,
-      },
-      { provider, parent: this }
-    );
+      vpcFlowLogGroup = new aws.cloudwatch.LogGroup(
+        createResourceName('vpc-flow-logs', region, environment),
+        {
+          name: `/aws/vpc/flowlogs/${environment}`,
+          retentionInDays: 14,
+          kmsKeyId: kmsKey.arn,
+          tags: resourceTags,
+        },
+        { provider, parent: this }
+      );
+
+      vpcFlowLogPolicy = new aws.iam.Policy(
+        createResourceName('vpc-flow-log-policy', region, environment),
+        {
+          policy: pulumi.all([vpcFlowLogGroup.arn]).apply(([logGroupArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                    'logs:DescribeLogGroups',
+                    'logs:DescribeLogStreams',
+                  ],
+                  Resource: [logGroupArn, `${logGroupArn}:*`],
+                },
+              ],
+            })
+          ),
+          tags: resourceTags,
+        },
+        { provider, parent: this }
+      );
+
+      new aws.iam.RolePolicyAttachment(
+        createResourceName(
+          'vpc-flow-log-policy-attachment',
+          region,
+          environment
+        ),
+        {
+          role: vpcFlowLogRole.name,
+          policyArn: vpcFlowLogPolicy.arn,
+        },
+        { provider, parent: this }
+      );
+    }
     // VPC
     const vpc = new aws.ec2.Vpc(
       createResourceName('vpc', region, environment),
@@ -275,17 +286,20 @@ export class Infrastructure extends pulumi.ComponentResource {
     );
 
     // VPC Flow Logs (now that VPC is created)
-    new aws.ec2.FlowLog(
-      createResourceName('vpc-flow-log', region, environment),
-      {
-        iamRoleArn: vpcFlowLogRole.arn,
-        logDestination: vpcFlowLogGroup.arn,
-        vpcId: vpc.id,
-        trafficType: 'ALL',
-        tags: resourceTags,
-      },
-      { provider, parent: this }
-    );
+    // Skip for LocalStack as Flow Log Max Aggregation Interval is not supported
+    if (!isLocalStack && vpcFlowLogRole && vpcFlowLogGroup) {
+      new aws.ec2.FlowLog(
+        createResourceName('vpc-flow-log', region, environment),
+        {
+          iamRoleArn: vpcFlowLogRole.arn,
+          logDestination: vpcFlowLogGroup.arn,
+          vpcId: vpc.id,
+          trafficType: 'ALL',
+          tags: resourceTags,
+        },
+        { provider, parent: this }
+      );
+    }
 
     // Internet Gateway
     const internetGateway = new aws.ec2.InternetGateway(
