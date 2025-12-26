@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-101912919",
+  "team": "synth-2",
+  "wave": "P1",
+  "startedAt": "2025-12-26T10:00:00+05:30",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "IAM",
+    "KinesisFirehose",
+    "Logs",
+    "S3",
+    "SNS",
+    "SSM",
+    "XRay"
+  ],
+  "migrated_from": {
+    "po_id": "101912919",
+    "pr": "Pr7560"
+  },
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}
