@@ -20,14 +20,21 @@
     "Fargate",
     "ElasticLoadBalancing",
     "ApplicationLoadBalancer",
-    "Route53",
     "AutoScaling",
     "CloudWatch",
     "SNS",
     "KMS",
     "IAM",
     "SystemsManager",
-    "CloudFormation"
+    "CloudFormation",
+    "SecretsManager"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
