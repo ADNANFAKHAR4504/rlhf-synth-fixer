@@ -152,7 +152,10 @@ describe('TapStack CloudFormation Template', () => {
 
     test('AppS3Bucket should NOT depend on AppLambdaPermission (circular dependency avoided)', () => {
       const bucket = template.Resources.AppS3Bucket;
-      expect(bucket.DependsOn).toBeUndefined(); // Dependency removed to prevent circular dependency
+      // S3 bucket should depend on Lambda function but NOT on Lambda permission
+      // to avoid circular dependency while ensuring proper resource creation order
+      expect(bucket.DependsOn).toEqual(['AppLambdaFunction']);
+      expect(bucket.DependsOn).not.toContain('AppLambdaPermission');
     });
   });
 

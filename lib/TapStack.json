@@ -97,10 +97,7 @@
           }
         }
       },
-      "DependsOn": [
-        "AppLambdaFunction",
-        "AppLambdaPermission"
-      ],
+      "DependsOn": ["AppLambdaFunction"],
       "Properties": {
         "BucketName": {
           "Fn::Sub": "app-s3bucket-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}"
