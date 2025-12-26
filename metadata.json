@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-101912560",
+  "team": "synth-2",
+  "startedAt": "2025-11-21T12:52:00-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "EventBridge",
+    "KMS",
+    "IAM"
+  ],
+  "wave": "P1"
+}
