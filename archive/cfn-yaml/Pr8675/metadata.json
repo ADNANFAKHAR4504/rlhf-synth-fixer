@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-291555",
+  "team": "synth-2",
+  "startedAt": "2025-08-19T10:30:07.823Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "IAM",
+    "KMS",
+    "S3",
+    "CloudWatch Logs",
+    "EC2",
+    "VPC",
+    "Internet Gateway",
+    "Subnet",
+    "Route Table",
+    "Security Group",
+    "VPC Flow Logs",
+    "CloudFormation",
+    "SSM",
+    "Instance Profile"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}
