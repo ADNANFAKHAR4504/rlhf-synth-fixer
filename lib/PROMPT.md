@@ -6,7 +6,7 @@ You're an expert Pulumi engineer. Build a highly available, secure, multi-region
 
 Don't touch anything else. If you need a variable, use Pulumi config with sensible defaults.
 
-## High-level Goal
+## High-level Goal/s
 
 Create "IaC - AWS Nova Model Breaking" - a production-ready, multi-region AWS setup with VPCs, autoscaling compute, managed DB with PITR, IAM roles, monitoring, encryption, tagging, and logging.
 
