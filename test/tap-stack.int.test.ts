@@ -48,9 +48,9 @@ describe('FinanceApp Integration Tests', () => {
       expect(keyPairParam.Description).toBe('EC2 Key Pair for SSH access (leave empty to disable SSH)');
     });
 
-    test('AmiId parameter should be a string for LocalStack', () => {
+    test('AmiId parameter should have correct type', () => {
       const amiParam = template.Parameters.AmiId;
-      expect(amiParam.Type).toBe('String');
+      expect(amiParam.Type).toBe('AWS::EC2::Image::Id');
       expect(amiParam.Default).toBe('ami-12345678');
     });
 
@@ -278,11 +278,10 @@ describe('FinanceApp Integration Tests', () => {
     test('ASG should use latest launch template version', () => {
       const asg = template.Resources.WebAutoScalingGroup;
       const launchTemplate = asg.Properties.LaunchTemplate;
-      
+
       expect(launchTemplate.LaunchTemplateId).toEqual({ Ref: 'WebLaunchTemplate' });
-      expect(launchTemplate.Version).toEqual({
-        'Fn::GetAtt': ['WebLaunchTemplate', 'LatestVersionNumber']
-      });
+      // LocalStack compatibility: using $Latest instead of Fn::GetAtt LatestVersionNumber
+      expect(launchTemplate.Version).toBe('$Latest');
     });
 
     test('ASG should be distributed across private subnets', () => {

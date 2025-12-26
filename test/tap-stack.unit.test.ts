@@ -56,9 +56,9 @@ describe('FinanceApp CloudFormation Template', () => {
       expect(keyPairParam.Description).toBe('EC2 Key Pair for SSH access (leave empty to disable SSH)');
     });
 
-    test('should have AmiId parameter as String for LocalStack', () => {
+    test('should have AmiId parameter with correct type', () => {
       const amiParam = template.Parameters.AmiId;
-      expect(amiParam.Type).toBe('String');
+      expect(amiParam.Type).toBe('AWS::EC2::Image::Id');
       expect(amiParam.Default).toBe('ami-12345678');
     });
 
@@ -366,7 +366,7 @@ describe('FinanceApp CloudFormation Template', () => {
       const rdsOutput = template.Outputs.RDSEndpoint;
       expect(rdsOutput.Description).toBe('RDS Database Endpoint');
       expect(rdsOutput.Value).toEqual({
-        'Fn::GetAtt': ['FinanceAppDatabase', 'Endpoint', 'Address']
+        'Fn::GetAtt': ['FinanceAppDatabase', 'Endpoint.Address']
       });
     });
 
