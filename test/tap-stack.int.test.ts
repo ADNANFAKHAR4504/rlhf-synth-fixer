@@ -640,7 +640,10 @@ describe('FinanceApp Integration Tests', () => {
 
     test('RDS endpoint should be available if deployed', () => {
       if (outputs && outputs.RDSEndpoint) {
-        expect(outputs.RDSEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
+        // Accept both AWS RDS endpoints and LocalStack endpoints
+        const isAwsEndpoint = /\.rds\.amazonaws\.com$/.test(outputs.RDSEndpoint);
+        const isLocalStackEndpoint = /localhost\.localstack\.cloud$/.test(outputs.RDSEndpoint);
+        expect(isAwsEndpoint || isLocalStackEndpoint).toBe(true);
       } else {
         expect(true).toBe(true); // Skip if not deployed
       }
