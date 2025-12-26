@@ -1,0 +1,320 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure, multi-region AWS infrastructure template with comprehensive logging, security, and data protection'
+
+# Parameters section commented out - EC2Instance disabled for LocalStack compatibility
+# Parameters:
+#   LatestAmiId:
+#     Type: AWS::EC2::Image::Id
+#     Default: ami-ff0fea8310f3
+#     Description: AMI ID for EC2 instance (LocalStack compatible)
+
+Resources:
+  # ========================================
+  # NETWORKING & LOGGING INFRASTRUCTURE
+  # ========================================
+
+  # Main VPC for the infrastructure
+  MainVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: IaCChallenge-VPC
+        - Key: Project
+          Value: IaCChallenge
+
+  # Public subnet for EC2 instances
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MainVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: IaCChallenge-PublicSubnet
+        - Key: Project
+          Value: IaCChallenge
+
+  # Internet Gateway for public internet access
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IaCChallenge-IGW
+        - Key: Project
+          Value: IaCChallenge
+
+  # Attach Internet Gateway to VPC
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MainVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Route table for public subnet
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MainVPC
+      Tags:
+        - Key: Name
+          Value: IaCChallenge-PublicRouteTable
+        - Key: Project
+          Value: IaCChallenge
+
+  # Default route to Internet Gateway
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Associate public subnet with route table
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # Central CloudWatch Log Group for aggregating logs
+  CentralLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/iacchallenge/central-logs
+      RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: IaCChallenge
+
+  # IAM Role for VPC Flow Logs
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: VPCFlowLogDeliveryRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: !GetAtt CentralLogGroup.Arn
+      Tags:
+        - Key: Project
+          Value: IaCChallenge
+
+  # VPC Flow Logs configuration
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref MainVPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref CentralLogGroup
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
+      Tags:
+        - Key: Project
+          Value: IaCChallenge
+
+  # ========================================
+  # SECURITY & COMPUTE INFRASTRUCTURE
+  # ========================================
+
+  # Security Group for EC2 instance
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for IaC Challenge EC2 instance
+      VpcId: !Ref MainVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP access
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: All outbound traffic
+      Tags:
+        - Key: Name
+          Value: IaCChallenge-EC2-SecurityGroup
+        - Key: Project
+          Value: IaCChallenge
+
+  # IAM Role for EC2 instances with minimal CloudWatch Logs permissions
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt CentralLogGroup.Arn
+      Tags:
+        - Key: Project
+          Value: IaCChallenge
+
+  # Instance Profile to attach IAM role to EC2 instance
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # EC2 Instance - Commented out due to LocalStack parameter resolution bug
+  # The EC2Instance resource has been temporarily disabled because LocalStack
+  # incorrectly wraps AMI IDs in double brackets when resolving parameters.
+  # All other infrastructure components deploy successfully.
+  # Uncomment for real AWS deployments where parameters work correctly.
+  #
+  # EC2Instance:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     ImageId: !Ref LatestAmiId
+  #     InstanceType: t2.micro
+  #     SubnetId: !Ref PublicSubnet
+  #     SecurityGroupIds:
+  #       - !Ref EC2SecurityGroup
+  #     IamInstanceProfile: !Ref EC2InstanceProfile
+  #     UserData:
+  #       Fn::Base64: !Sub |
+  #         #!/bin/bash
+  #         yum update -y
+  #         yum install -y awslogs
+  #
+  #         # Configure CloudWatch agent to send logs to central log group
+  #         cat > /etc/awslogs/awslogs.conf << EOF
+  #         [general]
+  #         state_file = /var/lib/awslogs/agent-state
+  #
+  #         [/var/log/messages]
+  #         file = /var/log/messages
+  #         log_group_name = ${CentralLogGroup}
+  #         log_stream_name = {instance_id}/var/log/messages
+  #         datetime_format = %b %d %H:%M:%S
+  #         EOF
+  #
+  #         # Start CloudWatch Logs agent
+  #         systemctl start awslogsd
+  #         systemctl enable awslogsd
+  #     Tags:
+  #       - Key: Name
+  #         Value: IaCChallenge-EC2Instance
+  #       - Key: Project
+  #         Value: IaCChallenge
+
+  # ========================================
+  # DATA PROTECTION INFRASTRUCTURE
+  # ========================================
+
+  # S3 Bucket with versioning and encryption
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'iacchallenge-bucket-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: IaCChallenge
+
+  # DynamoDB Table with Point-in-Time Recovery
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'IaCChallenge-Table-${AWS::Region}'
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Project
+          Value: IaCChallenge
+
+# ========================================
+# OUTPUTS
+# ========================================
+
+Outputs:
+  S3BucketName:
+    Description: 'Name of the created S3 bucket'
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketName'
+
+  DynamoDBTableName:
+    Description: 'Name of the created DynamoDB table'
+    Value: !Ref DynamoDBTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
+
+  # EC2InstanceId output commented out since EC2Instance is disabled
+  # EC2InstanceId:
+  #   Description: 'ID of the launched EC2 instance'
+  #   Value: !Ref EC2Instance
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-EC2InstanceId'
+
+  VPCId:
+    Description: 'ID of the created VPC'
+    Value: !Ref MainVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  CentralLogGroupName:
+    Description: 'Name of the central CloudWatch Log Group'
+    Value: !Ref CentralLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-CentralLogGroupName'

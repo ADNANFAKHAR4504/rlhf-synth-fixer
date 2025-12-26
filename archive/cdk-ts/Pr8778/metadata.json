@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr30",
+  "team": "synth-2",
+  "startedAt": "2025-08-08T12:57:40-05:00",
+  "subtask": "IaC Program Optimization",
+  "provider": "localstack",
+  "subject_labels": [
+    "IaC Diagnosis/Edits"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Auto Scaling",
+    "ALB",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "SNS"
+  ],
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,20 @@
+
+# Example Terraform variables file
+# Copy to terraform.tfvars and adjust values
+
+aws_region         = "us-east-1"
+environment_suffix = "dev-12345"
+
+# CloudWatch log retention (7-30 days recommended for cost management)
+log_retention_days = 14
+
+# X-Ray sampling percentage (0.05 = 5%, 0.1 = 10%)
+xray_sampling_percentage = 0.1
+
+# Alert email (leave empty to skip email subscriptions)
+alert_email = "ops-team@example.com"
+
+# Feature flags
+enable_security_hub = true
+enable_config       = true
+

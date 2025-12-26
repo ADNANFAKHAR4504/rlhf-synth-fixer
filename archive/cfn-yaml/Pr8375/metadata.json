@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350194",
+  "team": "3",
+  "startedAt": "2025-12-03T13:13:12.121Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "IAM",
+    "KMS",
+    "Secrets Manager",
+    "S3",
+    "Auto Scaling",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "RDS",
+    "SNS",
+    "Lambda",
+    "SSM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}

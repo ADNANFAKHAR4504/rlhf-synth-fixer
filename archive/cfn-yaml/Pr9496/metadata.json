@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-73031627",
+  "team": "synth-2",
+  "startedAt": "2025-10-06T20:43:08.212Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "Step Functions",
+    "S3",
+    "CloudFront",
+    "Cognito",
+    "SNS",
+    "EventBridge",
+    "CloudWatch",
+    "Athena",
+    "KMS",
+    "IAM",
+    "CloudFormation"
+  ],
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

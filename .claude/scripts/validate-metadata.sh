@@ -59,8 +59,8 @@ fi
 # 3. Validate language
 LANGUAGE=$(jq -r '.language // empty' "$METADATA_FILE")
 if [ -n "$LANGUAGE" ]; then
-    if [[ ! "$LANGUAGE" =~ ^(ts|py|js|go|java|hcl|yaml|json|yml)$ ]]; then
-        log_error "Invalid language: '$LANGUAGE' (must be: ts, py, js, go, java, hcl, yaml, json, or yml)"
+    if [[ ! "$LANGUAGE" =~ ^(ts|py|js|go|java|hcl|yaml|json|yml|sh)$ ]]; then
+        log_error "Invalid language: '$LANGUAGE' (must be: ts, py, js, go, java, hcl, yaml, json, yml, or sh)"
         ((ERRORS++))
     else
         log_info "Language: $LANGUAGE"
@@ -107,8 +107,8 @@ if [ -n "$PLATFORM" ] && [ -n "$LANGUAGE" ]; then
             fi
             ;;
         analysis)
-            if [ "$LANGUAGE" != "py" ]; then
-                log_error "Invalid platform-language combination: analysis-$LANGUAGE (analysis supports: py)"
+            if [[ ! "$LANGUAGE" =~ ^(py|sh)$ ]]; then
+                log_error "Invalid platform-language combination: analysis-$LANGUAGE (analysis supports: py, sh)"
                 ((ERRORS++))
             fi
             ;;

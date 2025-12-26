@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-267505",
+  "team": "synth-2",
+  "startedAt": "2025-07-26T08:20:55.868Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "CloudFormation"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "267505",
+    "pr": "Pr185"
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}

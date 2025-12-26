@@ -1,0 +1,41 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000249",
+  "team": "synth",
+  "startedAt": "2025-10-28T16:40:51.281Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "VPC Gateway Attachment",
+    "Public Subnets",
+    "Private Subnets",
+    "Database Subnets",
+    "Elastic IP",
+    "NAT Gateway",
+    "Route Table",
+    "Route",
+    "Subnet Route Table Associations",
+    "Network ACL",
+    "VPC Endpoint (S3)",
+    "VPC Endpoint (DynamoDB)",
+    "CloudWatch Logs Log Group",
+    "IAM Role",
+    "VPC Flow Logs"
+  ],
+  "provider": "localstack",
+  "wave": "P1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

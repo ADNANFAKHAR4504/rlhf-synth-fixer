@@ -1,0 +1,528 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template with Production Features",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix",
+            "Environment"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Security Configuration"
+          },
+          "Parameters": [
+            "EnableKMSEncryption"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Backup & Recovery Configuration"
+          },
+          "Parameters": [
+            "EnablePointInTimeRecovery",
+            "EnableBackup"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "development",
+      "AllowedValues": [
+        "development",
+        "staging",
+        "production"
+      ],
+      "Description": "Environment type for conditional resource configuration"
+    },
+    "EnableKMSEncryption": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Enable customer-managed KMS encryption for the DynamoDB table"
+    },
+    "EnablePointInTimeRecovery": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Enable Point-in-Time Recovery for the DynamoDB table (recommended for production)"
+    },
+    "EnableBackup": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Enable AWS Backup plan for the DynamoDB table (recommended for production)"
+    }
+  },
+  "Conditions": {
+    "IsProduction": {
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "production"
+      ]
+    },
+    "UseKMSEncryption": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableKMSEncryption"
+        },
+        "true"
+      ]
+    },
+    "EnablePITR": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnablePointInTimeRecovery"
+        },
+        "true"
+      ]
+    },
+    "EnableBackupPlan": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableBackup"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "TableEncryptionKey": {
+      "Type": "AWS::KMS::Key",
+      "Condition": "UseKMSEncryption",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for TurnAroundPromptTable encryption in ${EnvironmentSuffix} environment"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow DynamoDB to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "dynamodb.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "dynamodb.${AWS::Region}.amazonaws.com"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "TurnAroundPromptTableKey-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "TableEncryptionKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Condition": "UseKMSEncryption",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/tap-table-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "TableEncryptionKey"
+        }
+      }
+    },
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": {
+          "Fn::If": [
+            "IsProduction",
+            true,
+            false
+          ]
+        },
+        "SSESpecification": {
+          "Fn::If": [
+            "UseKMSEncryption",
+            {
+              "SSEEnabled": true,
+              "SSEType": "KMS",
+              "KMSMasterKeyId": {
+                "Ref": "TableEncryptionKey"
+              }
+            },
+            {
+              "SSEEnabled": true,
+              "SSEType": "KMS"
+            }
+          ]
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": {
+            "Fn::If": [
+              "EnablePITR",
+              true,
+              false
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "TurnAroundPromptTable-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "EnvironmentType",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": "CostCenter",
+            "Value": "Engineering"
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskAssignmentPlatform"
+          }
+        ]
+      }
+    },
+    "TableReadCapacityAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "TurnAroundPromptTable-${EnvironmentSuffix}-ReadThrottleEvents"
+        },
+        "AlarmDescription": "Alert when DynamoDB table experiences read throttle events",
+        "MetricName": "ReadThrottleEvents",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "TableWriteCapacityAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "TurnAroundPromptTable-${EnvironmentSuffix}-WriteThrottleEvents"
+        },
+        "AlarmDescription": "Alert when DynamoDB table experiences write throttle events",
+        "MetricName": "WriteThrottleEvents",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "TableUserErrorsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "TurnAroundPromptTable-${EnvironmentSuffix}-UserErrors"
+        },
+        "AlarmDescription": "Alert when DynamoDB table experiences user errors",
+        "MetricName": "UserErrors",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "BackupVault": {
+      "Type": "AWS::Backup::BackupVault",
+      "Condition": "EnableBackupPlan",
+      "Properties": {
+        "BackupVaultName": {
+          "Fn::Sub": "tap-backup-vault-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "BackupPlan": {
+      "Type": "AWS::Backup::BackupPlan",
+      "Condition": "EnableBackupPlan",
+      "Properties": {
+        "BackupPlan": {
+          "BackupPlanName": {
+            "Fn::Sub": "tap-dynamodb-backup-plan-${EnvironmentSuffix}"
+          },
+          "BackupPlanRule": [
+            {
+              "RuleName": "DailyBackups",
+              "TargetBackupVault": {
+                "Ref": "BackupVault"
+              },
+              "ScheduleExpression": "cron(0 5 ? * * *)",
+              "StartWindowMinutes": 60,
+              "CompletionWindowMinutes": 120,
+              "Lifecycle": {
+                "DeleteAfterDays": 30
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BackupRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "EnableBackupPlan",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "backup.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+          "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+        ]
+      }
+    },
+    "BackupSelection": {
+      "Type": "AWS::Backup::BackupSelection",
+      "Condition": "EnableBackupPlan",
+      "Properties": {
+        "BackupPlanId": {
+          "Ref": "BackupPlan"
+        },
+        "BackupSelection": {
+          "SelectionName": {
+            "Fn::Sub": "tap-table-backup-selection-${EnvironmentSuffix}"
+          },
+          "IamRoleArn": {
+            "Fn::GetAtt": [
+              "BackupRole",
+              "Arn"
+            ]
+          },
+          "Resources": [
+            {
+              "Fn::GetAtt": [
+                "TurnAroundPromptTable",
+                "Arn"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
+      }
+    },
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TurnAroundPromptTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "EncryptionKeyId": {
+      "Condition": "UseKMSEncryption",
+      "Description": "KMS Key ID used for table encryption",
+      "Value": {
+        "Ref": "TableEncryptionKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EncryptionKeyId"
+        }
+      }
+    },
+    "EncryptionKeyArn": {
+      "Condition": "UseKMSEncryption",
+      "Description": "KMS Key ARN used for table encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "TableEncryptionKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EncryptionKeyArn"
+        }
+      }
+    },
+    "BackupVaultName": {
+      "Condition": "EnableBackupPlan",
+      "Description": "Name of the backup vault",
+      "Value": {
+        "Ref": "BackupVault"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BackupVaultName"
+        }
+      }
+    }
+  }
+}

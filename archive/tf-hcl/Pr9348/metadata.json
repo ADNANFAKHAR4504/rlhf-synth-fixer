@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291790",
+  "team": "synth-2",
+  "startedAt": "2025-12-26T03:44:00.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudTrail",
+    "IAM",
+    "KMS",
+    "AutoScaling",
+    "SecretsManager"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "291790",
+    "pr": "Pr1246"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}

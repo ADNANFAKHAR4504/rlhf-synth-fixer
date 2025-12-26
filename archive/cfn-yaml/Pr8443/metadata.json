@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291915",
+  "team": "synth-2",
+  "startedAt": "2025-08-08T08:48:45.481Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "CloudWatch Logs",
+    "EC2",
+    "EventBridge",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "S3"
+  ],
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "michael-adeteye",
+  "dockerS3Location": ""
+}

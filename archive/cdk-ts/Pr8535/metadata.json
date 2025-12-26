@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "turn_type": "single",
+  "team": "synth",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AWS CDK",
+    "CloudFormation",
+    "IAM",
+    "Lambda",
+    "S3"
+  ],
+  "provider": "localstack",
+  "complexity": "medium",
+  "po_id": "4187",
+  "startedAt": "2025-12-21T10:38:31.000Z",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

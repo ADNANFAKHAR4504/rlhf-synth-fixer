@@ -1,0 +1,37 @@
+{
+  "provider": "localstack",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291975",
+  "team": "synth-2",
+  "wave": "P0",
+  "startedAt": "2025-08-19T09:27:14.309Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Internet Gateway",
+    "VPC Gateway Attachment",
+    "Subnet",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "Security Groups",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "michael-adeteye",
+  "dockerS3Location": ""
+}

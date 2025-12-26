@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291553",
+  "team": "4",
+  "startedAt": "2025-08-21T07:41:11.830Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Security Group",
+    "S3",
+    "IAM Role",
+    "CloudWatch Logs",
+    "Systems Manager Parameter Store",
+    "VPC Endpoint"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
