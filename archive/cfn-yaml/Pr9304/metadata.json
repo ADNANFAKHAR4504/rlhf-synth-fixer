@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr947",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "ALB",
+    "IAM",
+    "CloudWatch Logs",
+    "NAT Gateway",
+    "Internet Gateway",
+    "S3",
+    "Elastic IP"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr947",
+    "pr": "Pr2041"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}
