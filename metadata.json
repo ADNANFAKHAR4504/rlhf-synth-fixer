@@ -1,0 +1,20 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-284208",
+  "team": "synth-2",
+  "startedAt": "2025-07-29T15:45:52.958Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "CloudWatch Logs"
+  ],
+  "wave": "P0"
+}
