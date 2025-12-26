@@ -1,0 +1,24 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-267505",
+  "team": "synth-2",
+  "startedAt": "2025-07-26T08:20:55.868Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "CloudFormation"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "267505",
+    "pr": "Pr185"
+  }
+}
