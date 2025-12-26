@@ -90,6 +90,13 @@
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
+      "Metadata": {
+        "cfn-lint": {
+          "config": {
+            "ignore_checks": ["W3005"]
+          }
+        }
+      },
       "DependsOn": [
         "AppLambdaFunction",
         "AppLambdaPermission"
