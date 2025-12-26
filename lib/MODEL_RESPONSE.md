@@ -221,7 +221,7 @@ Now let's review this template and see if it meets all requirements:
 
 3. **Validation**:
    - [PASS] Used intrinsic functions (!Ref, !Sub, !GetAtt) instead of hardcoded ARNs
-   - ❓ Need to check if it passes cfn-nag scan
+   - Need to check if it passes cfn-nag scan
 
 However, there are a couple of issues I need to correct:
 
