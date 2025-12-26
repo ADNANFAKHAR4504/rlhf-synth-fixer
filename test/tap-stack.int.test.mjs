@@ -13,12 +13,23 @@ if (fs.existsSync(outputsPath)) {
   outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 }
 
-// AWS Clients
-const ecsClient = new ECSClient({ region: 'us-west-2' });
-const ec2Client = new EC2Client({ region: 'us-west-2' });
-const secretsClient = new SecretsManagerClient({ region: 'us-west-2' });
-const logsClient = new CloudWatchLogsClient({ region: 'us-west-2' });
-const ecrClient = new ECRClient({ region: 'us-west-2' });
+// AWS Clients - Configure for LocalStack if endpoint URL is set
+const awsConfig = {
+  region: process.env.AWS_REGION || 'us-east-1',
+  ...(process.env.AWS_ENDPOINT_URL && {
+    endpoint: process.env.AWS_ENDPOINT_URL,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test'
+    }
+  })
+};
+
+const ecsClient = new ECSClient(awsConfig);
+const ec2Client = new EC2Client(awsConfig);
+const secretsClient = new SecretsManagerClient(awsConfig);
+const logsClient = new CloudWatchLogsClient(awsConfig);
+const ecrClient = new ECRClient(awsConfig);
 
 describe('CI/CD Pipeline with AWS Fargate - Integration Tests', () => {
   describe('VPC and Networking', () => {

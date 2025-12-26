@@ -6,14 +6,17 @@
   "po_id": "LS-trainr125-new",
   "team": "synth-2",
   "startedAt": "2025-08-22T13:09:38+05:30",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup",
-    "Serverless Infrastructure (Functions as Code)",
-    "CI/CD Pipeline"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr125-new",
+    "pr": "Pr1988"
+  },
   "training_quality": 9,
   "aws_services": [
     "ECS",
