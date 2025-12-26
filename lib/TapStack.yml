@@ -42,7 +42,6 @@ Parameters:
 Conditions:
   DeployCodePipeline: !Equals [!Ref IsLocalStack, 'false']
   DeployNATGateway: !Equals [!Ref IsLocalStack, 'false']
-  IsLocalStackCondition: !Equals [!Ref IsLocalStack, 'true']
 
 Resources:
   # VPC Configuration (using default VPC)
