@@ -33,6 +33,34 @@ Parameters:
     Default: Production
     Description: Environment tag
 
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Environment suffix for resource naming
+
+  KeyPairName:
+    Type: String
+    Default: localstack-key
+    Description: EC2 key pair name for SSH access
+
+  UseLocalStack:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Whether deploying to LocalStack (uses dummy AMI)
+
+Conditions:
+  IsLocalStack: !Equals [!Ref UseLocalStack, 'true']
+
+Mappings:
+  EnvironmentConfig:
+    LocalStack:
+      AMI: ami-00000000000000000
+    AWS:
+      AMI: ami-00ca32bbc84273381
+
 Resources:
 
   ### VPC and Networking ###
@@ -146,7 +174,11 @@ Resources:
     Properties:
       LaunchTemplateData:
         InstanceType: !Ref InstanceType
-        ImageId: ami-00ca32bbc84273381
+        ImageId: !If
+          - IsLocalStack
+          - !FindInMap [EnvironmentConfig, LocalStack, AMI]
+          - !FindInMap [EnvironmentConfig, AWS, AMI]
+        KeyName: !Ref KeyPairName
         SecurityGroupIds:
           - !Ref InstanceSecurityGroup
         UserData:
@@ -221,8 +253,9 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: '2'
-      MaxSize: '10'
+      MinSize: !If [IsLocalStack, '1', '2']
+      MaxSize: !If [IsLocalStack, '2', '10']
+      DesiredCapacity: !If [IsLocalStack, '1', '2']
       TargetGroupARNs:
         - !Ref TargetGroup
       HealthCheckType: EC2
