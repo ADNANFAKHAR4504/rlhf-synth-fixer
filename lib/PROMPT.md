@@ -1,13 +1,13 @@
 # AWS CloudFormation Payment Processing Application
 
-You are an expert AWS CloudFormation architect. Create a single, production-ready CloudFormation YAML template that can deploy a payment processing application to both development and production environments — automatically adapting configuration using parameters and conditions.
+You are an expert AWS CloudFormation architect. Create a single, production-ready CloudFormation YAML template that can deploy a payment processing application to both development and production environments - automatically adapting configuration using parameters and conditions.
 
 ## Functional Goal
 
 The template must:
 
 - Deploy a payment processing application using one CloudFormation stack that dynamically configures itself for dev or prod based on a parameter
-- Be fully cross-account and cross-region executable — no hardcoded account IDs, ARNs, or regions
+- Be fully cross-account and cross-region executable - no hardcoded account IDs, ARNs, or regions
 - Follow strict naming, parameterization, and tagging conventions
 - Require no manual post-deployment configuration
 
@@ -17,9 +17,9 @@ The template must:
 
 Must include Environment parameter (dev or prod) used for all environment-based conditions and logic.
 
-Must include parameters for instance sizes, database storage, allowed CIDR blocks, Lambda concurrency, etc.
+Must include parameters for instance sizes, database storage, allowed CIDR blocks, Lambda concurrency, and similar configuration values.
 
-Must include an EnvironmentSuffix parameter used only for resource naming (e.g., PR numbers injected by CI/CD).
+Must include an EnvironmentSuffix parameter used only for resource naming (like PR numbers injected by CI/CD).
 
 Example:
 
@@ -35,13 +35,13 @@ Parameters:
 
   EnvironmentSuffix:
     Type: String
-    Description: 'Suffix for resource names to support multiple parallel deployments (e.g., PR number from CI/CD)'
+    Description: 'Suffix for resource names to support multiple parallel deployments (like PR number from CI/CD)'
     Default: "pr4056"
     AllowedPattern: '^[a-zA-Z0-9\\-]*$'
     ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
 ```
 
-**Important:** All environment-specific logic (conditions, resource properties, thresholds, etc.) must be based on Environment, while naming must use EnvironmentSuffix.
+**Important:** All environment-specific logic (conditions, resource properties, thresholds) must be based on Environment, while naming must use EnvironmentSuffix.
 
 ## Technical Requirements
 
@@ -80,14 +80,14 @@ Parameters:
 
 ### Security Groups
 
-- CIDR ranges provided as parameters — no hardcoded CIDRs
+- CIDR ranges provided as parameters - no hardcoded CIDRs
 - Stricter ingress for prod
 
 ### IAM Roles
 
 - Define least-privilege roles and policies
 - Use !Sub and Conditions to scope permissions dynamically
-- No wildcard ("*") actions or hardcoded ARNs
+- No wildcard actions or hardcoded ARNs
 
 ### Tagging
 
@@ -106,7 +106,7 @@ Tags:
 Must be deployable across any AWS account and region without modification.
 
 - No hardcoded ARNs, account IDs, or region names
-- Use intrinsic functions (!Sub, !Ref, !GetAtt, etc.) for all references
+- Use intrinsic functions (!Sub, !Ref, !GetAtt) for all references
 
 ## Naming Convention (Mandatory)
 
@@ -117,11 +117,11 @@ Name: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-[resource-type
 ```
 
 **Examples:**
-- VPC → `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc`
-- Subnet → `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1`
-- EC2 → `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-instance`
+- VPC to `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc`
+- Subnet to `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1`
+- EC2 to `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-instance`
 
-EnvironmentSuffix is not the environment name; it is a unique identifier (e.g., PR number) injected by CI/CD.
+EnvironmentSuffix is not the environment name; it is a unique identifier (like PR number) injected by CI/CD.
 
 ## Architectural / Structural Requirements
 
