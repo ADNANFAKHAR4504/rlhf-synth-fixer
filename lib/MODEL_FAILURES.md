@@ -4,30 +4,30 @@ This document compares the **ideal implementation** of the `TapStack` AWS CDK Py
 
 ---
 
-## ✅ Areas Where Model Matches the Ideal
+##  Areas Where Model Matches the Ideal
 
 | Feature                              | Status | Notes                                                                 |
 |--------------------------------------|--------|-----------------------------------------------------------------------|
-| ✅ Lambda Functionality              | ✅     | Two Lambda functions (`hello` and `user`) implemented correctly       |
-| ✅ API Gateway Integration           | ✅     | Used `HttpApi` and integrated with both Lambda functions              |
-| ✅ CORS Support in CDK               | ✅     | Configured via `cors_preflight` in CDK for HTTP API                   |
-| ✅ Free Tier Optimizations           | ✅     | 128 MB memory, 30s timeout, 1-week logs used                          |
-| ✅ Project Structure Overview        | ✅     | Provided tree structure and command-line usage in `README.md`        |
-| ✅ Clean `requirements.txt` & `cdk.json` | ✅  | Lists required libraries and CDK context settings                     |
+|  Lambda Functionality              |      | Two Lambda functions (`hello` and `user`) implemented correctly       |
+|  API Gateway Integration           |      | Used `HttpApi` and integrated with both Lambda functions              |
+|  CORS Support in CDK               |      | Configured via `cors_preflight` in CDK for HTTP API                   |
+|  Free Tier Optimizations           |      | 128 MB memory, 30s timeout, 1-week logs used                          |
+|  Project Structure Overview        |      | Provided tree structure and command-line usage in `README.md`        |
+|  Clean `requirements.txt` & `cdk.json` |   | Lists required libraries and CDK context settings                     |
 
 ---
 
-## ❌ Model Failures Compared to Ideal Response
+##  Model Failures Compared to Ideal Response
 
 | Area                                   | Issue Description                                                                                                                                      | Impact                                                                 |
 |----------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
-| ❌ Lambda Inline Code Format           | In the model response, multiline string literals are not dedented with `textwrap.dedent()`                                                             | Makes the inline code harder to read and maintain                      |
-| ❌ Missing `TapStackProps` Class       | The model response omits `TapStackProps`, which supports dynamic `environment_suffix` from context or props                                           | Reduces flexibility and modularity                                     |
-| ❌ Hardcoded API Name in CDK           | Model hardcodes `"tap-serverless-api"` in `HttpApi`, whereas ideal version uses `stack_prefix = f"tap-{env}"` for dynamic naming                      | Breaks naming consistency across environments                          |
-| ❌ No Parameterization or Context Use  | Model does **not** retrieve context values (e.g., `environmentSuffix`) from CDK context or props                                                       | Not environment-agnostic; hurts reusability in CI/CD pipelines         |
-| ❌ No Integration with Other Stacks    | Ideal response suggests modular orchestration (e.g., `DynamoDBStack`) via composition; model makes no mention                                          | Violates modular architecture recommendation                           |
-| ❌ Limited Docstrings and Comments     | The model’s `tap_stack.py` lacks complete docstrings and in-line comments that are detailed in the ideal version                                       | Hurts maintainability and code readability                             |
-| ❌ CORS Test Integration Clarity       | While the Lambda responses contain CORS headers, the model doesn't validate that this is fully reflected in deployed OPTIONS behavior at runtime       | Leads to test failures (e.g., missing `Access-Control-Allow-Origin`)   |
+|  Lambda Inline Code Format           | In the model response, multiline string literals are not dedented with `textwrap.dedent()`                                                             | Makes the inline code harder to read and maintain                      |
+|  Missing `TapStackProps` Class       | The model response omits `TapStackProps`, which supports dynamic `environment_suffix` from context or props                                           | Reduces flexibility and modularity                                     |
+|  Hardcoded API Name in CDK           | Model hardcodes `"tap-serverless-api"` in `HttpApi`, whereas ideal version uses `stack_prefix = f"tap-{env}"` for dynamic naming                      | Breaks naming consistency across environments                          |
+|  No Parameterization or Context Use  | Model does **not** retrieve context values (e.g., `environmentSuffix`) from CDK context or props                                                       | Not environment-agnostic; hurts reusability in CI/CD pipelines         |
+|  No Integration with Other Stacks    | Ideal response suggests modular orchestration (e.g., `DynamoDBStack`) via composition; model makes no mention                                          | Violates modular architecture recommendation                           |
+|  Limited Docstrings and Comments     | The model’s `tap_stack.py` lacks complete docstrings and in-line comments that are detailed in the ideal version                                       | Hurts maintainability and code readability                             |
+|  CORS Test Integration Clarity       | While the Lambda responses contain CORS headers, the model doesn't validate that this is fully reflected in deployed OPTIONS behavior at runtime       | Leads to test failures (e.g., missing `Access-Control-Allow-Origin`)   |
 
 ---
 
@@ -48,6 +48,6 @@ The model-generated solution is a **solid functional baseline**, but **fails in 
 
 | Verdict           | Reason                                                                 |
 |-------------------|------------------------------------------------------------------------|
-| ❌ Not Production-Ready | Lacks flexibility, context-awareness, and clean formatting/documentation |
+|  Not Production-Ready | Lacks flexibility, context-awareness, and clean formatting/documentation |
 
 
