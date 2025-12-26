@@ -52,9 +52,10 @@ describe('CloudFormation Template', () => {
       expect(template.Resources.PrivateSubnet2).toBeDefined();
     });
 
-    test('should define Internet Gateway and NAT Gateway', () => {
+    test('should define Internet Gateway', () => {
       expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.NatGateway).toBeDefined();
+      // NAT Gateway removed for LocalStack Community Edition compatibility
+      // (EIP allocation for NAT Gateway does not work in LocalStack Community)
     });
 
     test('should define IAM roles for EC2 and RDS', () => {
@@ -107,7 +108,7 @@ describe('CloudFormation Template', () => {
         'PrivateSubnet1',
         'PrivateSubnet2',
         'InternetGateway',
-        'NatGateway',
+        // 'NatGateway' removed - not present in LocalStack-compatible template
       ];
 
       resourcesWithTags.forEach(resourceName => {
