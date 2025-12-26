@@ -435,25 +435,10 @@ public final class Main {
         }
 
         // Create the main high availability TAP stack
-        // Use placeholder account/region during synthesis to avoid credential validation
-        // These will be overridden during actual deployment
-        String account = System.getenv("CDK_DEFAULT_ACCOUNT");
-        String region = System.getenv("CDK_DEFAULT_REGION");
-
-        // Use placeholder values if not set (allows synth without credentials)
-        if (account == null || account.isEmpty()) {
-            account = "123456789012";
-        }
-        if (region == null || region.isEmpty()) {
-            region = "us-east-1";
-        }
-
-        new TapStackDev(app, "TapStack" + environmentSuffix, StackProps.builder()
-                .env(Environment.builder()
-                        .account(account)
-                        .region(region)
-                        .build())
-                .build());
+        // For CDK Java apps, avoid setting explicit environment during synth
+        // This prevents AWS API calls and credential validation during synthesis
+        // Environment will be resolved at deploy time from AWS credentials
+        new TapStackDev(app, "TapStack" + environmentSuffix, StackProps.builder().build());
 
         // Synthesize the CDK app
         app.synth();
