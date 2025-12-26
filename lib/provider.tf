@@ -6,15 +6,16 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = "~> 5.0"
     }
   }
+  # Backend disabled for LocalStack testing
+  backend "s3" {}
 }
 
-# Primary AWS provider for general resources
+# Primary AWS provider for general resources - LocalStack Configuration
 provider "aws" {
-  region = var.aws_region
-
+  region                      = var.aws_region
   access_key                  = "test"
   secret_key                  = "test"
   skip_credentials_validation = true
@@ -22,19 +23,17 @@ provider "aws" {
   skip_requesting_account_id  = true
 
   endpoints {
-    ec2            = "http://localhost:4566"
-    iam            = "http://localhost:4566"
-    s3             = "http://localhost:4566"
-    sts            = "http://localhost:4566"
-    cloudformation = "http://localhost:4566"
+    ec2 = "http://localhost:4566"
+    sts = "http://localhost:4566"
   }
+
+  s3_use_path_style = true
 }
 
-# Provider aliases for multi-region deployment
+# Provider alias for us-east-2 region - LocalStack Configuration
 provider "aws" {
-  alias  = "us_east_2"
-  region = "us-east-2"
-
+  alias                       = "us_east_2"
+  region                      = "us-east-2"
   access_key                  = "test"
   secret_key                  = "test"
   skip_credentials_validation = true
@@ -42,18 +41,17 @@ provider "aws" {
   skip_requesting_account_id  = true
 
   endpoints {
-    ec2            = "http://localhost:4566"
-    iam            = "http://localhost:4566"
-    s3             = "http://localhost:4566"
-    sts            = "http://localhost:4566"
-    cloudformation = "http://localhost:4566"
+    ec2 = "http://localhost:4566"
+    sts = "http://localhost:4566"
   }
+
+  s3_use_path_style = true
 }
 
+# Provider alias for us-west-2 region - LocalStack Configuration
 provider "aws" {
-  alias  = "us_west_2"
-  region = "us-west-2"
-
+  alias                       = "us_west_2"
+  region                      = "us-west-2"
   access_key                  = "test"
   secret_key                  = "test"
   skip_credentials_validation = true
@@ -61,10 +59,9 @@ provider "aws" {
   skip_requesting_account_id  = true
 
   endpoints {
-    ec2            = "http://localhost:4566"
-    iam            = "http://localhost:4566"
-    s3             = "http://localhost:4566"
-    sts            = "http://localhost:4566"
-    cloudformation = "http://localhost:4566"
+    ec2 = "http://localhost:4566"
+    sts = "http://localhost:4566"
   }
+
+  s3_use_path_style = true
 }

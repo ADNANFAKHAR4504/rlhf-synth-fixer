@@ -17,9 +17,15 @@ type InfrastructureOutput = {
   nat_gateway_eip_id: string;
 };
 
+type TerraformOutput<T> = {
+  sensitive: boolean;
+  type: unknown;
+  value: T;
+};
+
 type FlatOutputs = {
-  us_east_2_infrastructure: string;
-  us_west_2_infrastructure: string;
+  us_east_2_infrastructure: TerraformOutput<InfrastructureOutput>;
+  us_west_2_infrastructure: TerraformOutput<InfrastructureOutput>;
 };
 
 function readFlatOutputs(): FlatOutputs {
@@ -29,8 +35,8 @@ function readFlatOutputs(): FlatOutputs {
   return JSON.parse(fs.readFileSync(FLAT_OUTPUTS_FILE, 'utf8'));
 }
 
-function parseInfrastructureOutput(outputString: string): InfrastructureOutput {
-  return JSON.parse(outputString);
+function extractInfrastructureOutput(output: TerraformOutput<InfrastructureOutput>): InfrastructureOutput {
+  return output.value;
 }
 
 describe('Terraform Infrastructure Integration Tests', () => {
@@ -40,8 +46,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   beforeAll(() => {
     flatOutputs = readFlatOutputs();
-    usEast2Infra = parseInfrastructureOutput(flatOutputs.us_east_2_infrastructure);
-    usWest2Infra = parseInfrastructureOutput(flatOutputs.us_west_2_infrastructure);
+    usEast2Infra = extractInfrastructureOutput(flatOutputs.us_east_2_infrastructure);
+    usWest2Infra = extractInfrastructureOutput(flatOutputs.us_west_2_infrastructure);
   });
 
   it('flat-outputs.json exists and contains expected regions', () => {

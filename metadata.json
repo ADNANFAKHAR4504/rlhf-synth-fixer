@@ -3,14 +3,13 @@
   "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "ls-291281",
+  "po_id": "LS-291281",
   "team": "synth-2",
   "startedAt": "2025-12-26T03:00:00.000Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "Cloud Environment Setup",
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
@@ -20,15 +19,9 @@
     "EIP",
     "RouteTable"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291281",
     "pr": "Pr1227"
-  },
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "enyachoke-turing",
-  "dockerS3Location": ""
+  }
 }
