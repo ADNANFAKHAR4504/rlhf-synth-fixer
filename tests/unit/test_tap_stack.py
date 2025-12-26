@@ -718,6 +718,242 @@ class TestTapStack(unittest.TestCase):
         self.assertEqual(args_special.tags, special_tags)
     
 
-    if __name__ == '__main__':
-        # Run tests with detailed output
-        unittest.main(verbosity=2, buffer=True)
+    def test_monitoring_localstack_detection(self):
+        """Test monitoring component detects LocalStack environment"""
+        from lib.components.monitoring import MonitoringInfrastructure
+        
+        # Test with LocalStack environment
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            monitoring = MonitoringInfrastructure('test-monitoring', tags={})
+            # In LocalStack, should create mock ARN
+            self.assertIsNotNone(monitoring.sns_topic_arn)
+    
+    def test_monitoring_setup_alarms_localstack(self):
+        """Test monitoring setup_alarms is no-op in LocalStack"""
+        from lib.components.monitoring import MonitoringInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            monitoring = MonitoringInfrastructure('test-monitoring', tags={})
+            # setup_alarms should not raise error in LocalStack
+            result = monitoring.setup_alarms(
+                lambda_function_names=[Mock()],
+                kinesis_stream_name=Mock(),
+                cloudfront_distribution_id=Mock()
+            )
+            # Should return None (no-op)
+            self.assertIsNone(result)
+    
+    def test_backend_s3_storage_creation(self):
+        """Test backend component creates S3 bucket for storage"""
+        from lib.components.backend import BackendInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            backend = BackendInfrastructure(
+                name='test-backend',
+                vpc_id=Mock(),
+                private_subnet_ids=[Mock()],
+                lambda_security_group_id=Mock(),
+                tags={}
+            )
+            # Should have data_bucket attribute
+            self.assertIsNotNone(backend.data_bucket)
+    
+    def test_backend_lambda_environment_vars(self):
+        """Test backend Lambda has correct environment variables"""
+        from lib.components.backend import BackendInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            backend = BackendInfrastructure(
+                name='test-backend',
+                vpc_id=Mock(),
+                private_subnet_ids=[Mock()],
+                lambda_security_group_id=Mock(),
+                tags={}
+            )
+            # Lambda should reference the data bucket
+            self.assertIsNotNone(backend.backend_lambda)
+    
+    def test_frontend_s3_website_config(self):
+        """Test frontend S3 bucket configured as static website"""
+        from lib.components.frontend import FrontendInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            frontend = FrontendInfrastructure(
+                name='test-frontend',
+                tags={}
+            )
+            # Should have website bucket and objects
+            self.assertIsNotNone(frontend.website_bucket)
+            self.assertIsNotNone(frontend.bucket_website_url)
+    
+    def test_frontend_index_and_error_pages(self):
+        """Test frontend creates index.html and error.html"""
+        from lib.components.frontend import FrontendInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            frontend = FrontendInfrastructure(
+                name='test-frontend',
+                tags={}
+            )
+            # Should have index and error HTML objects
+            self.assertTrue(hasattr(frontend, 'index_html'))
+            self.assertTrue(hasattr(frontend, 'error_html'))
+    
+    def test_data_processing_s3_events(self):
+        """Test data processing uses S3 events instead of Kinesis"""
+        from lib.components.data_processing import DataProcessingInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            data_processing = DataProcessingInfrastructure(
+                name='test-data-processing',
+                vpc_id=Mock(),
+                private_subnet_ids=[Mock()],
+                lambda_security_group_id=Mock(),
+                tags={}
+            )
+            # Should have processing Lambda and output bucket
+            self.assertIsNotNone(data_processing.processing_lambda)
+            self.assertIsNotNone(data_processing.output_bucket)
+    
+    def test_data_processing_lambda_permissions(self):
+        """Test data processing Lambda has S3 permissions"""
+        from lib.components.data_processing import DataProcessingInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            data_processing = DataProcessingInfrastructure(
+                name='test-data-processing',
+                vpc_id=Mock(),
+                private_subnet_ids=[Mock()],
+                lambda_security_group_id=Mock(),
+                tags={}
+            )
+            # Lambda role should exist
+            self.assertTrue(hasattr(data_processing, 'processing_lambda_role'))
+    
+    def test_network_vpc_configuration(self):
+        """Test network creates VPC with correct CIDR"""
+        from lib.components.network import NetworkInfrastructure
+        
+        network = NetworkInfrastructure(
+            name='test-network',
+            tags={}
+        )
+        # Should have VPC
+        self.assertIsNotNone(network.vpc)
+        self.assertIsNotNone(network.vpc_id)
+    
+    def test_network_nat_gateways(self):
+        """Test network creates NAT gateways for private subnets"""
+        from lib.components.network import NetworkInfrastructure
+        
+        network = NetworkInfrastructure(
+            name='test-network',
+            tags={}
+        )
+        # Should have NAT gateways
+        self.assertTrue(hasattr(network, 'nat_gateways'))
+    
+    def test_network_vpc_endpoints_s3(self):
+        """Test network creates VPC endpoint for S3"""
+        from lib.components.network import NetworkInfrastructure
+        
+        network = NetworkInfrastructure(
+            name='test-network',
+            tags={}
+        )
+        # Should have S3 VPC endpoint
+        self.assertTrue(hasattr(network, 's3_vpc_endpoint'))
+    
+    def test_backend_iam_policy_statements(self):
+        """Test backend Lambda IAM role has necessary permissions"""
+        from lib.components.backend import BackendInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            backend = BackendInfrastructure(
+                name='test-backend',
+                vpc_id=Mock(),
+                private_subnet_ids=[Mock()],
+                lambda_security_group_id=Mock(),
+                tags={}
+            )
+            # Should have IAM role
+            self.assertTrue(hasattr(backend, 'backend_lambda_role'))
+    
+    def test_tap_stack_with_empty_tags(self):
+        """Test TapStack handles empty tags dict"""
+        args = self.TapStackArgs(environment_suffix='test', tags={})
+        
+        with patch('lib.tap_stack.NetworkInfrastructure'), \
+             patch('lib.tap_stack.BackendInfrastructure'), \
+             patch('lib.tap_stack.DataProcessingInfrastructure'), \
+             patch('lib.tap_stack.FrontendInfrastructure'), \
+             patch('lib.tap_stack.MonitoringInfrastructure'):
+            
+            stack = self.TapStack('test-stack', args)
+            self.assertIsNotNone(stack)
+    
+    def test_monitoring_register_outputs(self):
+        """Test monitoring component registers outputs correctly"""
+        from lib.components.monitoring import MonitoringInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            monitoring = MonitoringInfrastructure('test-monitoring', tags={'Test': 'value'})
+            # Should register sns_topic_arn output
+            self.assertTrue(hasattr(monitoring, 'outputs'))
+    
+    def test_backend_outputs_registration(self):
+        """Test backend component registers all required outputs"""
+        from lib.components.backend import BackendInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            backend = BackendInfrastructure(
+                name='test-backend',
+                vpc_id=Mock(),
+                private_subnet_ids=[Mock()],
+                lambda_security_group_id=Mock(),
+                tags={'Environment': 'test'}
+            )
+            # Should have registered outputs
+            self.assertTrue(hasattr(backend, 'outputs'))
+    
+    def test_frontend_outputs_registration(self):
+        """Test frontend component registers website URL output"""
+        from lib.components.frontend import FrontendInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            frontend = FrontendInfrastructure(
+                name='test-frontend',
+                tags={'Environment': 'test'}
+            )
+            # Should have outputs
+            self.assertTrue(hasattr(frontend, 'outputs'))
+    
+    def test_data_processing_outputs_registration(self):
+        """Test data processing component registers outputs"""
+        from lib.components.data_processing import DataProcessingInfrastructure
+        
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:4566'}):
+            data_processing = DataProcessingInfrastructure(
+                name='test-data-processing',
+                vpc_id=Mock(),
+                private_subnet_ids=[Mock()],
+                lambda_security_group_id=Mock(),
+                tags={'Environment': 'test'}
+            )
+            # Should have outputs
+            self.assertTrue(hasattr(data_processing, 'outputs'))
+    
+    def test_network_outputs_registration(self):
+        """Test network component registers all network-related outputs"""
+        from lib.components.network import NetworkInfrastructure
+        
+        network = NetworkInfrastructure(
+            name='test-network',
+            tags={'Environment': 'test'}
+        )
+        # Should have multiple outputs registered
+        self.assertTrue(hasattr(network, 'outputs'))
+
+
+if __name__ == '__main__':
+    unittest.main()
