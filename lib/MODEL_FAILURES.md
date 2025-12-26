@@ -2,6 +2,7 @@
 
 This document outlines the differences between the ideal configuration (`IDEAL_RESPONSE.md`) and the model-generated configuration (`MODEL_RESPONSE.md`) for the large-scale profile migration system.
 
+
 ## Database Configuration Failures
 
 ### Source Database Engine Mismatch
