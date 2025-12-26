@@ -235,20 +235,18 @@ class TapStack(TerraformStack):
         )
         
         # S3 Bucket for logs
-        # Note: Tags removed for LocalStack due to S3 Control API account ID validation bug
-        s3_bucket_config = {
-            "bucket": f"logs-bucket-{environment_suffix}-{aws_region}",
-            "force_destroy": True  # Required for LocalStack cleanup
-        }
-
-        # Only add tags for non-LocalStack deployments (S3 Control API issue in LocalStack)
+        # Note: S3 bucket is skipped in LocalStack mode due to S3 Control API AccountId validation bug
+        # The ListTagsForResource API fails with: "AccountId must only contain a-z, A-Z, 0-9 and `-`"
+        s3_logs_bucket = None
         if not is_localstack:
-            s3_bucket_config["tags"] = {
-                "Name": f"logs-bucket-{environment_suffix}",
-                "Environment": "Production"
-            }
-
-        s3_logs_bucket = S3Bucket(self, "s3_logs_bucket", **s3_bucket_config)
+            s3_logs_bucket = S3Bucket(self, "s3_logs_bucket",
+                bucket=f"logs-bucket-{environment_suffix}-{aws_region}",
+                force_destroy=True,
+                tags={
+                    "Name": f"logs-bucket-{environment_suffix}",
+                    "Environment": "Production"
+                }
+            )
         
         # S3 Bucket Server-Side Encryption - Disabled for LocalStack
         # LocalStack has strict AccountId validation that causes errors
@@ -407,7 +405,9 @@ class TapStack(TerraformStack):
         #   description="EC2 Instance IDs"
         # )
 
-        TerraformOutput(self, "s3_logs_bucket_name",
-            value=s3_logs_bucket.bucket,
-            description="S3 Logs Bucket Name"
-        )
+        # S3 output only when not in LocalStack mode
+        if s3_logs_bucket:
+            TerraformOutput(self, "s3_logs_bucket_name",
+                value=s3_logs_bucket.bucket,
+                description="S3 Logs Bucket Name"
+            )
