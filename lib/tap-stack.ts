@@ -72,7 +72,8 @@ export class TapStack extends TerraformStack {
 
     // Use generic AMI ID for LocalStack, real AMI for AWS
     // LocalStack doesn't validate AMI IDs like AWS does
-    const amiId = props.amiId || (isLocalStack ? 'ami-12345678' : 'ami-0e0d5cba8c90ba8c5');
+    const amiId =
+      props.amiId || (isLocalStack ? 'ami-12345678' : 'ami-0e0d5cba8c90ba8c5');
     const tags = { Environment: 'Production' };
 
     // Generate unique names for resources that require global uniqueness
@@ -277,60 +278,68 @@ export class TapStack extends TerraformStack {
       restrictPublicBuckets: true,
     });
 
-    const ec2Role: IamRole = new IamRole(this, 'EC2LogRole', {
-      name: uniqueRoleName,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: { Service: 'ec2.amazonaws.com' },
-            Action: 'sts:AssumeRole',
-          },
-        ],
-      }),
-      tags,
-    });
+    // EC2 instance and related resources are only created for AWS deployments
+    // LocalStack Community Edition does not support EC2 (requires Pro/Ultimate)
+    let webInstance: Instance | undefined;
+    let ec2Role: IamRole | undefined;
+    let ec2Policy: IamPolicy | undefined;
 
-    // Create IAM Instance Profile for EC2
-    const ec2InstanceProfile = new IamInstanceProfile(
-      this,
-      'EC2InstanceProfile',
-      {
-        name: uniqueInstanceProfileName,
+    if (!isLocalStack) {
+      ec2Role = new IamRole(this, 'EC2LogRole', {
+        name: uniqueRoleName,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: { Service: 'ec2.amazonaws.com' },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        tags,
+      });
+
+      // Create IAM Instance Profile for EC2
+      const ec2InstanceProfile = new IamInstanceProfile(
+        this,
+        'EC2InstanceProfile',
+        {
+          name: uniqueInstanceProfileName,
+          role: ec2Role.name,
+        }
+      );
+
+      ec2Policy = new IamPolicy(this, 'EC2S3LogPolicy', {
+        name: uniquePolicyName,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['s3:PutObject'],
+              Resource: [`${logBucket.arn}/*`],
+            },
+          ],
+        }),
+        tags,
+      });
+
+      new IamRolePolicyAttachment(this, 'AttachS3Policy', {
         role: ec2Role.name,
-      }
-    );
+        policyArn: ec2Policy.arn,
+      });
 
-    const ec2Policy = new IamPolicy(this, 'EC2S3LogPolicy', {
-      name: uniquePolicyName,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: ['s3:PutObject'],
-            Resource: [`${logBucket.arn}/*`],
-          },
-        ],
-      }),
-      tags,
-    });
-
-    new IamRolePolicyAttachment(this, 'AttachS3Policy', {
-      role: ec2Role.name,
-      policyArn: ec2Policy.arn,
-    });
-
-    const webInstance = new Instance(this, 'WebInstance', {
-      ami: amiId,
-      instanceType: 't3.micro',
-      subnetId: subnet.id,
-      vpcSecurityGroupIds: [sg.id],
-      associatePublicIpAddress: true,
-      iamInstanceProfile: ec2InstanceProfile.name,
-      tags: { ...tags, Name: uniqueInstanceName },
-    });
+      webInstance = new Instance(this, 'WebInstance', {
+        ami: amiId,
+        instanceType: 't3.micro',
+        subnetId: subnet.id,
+        vpcSecurityGroupIds: [sg.id],
+        associatePublicIpAddress: true,
+        iamInstanceProfile: ec2InstanceProfile.name,
+        tags: { ...tags, Name: uniqueInstanceName },
+      });
+    }
 
     // Required Infrastructure Outputs
     new TerraformOutput(this, 'VpcIdOutput', {
@@ -344,12 +353,16 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'WebServerPublicIpOutput', {
-      value: webInstance.publicIp,
+      value:
+        webInstance?.publicIp ||
+        'N/A (LocalStack Community - EC2 not supported)',
       description: 'The public IP address of the web server',
     });
 
     new TerraformOutput(this, 'WebServerPublicDnsOutput', {
-      value: webInstance.publicDns,
+      value:
+        webInstance?.publicDns ||
+        'N/A (LocalStack Community - EC2 not supported)',
       description: 'The public DNS name of the web server',
     });
 
@@ -364,12 +377,14 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'IamRoleArnOutput', {
-      value: ec2Role.arn,
+      value: ec2Role?.arn || 'N/A (LocalStack Community - EC2 not supported)',
       description: 'The ARN of the EC2 IAM role',
     });
 
     new TerraformOutput(this, 'WebApplicationUrlOutput', {
-      value: `http://${webInstance.publicDns}`,
+      value: webInstance
+        ? `http://${webInstance.publicDns}`
+        : 'N/A (LocalStack Community - EC2 not supported)',
       description: 'The URL of the web application',
     });
   }
