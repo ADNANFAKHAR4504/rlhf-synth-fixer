@@ -1,53 +1,29 @@
-Your task is to create a comprehensive, production-ready AWS CloudFormation template in YAML format. This template will define a serverless infrastructure for a modern web application, incorporating best practices for high availability, security, and operational excellence.
+Need a production-ready serverless web application stack using CloudFormation with SAM transform. This should be deployable in multiple regions for failover.
 
-Please generate a complete CloudFormation YAML template that fulfills all of the following requirements:
+Core Setup:
 
-Core Architecture & Services:
+API Gateway V2 that routes incoming HTTP requests to Lambda functions for processing. Lambda functions run in private VPC subnets and store data in DynamoDB tables. When Lambda processes requests, it reads secrets from Secrets Manager and logs everything to CloudWatch. Failed Lambda invocations get sent to an SQS dead letter queue so we don't lose error data.
 
-Serverless Compute: The template must use the AWS::Serverless-2016-10-31 transform. Define at least one placeholder AWS::Serverless::Function (Lambda).
-
-API Layer: Provision an AWS::Serverless::HttpApi (API Gateway V2) to serve as the front door for incoming requests to the Lambda function.
+For file storage, S3 bucket with versioning and encryption that Lambda can write to. KMS key encrypts Lambda environment variables and S3 data. API Gateway protected by WAF to block malicious traffic before it reaches our functions.
 
 Networking:
 
-Create a new VPC with both public and private subnets distributed across two Availability Zones.
+VPC across 2 availability zones with public and private subnets. NAT gateways in public subnets give private subnet resources internet access. Lambda functions run in private subnets for security. Route 53 DNS records pointing to the API Gateway for custom domain support with failover routing to secondary region.
 
-Deploy NAT Gateways in the public subnets to grant internet access to resources located in the private subnets.
+DynamoDB table with auto-scaling for both read and write capacity so it handles traffic spikes without manual intervention.
 
-Ensure the Lambda functions are configured to operate within the private subnets.
+Security Requirements:
 
-DNS Management: Configure Amazon Route 53 with placeholder records for a custom domain, designed to support a multi-region failover routing policy.
+IAM roles with least-privilege permissions - Lambda execution role only gets specific actions it needs for DynamoDB access, Secrets Manager read, CloudWatch logs write, and SQS send. No wildcard permissions allowed.
 
-Security & Compliance:
+Everything encrypted - S3 server-side encryption, KMS for Lambda env vars, encrypted DynamoDB table.
 
-IAM Roles: Create all necessary IAM Roles with precision. Every role, especially the Lambda execution role, must strictly adhere to the principle of least privilege, granting only the permissions required for its specific tasks.
+Monitoring:
 
-Data Encryption:
+CloudWatch log groups capture Lambda execution logs and errors. CloudWatch alarms trigger when Lambda error rate spikes or API Gateway returns too many 4xx/5xx errors. SNS topic sends alarm notifications.
 
-Provision an AWS S3 Bucket with versioning and server-side encryption (SSE-S3) enabled by default.
+Tagging:
 
-Create a customer-managed AWS KMS Key. Use this key to encrypt the environment variables of all Lambda functions.
+All resources tagged with Environment, Project, and Owner from CloudFormation parameters. Need this for cost tracking and resource management.
 
-Secrets Management: Integrate AWS Secrets Manager to handle sensitive information (e.g., API keys). The Lambda function's execution role must be granted secure access to a placeholder secret.
-
-Web Application Firewall: Protect the API Gateway endpoint by associating it with an AWS WAF WebACL.
-
-Operations & Resiliency:
-
-Multi-Region Design: The entire stack must be designed to be deployable in a primary region and, without modification, in a secondary region to establish a failover environment.
-
-Database Scalability: Provision an AWS::DynamoDB::Table and configure an auto-scaling policy for both its read and write capacity units.
-
-Logging & Error Handling:
-
-Ensure CloudWatch Log Groups are configured for the Lambda function(s) to capture all application and error logs.
-
-Implement a Dead Letter Queue (DLQ) using an SQS queue for the Lambda function to handle failed invocations.
-
-Resource Identification: All created resources must be tagged with Environment, Project, and Owner. Use CloudFormation Parameters to accept values for these tags.
-
-Configuration Integrity: Note that after a successful deployment, CloudFormation drift detection will be run to ensure the deployed infrastructure matches the template's definition.
-
-Naming Conventions: All resource names must conform to AWS best practices and be dynamically generated where possible to prevent conflicts.
-
-The final output should be a single, complete CloudFormation YAML file. Do not provide explanations outside of the code block; instead, use comments within the YAML to clarify complex sections or resource configurations.
+Template should be complete CloudFormation YAML with inline comments explaining the service integrations. Must work without modifications when deployed to primary or secondary region.
