@@ -961,6 +961,31 @@ class TestTapStack(unittest.TestCase):
         # Should have multiple outputs registered
         self.assertTrue(hasattr(network, 'outputs'))
 
+    def test_monitoring_non_localstack_sns_topic(self):
+        """Test monitoring component creates real SNS topic in AWS (not LocalStack)"""
+        from lib.components.monitoring import MonitoringInfrastructure
+
+        # Test without LocalStack environment (real AWS)
+        with patch.dict(os.environ, {}, clear=True):
+            monitoring = MonitoringInfrastructure('test-monitoring', tags={})
+            # Should have sns_topic attribute (real SNS)
+            self.assertTrue(hasattr(monitoring, 'sns_topic'))
+            self.assertIsNotNone(monitoring.sns_topic_arn)
+
+    def test_frontend_non_localstack_cloudfront(self):
+        """Test frontend component creates CloudFront distribution in AWS (not LocalStack)"""
+        from lib.components.frontend import FrontendInfrastructure
+
+        # Test without LocalStack environment (real AWS)
+        with patch.dict(os.environ, {}, clear=True):
+            frontend = FrontendInfrastructure(
+                name='test-frontend',
+                tags={}
+            )
+            # Should have CloudFront distribution
+            self.assertTrue(hasattr(frontend, 'cloudfront_distribution'))
+            self.assertTrue(hasattr(frontend, 'oac'))
+
 
 if __name__ == '__main__':
     unittest.main()
