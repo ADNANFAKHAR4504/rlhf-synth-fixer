@@ -78,7 +78,7 @@ async function getStackOutputs(): Promise<Record<string, string>> {
   }
 
   // Fallback: query CloudFormation stack directly
-  const stackName = `localstack-stack-pr${environmentSuffix}`;
+  const stackName = `localstack-stack-${environmentSuffix}`;
   const cfn = new CloudFormationClient({ region });
 
   try {
