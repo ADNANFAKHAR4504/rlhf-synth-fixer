@@ -165,3 +165,4 @@ ci_checks.json
 # Root reports folder (use .claude/reports/ instead)
 reports/
 cdk-outputs/
+target/
