@@ -131,13 +131,11 @@ class TapStackDev extends Stack {
     private void createVpc() {
         // LocalStack Community Edition doesn't support NAT Gateways well
         // and only supports 1 AZ effectively. Use simplified configuration for LocalStack.
-        int natGateways = isLocalStack ? 0 : 3;
+        int maxAzs = isLocalStack ? 1 : 2;  // Use maxAzs - CDK will select AZs automatically
+        int natGateways = isLocalStack ? 0 : 2;  // Match NAT gateways to AZ count
 
         this.vpc = Vpc.Builder.create(this, "HighAvailabilityVpc")
-                // Use explicit AZ list to avoid AWS API calls during synth
-                .availabilityZones(isLocalStack
-                    ? Arrays.asList("us-east-1a")
-                    : Arrays.asList("us-east-1a", "us-east-1b", "us-east-1c"))
+                .maxAzs(maxAzs)  // Let CDK select AZs automatically - no AWS API calls during synth
                 .cidr("10.0.0.0/16")
                 .enableDnsHostnames(true)
                 .enableDnsSupport(true)
