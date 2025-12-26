@@ -113,7 +113,7 @@ Must be deployable across any AWS account and region without modification.
 All resources must follow this exact pattern:
 
 ```yaml
-Name: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-[resource-type]"
+Name: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-<resource-type>"
 ```
 
 **Examples:**
