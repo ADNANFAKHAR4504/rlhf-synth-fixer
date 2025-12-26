@@ -6,17 +6,23 @@
   "po_id": "LS-ls-291442",
   "team": "synth-2",
   "startedAt": "2025-08-11T11:12:38.739Z",
-  "subtask": "Application Deployment",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "Web Application Deployment"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "VPC",
     "EC2",
-    "ELB",
-    "AutoScaling",
-    "S3"
+    "RDS",
+    "S3",
+    "ALB",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "DynamoDB",
+    "IAM"
   ],
   "wave": "P0",
   "migrated_from": {
