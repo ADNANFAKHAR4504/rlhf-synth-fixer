@@ -1,86 +1,78 @@
-# Revised Prompt — aligned to current implementation (TapStack)
+# Serverless CRUD API with Pulumi Python
 
-**Goal**  
-Provide a Pulumi Python component that provisions a small serverless stack used for testing and lightweight CRUD operations.
+Build a Pulumi Python stack that sets up a simple serverless API for item management.
 
-**Constraints / Environment**
-- AWS region: `us-east-1` (N. Virginia).
-- Project uses a Pulumi ComponentResource implemented in `lib/tap_stack.py`.
-- The main component class must be `TapStack` and accept `TapStackArgs` (environment suffix, tags).
-- Tests and CI rely on importing `lib.tap_stack`.
+## Environment
 
-**Required Resources & Configuration (exactly what the implementation does)**
+Deploy to `us-east-1`. Main component should be `TapStack` in `lib/tap_stack.py`, accepting `TapStackArgs` for environment suffix and tags. Tests import from `lib.tap_stack`.
 
-1. **DynamoDB Table**
-   - Resource type: `aws.dynamodb.Table`
-   - Name pattern: `<environment_suffix>-items-table`
-   - Composite primary key:
-     - Partition key: `ItemId` (string)
-     - Sort key: `CreatedAt` (string)
-   - Billing mode: `PAY_PER_REQUEST`
-   - Point-in-time recovery and server-side encryption enabled.
-   - Table ARN used to generate a least-privilege IAM policy for the Lambda.
+## Core Infrastructure
 
-2. **IAM**
-   - Create a Lambda IAM Role with:
-     - `AWSLambdaBasicExecutionRole` attached for CloudWatch Logs.
-     - A custom inline/managed policy granting **least-privilege** access to the specific DynamoDB table and its indexes (only `GetItem`, `PutItem`, `UpdateItem`, `DeleteItem`, `Query`, `Scan`).
-   - All created IAM objects must be tagged using `args.tags`.
+### 1. DynamoDB Table
 
-3. **Lambda Function (inline)**
-   - Runtime: `python3.9`
-   - Name pattern: `<environment_suffix>-items-lambda`
-   - Inline code embedded via `pulumi.AssetArchive` / `StringAsset`. (The current implementation uses a lightweight handler that returns a JSON message.)
-   - `timeout` set to `5` seconds and `memory_size` to `128`.
-   - `environment` variables must include `DYNAMODB_TABLE_NAME` pointing to the table name.
-   - `publish=True` so provider publishes a version automatically (no separate Version resource required).
-   - Tags applied.
+Create an `aws.dynamodb.Table` for storing items:
+- Name: `<environment_suffix>-items-table`
+- Partition key: `ItemId` as string
+- Sort key: `CreatedAt` as string
+- Use PAY_PER_REQUEST billing
+- Enable point-in-time recovery and encryption
+- Table ARN gets used for IAM policy
 
-   > Note: The current handler is intentionally a lightweight "HTTP hello" handler (for quick deploy & smoke tests). It does not perform full DynamoDB CRUD in its current form, but the infrastructure provides the table and role to do so.
+### 2. IAM Role for Lambda
 
-4. **API Gateway (REST v1)**
-   - Create a `RestApi` named `<environment_suffix>-items-api`.
-   - Resources:
-     - `/items`
-     - `/items/{ItemId}`
-     - `/items/{ItemId}/{CreatedAt}`
-   - Methods:
-     - `GET`, `POST` on `/items`
-     - `GET`, `PUT`, `DELETE` on `/items/{ItemId}/{CreatedAt}`
-     - `OPTIONS` methods for CORS
-   - Each method uses `AWS_PROXY` integration to the Lambda `invoke_arn`.
-   - Create a `Deployment` and `Stage` named `prod`.
-   - **Throttle** Stage/Method settings:
-     - `rate_limit` ≈ `17` (approx. 1000 RPM)
-     - `burst_limit` ≈ `50`
+Set up a Lambda execution role that grants access to DynamoDB and CloudWatch:
+- Attach `AWSLambdaBasicExecutionRole` for writing logs to CloudWatch
+- Add custom inline policy for DynamoDB access - least privilege, only allowing `GetItem`, `PutItem`, `UpdateItem`, `DeleteItem`, `Query`, `Scan` on the specific table
+- Tag everything with `args.tags`
 
-5. **Logging & Monitoring**
-   - CloudWatch Log Group created with the name `/aws/lambda/<lambda_function_name>`, retention 14 days.
-   - CloudWatch Metric Alarms for Lambda:
-     - Duration (Average), threshold ~ 4000 ms
-     - Errors (Sum), threshold ≥ 1
-     - Throttles (Sum), threshold ≥ 1
-   - An SNS topic is created and used as the alarm action target.
-   - Tagging applied to alarms and SNS topic.
+### 3. Lambda Function
 
-6. **Tagging**
-   - Apply tags from `TapStackArgs.tags` to all created resources. Recommended default tags include `{"Project": "IaC-Nova-Test", "Owner": "LLM-Eval"}`.
+Deploy an inline Lambda that processes API requests and accesses DynamoDB:
+- Python 3.9 runtime
+- Name: `<environment_suffix>-items-lambda`
+- Embed code using `pulumi.AssetArchive` or `StringAsset` - lightweight handler that returns JSON
+- Timeout 5 seconds, memory 128MB
+- Environment variable `DYNAMODB_TABLE_NAME` pointing to the table so Lambda can read/write items
+- Set `publish=True` for versioning
+- Apply tags
 
-7. **Outputs**
-   - Register and export (via `register_outputs`) at least:
-     - `dynamodb_table_name`
-     - `lambda_function_name`
-     - `api_rest_id`
-     - `api_stage`
-     - `alarm_topic_arn`
+The handler is intentionally simple for quick deployment and smoke testing. Infrastructure supports full CRUD but the handler itself just returns a basic response.
 
-8. **Scaling behavior (as implemented)**
-   - API Gateway throttling configured to support ~1000 RPM.
-   - The current implementation **does not** create AppAutoScaling scalable targets or provisioned concurrency resources. The Lambda is published (versioned) but relies on on-demand concurrency for normal operation. (This is deliberate to avoid provider-version quirks in some environments.)
-   - Tests and CI should expect throttling to be configured on the API stage, not an autoscaling resource.
+### 4. API Gateway REST v1
 
-**Deliverable**
-- A Pulumi ComponentResource implemented at `lib/tap_stack.py` named `TapStack`.
-- `TapStack` should be importable by tests as `from lib.tap_stack import TapStack, TapStackArgs`.
-- Unit tests and integration tests will validate resources creation via mocked Pulumi runtime (unit) and live AWS (integration).
+Create REST API that connects to the Lambda function:
+- Name: `<environment_suffix>-items-api`
+- Resources for `/items`, `/items/ItemId`, `/items/ItemId/CreatedAt` paths
+- Methods: GET and POST on `/items`, GET/PUT/DELETE on item paths, OPTIONS for CORS
+- All methods integrate with Lambda using AWS_PROXY to invoke the function
+- Deploy to `prod` stage
+- Configure throttling: rate limit around 17 requests/sec, burst limit 50
 
+### 5. CloudWatch Monitoring
+
+Set up logging and alarms that send notifications to SNS:
+- Log group `/aws/lambda/function_name` with 14 day retention for Lambda logs
+- Three alarms on Lambda metrics: Duration averaging over 4000ms, any Errors, any Throttles
+- Create SNS topic that receives alarm notifications
+- Tag alarms and topic
+
+### 6. Tagging Strategy
+
+Apply tags from `TapStackArgs.tags` to all resources. Recommend defaults like `Project: IaC-Nova-Test, Owner: LLM-Eval`.
+
+### 7. Stack Outputs
+
+Export these via `register_outputs`:
+- `dynamodb_table_name`
+- `lambda_function_name`
+- `api_rest_id`
+- `api_stage`
+- `alarm_topic_arn`
+
+### 8. Scaling Notes
+
+API Gateway throttling handles about 1000 requests per minute. Lambda uses on-demand concurrency - no AppAutoScaling or provisioned concurrency configured. This keeps things simple and avoids provider version quirks in different environments.
+
+## Testing
+
+Tests should import `from lib.tap_stack import TapStack, TapStackArgs`. Unit tests mock the Pulumi runtime, integration tests validate against live AWS.
