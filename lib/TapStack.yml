@@ -293,15 +293,15 @@ Resources:
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db'
       Engine: mysql
-      EngineVersion: '8.0.43'
+      EngineVersion: '8.0'
       DBInstanceClass: !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
       AllocatedStorage: !FindInMap [EnvironmentConfig, !Ref Environment, DBAllocatedStorage]
-      StorageType: gp3
+      StorageType: gp2
       StorageEncrypted: true
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-${EnvironmentSuffix}-db-password:SecretString:password}}'
