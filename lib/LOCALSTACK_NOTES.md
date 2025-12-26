@@ -6,7 +6,7 @@ This is a **CloudFormation JSON** observability stack for payment processing wit
 
 ## LocalStack Service Compatibility
 
-### ✅ Community Tier Supported (Free)
+### Community Tier Supported (Free)
 
 | Service | Resource Type | Notes |
 |---------|--------------|-------|
@@ -24,7 +24,7 @@ This is a **CloudFormation JSON** observability stack for payment processing wit
 | IAM | AWS::IAM::Policy | Supported |
 | IAM | AWS::IAM::InstanceProfile | Supported |
 
-### ⚠️ Pro Tier Required (Paid)
+### Pro Tier Required (Paid)
 
 | Service | Resource Type | Status |
 |---------|--------------|--------|
@@ -32,7 +32,7 @@ This is a **CloudFormation JSON** observability stack for payment processing wit
 | CloudWatch | AWS::CloudWatch::MetricStream | **Pro tier required** |
 | CloudWatch | AWS::CloudWatch::CompositeAlarm | **Pro tier or limited support** |
 
-### 🔧 LocalStack Adaptations Made
+### LocalStack Adaptations Made
 
 1. **Conditional Metric Streaming**:
    - Added `IsLocalStack` condition to detect LocalStack environment
@@ -64,21 +64,21 @@ This is a **CloudFormation JSON** observability stack for payment processing wit
 ### LocalStack Community Deployment
 
 **What Will Deploy**:
-- ✅ CloudWatch Log Groups (3: Payment, API Gateway, Lambda)
-- ✅ CloudWatch Dashboard with metrics widgets
-- ✅ CloudWatch Alarms (API 5XX errors, Lambda timeouts)
-- ✅ Composite Alarm (if supported, skipped if not)
-- ✅ SNS Topic and email subscription (no actual emails)
-- ✅ X-Ray Sampling Rule
-- ✅ SSM Parameter for dashboard config
-- ✅ Log Metric Filters (transaction volume, failures)
-- ✅ IAM Roles and Policies
-- ✅ S3 Bucket for metric storage
+- CloudWatch Log Groups (3: Payment, API Gateway, Lambda)
+- CloudWatch Dashboard with metrics widgets
+- CloudWatch Alarms (API 5XX errors, Lambda timeouts)
+- Composite Alarm (if supported, skipped if not)
+- SNS Topic and email subscription (no actual emails)
+- X-Ray Sampling Rule
+- SSM Parameter for dashboard config
+- Log Metric Filters (transaction volume, failures)
+- IAM Roles and Policies
+- S3 Bucket for metric storage
 
 **What Will NOT Deploy** (Pro tier):
-- ❌ CloudWatch Metric Stream
-- ❌ Kinesis Firehose Delivery Stream
-- ❌ Metric Stream IAM Role (conditional)
+- CloudWatch Metric Stream
+- Kinesis Firehose Delivery Stream
+- Metric Stream IAM Role (conditional)
 
 **Expected Behavior**:
 - Stack creates successfully
@@ -91,10 +91,10 @@ This is a **CloudFormation JSON** observability stack for payment processing wit
 ### AWS Deployment
 
 **What Will Deploy**:
-- ✅ Everything - full observability stack
-- ✅ Metric streaming to S3 via Firehose
-- ✅ Real email notifications via SNS
-- ✅ KMS encryption (if key ARN provided)
+- Everything - full observability stack
+- Metric streaming to S3 via Firehose
+- Real email notifications via SNS
+- KMS encryption (if key ARN provided)
 
 ## Testing Strategy
 
