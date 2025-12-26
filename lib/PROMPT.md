@@ -42,7 +42,7 @@ You are an AWS Cloud Engineer tasked with provisioning a secure, development-rea
 ### Access Management and IAM
 
 - **IAM Role**: Create EC2 service role with necessary permissions
-- **IAM Policies**: Define least-privilege policies for S3 bucket access. The EC2 instance should only be able to perform specific S3 actions like s3:GetObject and s3:PutObject on the designated bucket - not broad permissions like s3:* on all resources
+- **IAM Policies**: Define least-privilege policies for S3 bucket access. The EC2 instance should only be able to perform specific S3 actions like s3:GetObject and s3:PutObject on the designated bucket - avoid using wildcard permissions or granting access to all buckets
 - **Instance Profile**: Attach IAM role to EC2 instance for secure API access without hardcoded credentials
 
 ### Monitoring & Alerting
@@ -119,7 +119,7 @@ Use CloudFormation Parameters for:
 
 1. **Complete CloudFormation Template** in YAML format
 2. **Parameter Documentation** explaining each configurable value
-3. **Resource Dependency Map** showing relationships between resources
+3. **Dependency Map** showing relationships between all infrastructure components
 4. **Security Considerations** document outlining implemented protections
 5. **Deployment Instructions** with validation steps
 
