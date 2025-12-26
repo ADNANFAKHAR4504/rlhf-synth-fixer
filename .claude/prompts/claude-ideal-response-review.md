@@ -22,7 +22,7 @@ Check the exit code:
 
 IDEAL_RESPONSE.md MUST contain the complete code for:
 
-1. All infrastructure files (tapstack files):
+1. All infrastructure files (tapstack files) in the lib/ folder:
    - CDK TypeScript: lib/tap-stack.ts
    - CDK Python: lib/tap_stack.py
    - CDK Java: lib/Main.java and all other .java files in lib/
@@ -36,13 +36,7 @@ IDEAL_RESPONSE.md MUST contain the complete code for:
    - Pulumi Java: lib/Main.java and all other .java files
    - Pulumi Go: lib/main.go
 
-2. All unit test files:
-   - Files matching: *.unit.test.*, *_unit_test.*, *UnitTest.*
-   - In test/ or tests/ directory
-
-3. All integration test files:
-   - Files matching: *.int.test.*, *_int_test.*, *IntTest.*, *IntegrationTest.*
-   - In test/ or tests/ directory
+**Note: Test files (unit tests, integration tests) are NOT validated and should NOT be included in IDEAL_RESPONSE.md.**
 
 The code must match CHARACTER-FOR-CHARACTER. Even a single space difference is a failure.
 
@@ -55,7 +49,7 @@ If validation PASSED, post this comment:
 
 ### Validation Results
 
-All infrastructure code and test files are correctly documented in IDEAL_RESPONSE.md.
+All infrastructure code files in lib/ folder are correctly documented in IDEAL_RESPONSE.md.
 
 **Script Output:**
 ```
@@ -65,8 +59,6 @@ All infrastructure code and test files are correctly documented in IDEAL_RESPONS
 ### Verification Summary
 
 - Infrastructure files: All present and matching
-- Unit test files: All present and matching
-- Integration test files: All present and matching
 
 IDEAL_RESPONSE.md accurately reflects the implementation and can be used as training data.
 ```
@@ -91,11 +83,10 @@ IDEAL_RESPONSE.md is missing or has incorrect code for one or more files.
 
 ### What This Means
 
-IDEAL_RESPONSE.md must contain the EXACT code from all infrastructure files and tests. Character-for-character accuracy is required.
+IDEAL_RESPONSE.md must contain the EXACT code from all infrastructure files in the lib/ folder. Character-for-character accuracy is required.
 
 This failure means:
 - Infrastructure code may have been changed but IDEAL_RESPONSE.md was not updated
-- Test files may be missing from documentation
 - Code blocks in IDEAL_RESPONSE.md do not match actual file contents
 
 ### How to Fix
@@ -160,15 +151,11 @@ The file exists at lib/tap-stack.ts but there is no code block in IDEAL_RESPONSE
 The actual file has 150 lines but the code block in IDEAL_RESPONSE.md only has 120 lines.
 Lines 45-75 are missing from the documentation.
 
-**test/infrastructure.unit.test.ts (MISSING)**
-This unit test file exists but is not included in IDEAL_RESPONSE.md at all.
-
 ### Action Required
 
 Update IDEAL_RESPONSE.md to include:
 1. Complete tap-stack.ts code (add new code block)
 2. Complete main.tf code (update existing code block with all 150 lines)
-3. Complete infrastructure.unit.test.ts code (add new code block)
 ```
 
 ## Step 5: Exit Appropriately
@@ -179,9 +166,9 @@ Update IDEAL_RESPONSE.md to include:
 ## Important Notes
 
 1. The validation script checks exact character matches. Whitespace matters.
-2. All infrastructure files must be in IDEAL_RESPONSE.md, not just the main tapstack file.
-3. All unit and integration tests must be included.
-4. For Terraform, ALL .tf files must be present (not just main.tf).
+2. All infrastructure files in lib/ folder must be in IDEAL_RESPONSE.md, not just the main tapstack file.
+3. Test files (unit tests, integration tests) are NOT validated and should NOT be included.
+4. For Terraform, ALL .tf files in lib/ must be present (not just main.tf).
 5. For Java projects, ALL .java files in lib/ must be included (not just Main.java).
 
 ## Best Practices
