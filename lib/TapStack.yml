@@ -39,7 +39,7 @@ Parameters:
     Description: 'EC2 Key Pair for SSH access (leave empty to disable SSH)'
 
   AmiId:
-    Type: String
+    Type: AWS::EC2::Image::Id
     Default: 'ami-12345678'
     Description: 'AMI ID for EC2 instances (automatically gets latest Amazon Linux 2)'
 
@@ -576,8 +576,7 @@ Resources:
   # Auto Scaling Group
   WebAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: 
-      - FinanceAppKMSKey
+    DependsOn: FinanceAppKMSKey
     Properties:
       AutoScalingGroupName: !Sub 'FinanceApp-WebASG-${Environment}'
       VPCZoneIdentifier:
@@ -585,7 +584,7 @@ Resources:
         - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref WebLaunchTemplate
-        Version: !GetAtt WebLaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 1
       MaxSize: 2
       DesiredCapacity: 1
