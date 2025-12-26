@@ -1,160 +1,81 @@
 # AWS CloudFormation Payment Processing Application
 
-You are an expert AWS CloudFormation architect. Create a single, production-ready CloudFormation YAML template that can deploy a payment processing application to both development and production environments - automatically adapting configuration using parameters and conditions.
+You are an expert AWS CloudFormation architect. I need a single CloudFormation YAML template that deploys our payment processing application infrastructure. The template needs to work for both dev and prod environments using the same stack by adapting based on parameters.
 
-## Functional Goal
+## What I Need
 
-The template must:
+Deploy a payment processing app with:
 
-- Deploy a payment processing application using one CloudFormation stack that dynamically configures itself for dev or prod based on a parameter
-- Be fully cross-account and cross-region executable - no hardcoded account IDs, ARNs, or regions
-- Follow strict naming, parameterization, and tagging conventions
-- Require no manual post-deployment configuration
+- EC2 instances that connect to an RDS MySQL database for transaction storage
+- Lambda functions that process payments by reading from and writing to the RDS database
+- S3 buckets that store payment receipts and logs, accessed by both Lambda and EC2
+- Lambda functions that send execution logs to CloudWatch for monitoring
+- VPC with subnets where EC2 and RDS resources communicate through security groups
+- IAM roles that grant Lambda access to S3, RDS, and CloudWatch
 
-## Core Functional Requirements
+## Environment Handling
 
-### 1. Parameters for Environment-Specific Values
+The stack should accept an Environment parameter (dev or prod) to control resource sizing and configuration:
 
-Must include Environment parameter (dev or prod) used for all environment-based conditions and logic.
+- dev uses t3.micro for EC2, prod uses m5.large
+- dev has single-AZ RDS, prod has multi-AZ
+- dev skips automated backups, prod enables them
+- CloudWatch alarm thresholds differ: 70% for dev, 80% for prod
 
-Must include parameters for instance sizes, database storage, allowed CIDR blocks, Lambda concurrency, and similar configuration values.
+Also needs an EnvironmentSuffix parameter for unique naming to support parallel deployments.
 
-Must include an EnvironmentSuffix parameter used only for resource naming (like PR numbers injected by CI/CD).
+## Cross-Account Portability
 
-Example:
+No hardcoded account IDs, ARNs, or regions. Use intrinsic functions like !Sub, !Ref, !GetAtt so it works anywhere.
 
-```yaml
-Parameters:
-  Environment:
-    Type: String
-    Description: 'Deployment environment (development or production)'
-    AllowedValues:
-      - dev
-      - prod
-    Default: dev
+## Technical Details
 
-  EnvironmentSuffix:
-    Type: String
-    Description: 'Suffix for resource names to support multiple parallel deployments (like PR number from CI/CD)'
-    Default: "pr4056"
-    AllowedPattern: '^[a-zA-Z0-9\\-]*$'
-    ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
-```
+### RDS
+- MySQL instance with encryption enabled
+- EC2 and Lambda connect via security group ingress rules
+- Multi-AZ and backup retention only in prod
 
-**Important:** All environment-specific logic (conditions, resource properties, thresholds) must be based on Environment, while naming must use EnvironmentSuffix.
+### EC2
+- Instance type based on Environment parameter
+- AMI IDs via Mappings by region
+- Security group allows ingress from application tier
 
-## Technical Requirements
+### S3
+- Bucket names must be unique using EnvironmentSuffix
+- Versioning enabled
+- Lifecycle policies: shorter retention in dev
 
-### RDS MySQL Instance
-
-- StorageEncrypted: true
-- Automated backups (BackupRetentionPeriod) enabled only for prod
-- MultiAZ: true only in prod
-- DeletionProtection: false in all environments
-- Use !Sub for names following required pattern
-- Conditionally adjust DB class/storage based on environment
-
-### EC2 Instances
-
-- Use t3.micro for dev and m5.large for prod
-- AMI IDs resolved via Mappings (region map)
-- Instance type set using Conditions based on Environment
-
-### S3 Buckets
-
-- Names must be unique and include EnvironmentSuffix
-- Versioning enabled in both environments
-- Lifecycle policies differ by environment (shorter retention for dev)
-- No hardcoded bucket names
-
-### Lambda Functions
-
-- Configuration via environment variables only (no hardcoded values)
-- Reserved concurrency defined only in prod
-- Reference other stack resources (RDS, S3)
-- IAM roles with least-privilege access, adjusted per environment
-
-### CloudWatch Alarms
-
-- Different thresholds per environment (70% for dev, 80% for prod)
+### Lambda
+- Environment variables point to RDS endpoint and S3 bucket
+- Reserved concurrency only in prod
+- IAM execution role with access to RDS, S3, CloudWatch
 
 ### Security Groups
+- CIDR ranges as parameters
+- Database security group allows access from EC2 and Lambda
+- Application tier security group controls ingress
 
-- CIDR ranges provided as parameters - no hardcoded CIDRs
-- Stricter ingress for prod
+### IAM
+- Lambda execution role with policies scoped to specific resources
+- No wildcard actions
+- Use Conditions to adjust permissions by environment
 
-### IAM Roles
+### CloudWatch
+- Alarms for RDS CPU and connections
+- Alarm thresholds differ by environment
 
-- Define least-privilege roles and policies
-- Use !Sub and Conditions to scope permissions dynamically
-- No wildcard actions or hardcoded ARNs
+### Resource Naming
+All resources follow this pattern using !Sub:
+Name: ${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc
+
+Examples:
+- VPC to paymentapp-us-east-1-pr4056-vpc
+- RDS to paymentapp-us-east-1-pr4056-rds
+- Lambda to paymentapp-us-east-1-pr4056-payment-processor
 
 ### Tagging
+Tag all resources with Environment and Application.
 
-All resources must include:
+## Output
 
-```yaml
-Tags:
-  - Key: Environment
-    Value: !Ref Environment
-  - Key: Application
-    Value: !Ref AWS::StackName
-```
-
-## Cross-Account / Cross-Region Support
-
-Must be deployable across any AWS account and region without modification.
-
-- No hardcoded ARNs, account IDs, or region names
-- Use intrinsic functions (!Sub, !Ref, !GetAtt) for all references
-
-## Naming Convention (Mandatory)
-
-All resources must follow this exact pattern:
-
-```yaml
-Name: !Sub "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-<resource-type>"
-```
-
-**Examples:**
-- VPC to `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc`
-- Subnet to `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1`
-- EC2 to `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-instance`
-
-EnvironmentSuffix is not the environment name; it is a unique identifier (like PR number) injected by CI/CD.
-
-## Architectural / Structural Requirements
-
-- Use Mappings for AMI IDs by region
-- Use Conditions for every environment-specific configuration
-- Use !If and AWS::NoValue to omit properties where not applicable
-- Use StorageEncrypted: true for all RDS instances
-- Include CloudWatch alarms with environment-based thresholds
-- The template must validate cleanly with cfn-lint and aws cloudformation validate-template
-- No manual or console-based setup required post-deployment
-
-## Outputs
-
-Output key resource details such as:
-
-- RDS endpoint
-- S3 bucket name
-- EC2 instance ID
-- Lambda function name
-
-Use !Sub for all dynamic output values.
-
-## Final Deliverable
-
-Produce a single, self-contained CloudFormation YAML file that:
-
-- Implements all requirements above
-- Has no hardcoded values
-- Uses Environment for configuration logic
-- Uses EnvironmentSuffix only for naming
-- Follows AWS best practices for:
-  - Parameterization
-  - Tagging
-  - Conditional logic
-  - Cross-account / cross-region portability
-  - Secure IAM (no wildcard or hardcoded ARNs)
+Provide RDS endpoint, S3 bucket name, EC2 instance ID, and Lambda function name as outputs.
