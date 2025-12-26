@@ -10,6 +10,20 @@ The business has been very clear that this is revenue-critical infrastructure. E
 
 Create a highly available payment processing infrastructure using **CloudFormation with JSON** that can survive AWS availability zone failures. The system must maintain 99.99% uptime by automatically recovering from single AZ failures without manual intervention.
 
+### Service Integration and Connectivity
+
+The infrastructure components work together as follows:
+
+**Network Foundation**: Deploy a VPC spanning three availability zones (us-east-1a, us-east-1b, us-east-1c) with public subnets for internet-facing resources and private subnets for application and database tiers. EC2 instances in private subnets connect through NAT Gateways for outbound internet access.
+
+**Load Balancer Integration**: Deploy an Application Load Balancer in the public subnets that receives traffic from the internet gateway and distributes requests across EC2 instances in both availability zones. Configure Target Groups that perform health checks on the EC2 instances.
+
+**Application and Database Connectivity**: ECS Fargate tasks running on EC2 infrastructure connect to the Aurora PostgreSQL database cluster across availability zones. The database writer instance handles write operations while reader instances in different AZs serve read traffic, providing automatic failover capability.
+
+**Monitoring Integration**: EC2 instances send performance metrics to CloudWatch for monitoring. Configure CloudWatch alarms that monitor CPU usage and target health, sending notifications through SNS when thresholds are exceeded.
+
+**DNS Failover**: Route 53 provides DNS failover routing between primary and secondary ALB endpoints, automatically redirecting traffic if the primary endpoint becomes unhealthy.
+
 ### Core Requirements
 
 1. **Database Layer**
@@ -53,10 +67,10 @@ Create a highly available payment processing infrastructure using **CloudFormati
 - All infrastructure defined using **CloudFormation with JSON**
 - Use **Amazon Aurora PostgreSQL** for database with automated failover
 - Use **Amazon ECS Fargate** for containerized application tasks
-- Use **Application Load Balancer** for traffic distribution with health checks
+- Use **Application Load Balancer** for traffic distribution with **Target Groups** for health checks
 - Use **Route 53** for DNS failover routing policy
-- Use **CloudWatch** for comprehensive monitoring and alarms
-- Use **SNS** for alert notifications
+- Use **CloudWatch** for comprehensive monitoring with **CloudWatch Alarms** tracking CPU, target health, and RDS failover events
+- Use **SNS** topic for alert notifications when CloudWatch alarms trigger
 - Use **KMS** for encryption at rest with customer managed keys
 - Use **VPC** spanning 3 AZs with public subnets for ALB and private subnets for ECS/RDS
 - Use **NAT Gateway** in each AZ for high availability
