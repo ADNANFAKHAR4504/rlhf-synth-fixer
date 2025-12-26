@@ -1,114 +1,114 @@
 Hey team,
 
-We have a critical requirement to build a multi-region disaster recovery architecture for our payment processing system. This is a production-grade system that handles financial transactions, so we need to ensure business continuity, meet strict recovery objectives, and align with payment processing compliance standards like PCI-DSS.
+We need to build a secure data processing infrastructure for handling sensitive financial transactions. This is for a financial services company that needs to comply with PCI-DSS requirements, so security and compliance are absolutely critical here. The whole system needs to enforce strict access controls, encrypt data at rest and in transit, and provide comprehensive audit logging to meet regulatory standards.
 
-The business has asked us to implement this solution in **CloudFormation with YAML** to maintain consistency with our existing infrastructure tooling. Our primary region is ap-southeast-1 (Singapore), and we need to establish a secondary disaster recovery region, likely ap-southeast-2 (Sydney) or ap-northeast-1 (Tokyo), for geographic redundancy.
+I've been asked to create this infrastructure using **CloudFormation with JSON**. The business has been clear that we need to follow PCI-DSS requirements closely, which means every aspect of this infrastructure needs to be locked down tight. We're talking customer-managed encryption keys, VPC isolation, no direct internet access for processing components, and audit trails for everything.
 
-The key challenge here is designing an architecture that can fail over between regions within 1 hour (RTO) while ensuring we lose no more than 5 minutes of transaction data (RPO). This means we need robust cross-region replication, automated failover capabilities, and comprehensive monitoring to detect failures quickly.
+The data processing workflow will center around Lambda functions running in private subnets, pulling data from S3 buckets with strict versioning and encryption controls. All storage needs to be encrypted with customer-managed KMS keys, and we need to ensure that IAM permissions follow the principle of least privilege with no wildcards allowed.
 
 ## What we need to build
 
-Create a multi-region disaster recovery payment processing system using **CloudFormation with YAML** that ensures business continuity across AWS regions.
+Create a secure data processing infrastructure using **CloudFormation with JSON** for PCI-DSS compliant financial transaction processing in AWS.
 
 ### Core Requirements
 
-1. **Multi-Region Architecture**
-   - Primary region: ap-southeast-1 (Singapore)
-   - Secondary DR region: ap-southeast-2 (Sydney) or ap-northeast-1 (Tokyo)
-   - Full infrastructure replication between regions
-   - Active-passive failover pattern with automated promotion
+1. **S3 Storage with Security Controls**
+   - Create S3 bucket with AES-256 encryption enabled
+   - Enable versioning on all buckets
+   - Implement lifecycle policies for data management
+   - Block all public access
 
-2. **Payment Processing Components**
-   - Transaction processing service using Lambda functions
-   - Payment gateway integration endpoints via API Gateway
-   - Relational database with cross-region read replicas for transaction records
-   - Queue system (SQS) for asynchronous transaction processing
-   - API Gateway with custom domain for payment endpoints
-   - Application Load Balancer for distributing traffic
+2. **Lambda Processing in VPC**
+   - Deploy Lambda function in VPC private subnets for data processing
+   - No direct internet access for Lambda functions
+   - Configure appropriate timeout and memory settings
+   - Implement error handling and retry logic
 
-3. **Disaster Recovery Capabilities**
-   - Recovery Time Objective (RTO): Less than 1 hour
-   - Recovery Point Objective (RPO): Less than 5 minutes
-   - Automated failover mechanisms using Route53 health checks
-   - Cross-region data replication for RDS and DynamoDB
-   - Read replica promotion capability for RDS in DR region
+3. **Encryption Key Management**
+   - Configure customer-managed KMS keys for all encryption operations
+   - Use KMS keys for S3, Lambda environment variables, and any other encrypted resources
+   - Enable key rotation for compliance
 
-4. **Data Layer**
-   - RDS database in primary region with automated backups
-   - Cross-region read replica in DR region for fast promotion
-   - DynamoDB Global Tables for session state and metadata
-   - S3 cross-region replication for transaction logs and backups
+4. **IAM Security**
+   - Implement IAM roles with explicit permissions for each service
+   - Follow principle of least privilege
+   - No wildcard permissions allowed
+   - Each service gets its own dedicated role
 
-5. **Security and Compliance**
-   - PCI-DSS alignment considerations in architecture design
-   - Encryption at rest using KMS with customer-managed keys
-   - Encryption in transit for all data transfer
-   - Network isolation using VPC with private subnets
-   - Secrets retrieved from existing Secrets Manager entries (not created)
-   - Comprehensive audit logging via CloudTrail
-   - Centralized logging to CloudWatch Logs
+5. **Network Infrastructure**
+   - Set up VPC with 2 private subnets across different availability zones
+   - No internet gateway (private subnets only)
+   - NAT instances for controlled outbound traffic if needed
+   - Proper subnet CIDR allocation
 
-6. **High Availability Within Each Region**
-   - Multi-AZ deployment for all stateful services
-   - Auto-scaling for Lambda and compute resources
-   - Application Load Balancer with health checks
-   - SQS for reliable message processing with dead-letter queues
-   - CloudWatch alarms for proactive monitoring
+6. **VPC Flow Logs**
+   - Enable VPC flow logs for network monitoring
+   - Store logs with 90-day retention minimum
+   - Use CloudWatch Logs for storage
+
+7. **Security Groups**
+   - Configure security groups with explicit ingress and egress rules
+   - No 0.0.0.0/0 CIDR blocks allowed
+   - Define specific port ranges and protocols
+
+8. **Resource Tagging**
+   - Add required tags to all resources: Environment, Owner, CostCenter
+   - Ensure consistent tagging across all infrastructure
 
 ### Technical Requirements
 
-- All infrastructure defined using **CloudFormation with YAML**
-- Use **VPC** with public and private subnets across multiple AZs
-- Use **RDS** (Aurora MySQL or PostgreSQL) with cross-region read replica
-- Use **DynamoDB Global Tables** for distributed session management
-- Use **SQS** standard queues for transaction processing
-- Use **Lambda** functions for serverless transaction processing
-- Use **API Gateway** for RESTful payment endpoints
-- Use **Application Load Balancer** for traffic distribution
-- Use **Route53** for DNS with failover routing policies and health checks
-- Use **CloudFront** as global CDN for static assets
-- Use **KMS** for encryption key management in both regions
-- Use **Secrets Manager** for retrieving existing database credentials
-- Use **CloudWatch** for metrics, logs, and alarms
-- Use **CloudTrail** for audit logging
-- Deploy primary infrastructure to **ap-southeast-1** region
-- Deploy DR infrastructure to **ap-southeast-2** region
-- Resource names must include **environmentSuffix** parameter for uniqueness
-- Follow naming convention: `{resource-type}-{purpose}-{environmentSuffix}`
+- All infrastructure defined using **CloudFormation with JSON**
+- Deploy to **us-east-1** region
+- Use **S3** for secure data storage with encryption and versioning
+- Use **Lambda** for serverless data processing in VPC
+- Use **KMS** for customer-managed encryption keys
+- Use **VPC** with private subnets only across 2 availability zones
+- Use **CloudWatch Logs** for VPC flow logs with 90-day retention
+- Resource names must include **EnvironmentSuffix** parameter for uniqueness
+- Follow naming convention: Use CloudFormation parameter substitution with !Sub
+- All resources must be destroyable (no Retain deletion policies)
+- Include proper error handling and logging
 
 ### Constraints
 
-- Follow AWS Well-Architected Framework security best practices
-- Use least privilege IAM policies for all services
-- All resources must be destroyable (no Retain deletion policies unless critical)
-- Secrets fetched from existing Secrets Manager entries, not created new
-- Comprehensive CloudWatch logging and monitoring enabled
-- All resources properly tagged with Environment, Project, and CostCenter
-- Integration tests must reference cfn-outputs/flat-outputs.json
-- Use nested stacks or modular approach for better organization
-- Consider cost optimization by using serverless where possible
+- All S3 buckets must have versioning enabled and use AES-256 encryption
+- Lambda functions must run within a VPC with no direct internet access
+- All IAM roles must follow the principle of least privilege with no wildcard permissions
+- All encryption operations must use customer-managed KMS keys
+- VPC flow logs must be enabled and stored for at least 90 days
+- All resources must be tagged with Environment, Owner, and CostCenter
+- Security groups must explicitly define all ingress and egress rules with no 0.0.0.0/0 CIDR blocks
+- All API endpoints must use HTTPS with TLS 1.2 or higher
+- No public internet access for any compute resources
+- All data must be encrypted at rest and in transit
+
+### Optional Enhancements
+
+If time permits and it makes sense for the architecture:
+- Add AWS Config rules for compliance monitoring to automate compliance checking
+- Implement CloudTrail for API audit logging to enhance security auditing
+- Add SNS topic for security alerts to enable real-time security notifications
 
 ## Success Criteria
 
-- **Functionality**: CloudFormation stack deploys successfully in both regions
-- **Disaster Recovery**: Cross-region replication configured and functional
-- **Performance**: API response times under 500ms, failover achievable within RTO
-- **Reliability**: Multi-AZ deployment, automated health checks, 99.9% uptime target
-- **Security**: Encryption enabled, network isolation, audit logging, PCI-DSS alignment
-- **Resource Naming**: All resources include environmentSuffix parameter
-- **Code Quality**: Valid YAML CloudFormation templates, well-documented, tested
-- **Testing**: Unit tests for validation, integration tests for cross-region failover
+- **Functionality**: S3 bucket with encryption and versioning, Lambda function in VPC private subnet, KMS encryption for all resources
+- **Security**: Customer-managed KMS keys, no wildcard IAM permissions, VPC isolation, no public access, explicit security group rules
+- **Compliance**: VPC flow logs with 90-day retention, proper resource tagging, PCI-DSS aligned architecture
+- **Network**: VPC with 2 private subnets across different AZs, no internet gateway, controlled outbound via NAT if needed
+- **Resource Naming**: All resources include EnvironmentSuffix parameter for uniqueness
+- **Destroyability**: No Retain deletion policies, all resources can be fully deleted
+- **Code Quality**: Valid CloudFormation JSON, well-structured, properly documented
 
 ## What to deliver
 
-- Complete CloudFormation YAML implementation with nested stacks or modular templates
-- Primary region stack (ap-southeast-1) with full infrastructure
-- DR region stack (ap-southeast-2) with replicated infrastructure
-- Route53 failover routing configuration
-- VPC, RDS, DynamoDB Global Tables, SQS, Lambda, API Gateway, ALB
-- KMS encryption configuration for both regions
-- IAM roles and policies with least privilege
-- CloudWatch alarms and dashboards
-- Unit tests for template validation
-- Integration tests for failover scenarios
-- Documentation for deployment and disaster recovery procedures
+- Complete CloudFormation JSON template implementation
+- S3 bucket with encryption, versioning, and lifecycle policies
+- Lambda function configured for VPC deployment in private subnets
+- KMS customer-managed keys for encryption operations
+- VPC with 2 private subnets across different availability zones
+- VPC flow logs with CloudWatch Logs storage and 90-day retention
+- Security groups with explicit rules and no 0.0.0.0/0 CIDR blocks
+- IAM roles with least privilege permissions for all services
+- Proper resource tagging on all infrastructure components
+- Documentation with deployment instructions
+- Integration tests to verify the deployed infrastructure
