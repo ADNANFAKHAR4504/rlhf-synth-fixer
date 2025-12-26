@@ -61,27 +61,27 @@ public_subnets = []
 availability_zones = ["us-east-1a", "us-east-1b"]
 
 for i, az in enumerate(availability_zones):
-  subnet = aws.ec2.Subnet(
+    subnet = aws.ec2.Subnet(
     f"{project_name_unique}-public-subnet-{i+1}",
     vpc_id=vpc.id,
     cidr_block=f"10.0.{i+1}.0/24",
     availability_zone=az,
     map_public_ip_on_launch=True,
     tags={**common_tags, "Name": f"{project_name_unique}-public-subnet-{i+1}"}
-  )
-  public_subnets.append(subnet)
+    )
+    public_subnets.append(subnet)
 
 # Private subnets
 private_subnets = []
 for i, az in enumerate(availability_zones):
-  subnet = aws.ec2.Subnet(
+    subnet = aws.ec2.Subnet(
     f"{project_name_unique}-private-subnet-{i+1}",
     vpc_id=vpc.id,
     cidr_block=f"10.0.{i+10}.0/24",
     availability_zone=az,
     tags={**common_tags, "Name": f"{project_name_unique}-private-subnet-{i+1}"}
-  )
-  private_subnets.append(subnet)
+    )
+    private_subnets.append(subnet)
 
 print("Creating S3 storage...")
 # S3 bucket with versioning and force_destroy for LocalStack cleanup
