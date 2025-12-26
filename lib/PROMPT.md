@@ -8,7 +8,7 @@ The infrastructure must include these essential components:
 
 1. **ECS Fargate Deployment**: Deploy the application on AWS Fargate without managing servers directly. The setup should include an ECS cluster, service, and task definitions optimized for containerized applications.
 
-2. **GitHub Actions CI/CD**: Implement automated deployment pipeline that triggers when code is pushed to the main branch. This should handle building, testing, and deploying the application seamlessly.
+2. **Automated CI/CD Pipeline**: Implement automated deployment pipeline using GitHub workflows that triggers when code is pushed to the main branch. This should handle building, testing, and deploying the application seamlessly.
 
 3. **Auto Scaling Configuration**: Use AWS Auto Scaling to handle varying load patterns. Configure scaling policies based on CPU and memory metrics to ensure optimal performance during traffic spikes.
 
@@ -16,7 +16,7 @@ The infrastructure must include these essential components:
 
 5. **Infrastructure Testing**: Include automated tests to validate that the infrastructure components are properly configured and that scaling policies work correctly.
 
-6. **Networking and Security**: Set up proper VPC configuration with public and private subnets, security groups, and load balancing for production traffic distribution.
+6. **Network Configuration**: Set up proper VPC configuration with public and private subnets, network security groups, and load balancing for production traffic distribution.
 
 ## Technical Specifications
 
