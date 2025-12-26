@@ -93,8 +93,15 @@ describe('TapStack Integration Tests', () => {
       throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
     }
     const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
-    const stackKey = Object.keys(outputs)[0]; // only one stack in your output
-    const stackOutputs = outputs[stackKey];
+
+    // CDKTF outputs are flat (not nested by stack name)
+    // Support both nested (CloudFormation) and flat (CDKTF) formats
+    let stackOutputs = outputs;
+    if (Object.keys(outputs).length === 1 && typeof outputs[Object.keys(outputs)[0]] === 'object') {
+      // Nested format - extract the first stack's outputs
+      const stackKey = Object.keys(outputs)[0];
+      stackOutputs = outputs[stackKey];
+    }
 
     vpcId = stackOutputs['vpc_id'];
     vpcCidrBlock = stackOutputs['vpc_cidr_block'];
