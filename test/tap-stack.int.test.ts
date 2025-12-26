@@ -42,16 +42,13 @@ import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 
 /* ---------------------------- Setup / Helpers --------------------------- */
 
-const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+const outputsPath = path.resolve(process.cwd(), "cdk-outputs/flat-outputs.json");
 if (!fs.existsSync(outputsPath)) {
   throw new Error(`Expected outputs file at ${outputsPath} — create it before running integration tests.`);
 }
 
 const raw = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
-const firstTopKey = Object.keys(raw)[0];
-const outputsArray: { OutputKey: string; OutputValue: string }[] = raw[firstTopKey];
-const outputs: Record<string, string> = {};
-for (const o of outputsArray) outputs[o.OutputKey] = o.OutputValue;
+const outputs: Record<string, string> = raw;
 
 // Deduce region from environment or default
 function deduceRegion(): string {
@@ -136,8 +133,8 @@ describe("Zero-Trust Security Baseline - Live Integration Tests", () => {
 
   // Test 1: Outputs file validation
   it("should have valid CloudFormation outputs with required security resources", () => {
-    expect(Array.isArray(outputsArray)).toBe(true);
-    expect(outputsArray.length).toBeGreaterThan(10);
+    expect(typeof outputs).toBe("object");
+    expect(Object.keys(outputs).length).toBeGreaterThan(10);
 
     // Check critical outputs exist
     expect(outputs.SecurityKMSKeyArn).toBeDefined();
