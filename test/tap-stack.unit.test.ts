@@ -13,11 +13,36 @@ jest.mock('@pulumi/pulumi', () => ({
     setMocks: jest.fn(),
   },
   ComponentResource: mockComponentResource,
-  all: jest.fn().mockImplementation(values => Promise.resolve(values)),
-  Output: jest.fn().mockImplementation(value => ({
-    promise: () => Promise.resolve(value),
-    apply: (fn: any) => fn(value),
-  })),
+  all: jest.fn().mockImplementation(values => {
+    // If values is an array of Outputs, unwrap them; otherwise return as-is
+    const unwrapped = Array.isArray(values) ? values.map((v: any) => {
+      if (v && typeof v.apply === 'function') {
+        return v.apply((x: any) => x);
+      }
+      return v;
+    }) : values;
+    // Return the unwrapped value directly for testing (arrays are returned as-is)
+    return Array.isArray(unwrapped) ? unwrapped : {
+      promise: () => Promise.resolve(unwrapped),
+      apply: (fn: any) => fn(unwrapped),
+    };
+  }),
+  Output: jest.fn().mockImplementation(value => {
+    const outputObj = {
+      promise: () => Promise.resolve(value),
+      apply: (fn: any) => fn(value),
+    };
+    // Make the Output directly accessible as the value for testing
+    Object.defineProperty(outputObj, 'valueOf', {
+      value: () => value,
+      enumerable: false,
+    });
+    // For direct property access in tests
+    if (Array.isArray(value)) {
+      return value; // Return array directly for arrays
+    }
+    return outputObj;
+  }),
   Config: jest.fn().mockImplementation(() => ({
     get: jest.fn().mockImplementation((key: string) => {
       switch (key) {

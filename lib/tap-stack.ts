@@ -36,8 +36,8 @@ export interface TapStackArgs {
 export class TapStack extends pulumi.ComponentResource {
   // Infrastructure outputs
   public readonly vpcId: pulumi.Output<string>;
-  public readonly publicSubnetIds: pulumi.Output<string>[];
-  public readonly privateSubnetIds: pulumi.Output<string>[];
+  public readonly publicSubnetIds: pulumi.Output<string[]>;
+  public readonly privateSubnetIds: pulumi.Output<string[]>;
   public readonly internetGatewayId: pulumi.Output<string>;
   public readonly securityGroupId: pulumi.Output<string>;
   public readonly ec2InstanceId: pulumi.Output<string>;

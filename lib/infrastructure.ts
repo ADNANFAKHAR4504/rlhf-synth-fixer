@@ -13,8 +13,8 @@ import { createVpcResources } from './vpc';
 
 export interface InfrastructureOutputs {
   vpcId: pulumi.Output<string>;
-  publicSubnetIds: pulumi.Output<string>[];
-  privateSubnetIds: pulumi.Output<string>[];
+  publicSubnetIds: pulumi.Output<string[]>;
+  privateSubnetIds: pulumi.Output<string[]>;
   internetGatewayId: pulumi.Output<string>;
   securityGroupId: pulumi.Output<string>;
   ec2InstanceId: pulumi.Output<string>;
@@ -70,8 +70,8 @@ export function createInfrastructure(
 
   return {
     vpcId: vpcResources.vpc.id,
-    publicSubnetIds: vpcResources.publicSubnets.map(subnet => subnet.id),
-    privateSubnetIds: vpcResources.privateSubnets.map(subnet => subnet.id),
+    publicSubnetIds: pulumi.all(vpcResources.publicSubnets.map(subnet => subnet.id)),
+    privateSubnetIds: pulumi.all(vpcResources.privateSubnets.map(subnet => subnet.id)),
     internetGatewayId: vpcResources.internetGateway.id,
     securityGroupId: securityGroup.id,
     ec2InstanceId: ec2Instance.id,
