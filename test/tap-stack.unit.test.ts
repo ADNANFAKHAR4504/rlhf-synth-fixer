@@ -481,6 +481,7 @@ describe('TapStack CloudFormation Template - Multi-Tier Web Application', () => 
       expect(cluster.Type).toBe('AWS::RDS::DBCluster');
       expect(cluster.DeletionPolicy).toBe('Delete');
       expect(cluster.Properties.StorageEncrypted).toBe(true);
+      expect(cluster.Properties.KmsKeyId).toBeDefined();
     });
 
     test('AuroraDBCluster should have correct engine configuration', () => {

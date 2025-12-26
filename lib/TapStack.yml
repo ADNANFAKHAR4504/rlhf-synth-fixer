@@ -901,6 +901,7 @@ Resources:
         - general
         - slowquery
       StorageEncrypted: true
+      KmsKeyId: !Ref ApplicationKMSKey
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${EnvironmentSuffix}-aurora-cluster
