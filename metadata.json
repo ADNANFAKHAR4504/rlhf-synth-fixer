@@ -1,29 +1,34 @@
 {
+  "provider": "localstack",
   "platform": "cfn",
   "language": "yaml",
-  "provider": "localstack",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "LS-291830",
+  "po_id": "LS-291975",
   "team": "synth-2",
   "wave": "P0",
-  "startedAt": "2025-08-20T11:20:35.394Z",
+  "startedAt": "2025-08-19T09:27:14.309Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "DynamoDB",
-    "EC2",
     "VPC",
+    "EC2",
     "Internet Gateway",
     "VPC Gateway Attachment",
     "Subnet",
-    "RDS",
-    "DB Subnet Group",
-    "Security Groups",
-    "Route Tables",
     "NAT Gateway",
-    "Elastic IP"
-  ]
+    "Elastic IP",
+    "Route Tables",
+    "Security Groups",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "VPC Flow Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }

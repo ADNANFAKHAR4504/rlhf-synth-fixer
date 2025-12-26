@@ -1,15 +1,15 @@
-We need to set up a secure and highly available web app environment in AWS, specifically in us-east-1.
+I am working on setting up a new AWS environment and need help with the CloudFormation template.
 
-The CloudFormation template should create a VPC with public and private subnets in at least two availability zones, and handle routing with an internet gateway and NAT gateway for private subnet internet access.
+I need to create a secure infrastructure setup in us-east-1 that can handle our application needs. I want to make sure we are following all the security best practices from the start, as it is always harder to fix security issues later.
 
-The database should be an RDS MySQL instance using db.t3.micro, with Multi-AZ enabled and storage encryption turned on. The RDS instance should only accept connections from the web server security group - no public access.
+For the networking piece, I need a VPC that covers two AZs with both public and private subnets. The VPC connects to an Internet Gateway for the public subnets and integrates with a NAT Gateway so the private subnets can reach out to the internet when needed for updates.
 
-We also need S3 buckets for app data, with server-side encryption and access logging enabled. The buckets should connect to our application for storing user uploads and logs.
+On the compute side, I want to spin up an EC2 instance in one of the public subnets. The security groups should only allow HTTP on port 80 and SSH on port 22, and even then, only from specific IP ranges. No open access to the world.
 
-Parameters should cover things like AMI ID, DB password, and key pairs. You can add conditions to toggle features like S3 logging if needed.
+For security, I am planning to use AWS Secrets Manager for storing our app secrets. The EC2 instance connects to Secrets Manager through proper IAM roles with minimal permissions - just what is absolutely necessary for Secrets Manager access and EC2 operations. No broad permissions that could cause security headaches down the road.
 
-Make sure the template exports useful outputs: VPC ID, subnet IDs, EC2 public IPs, DB endpoint, and S3 bucket names.
+I also want to make sure we have good visibility into what is happening. CloudWatch integrates with the EC2 instance for metrics logging, and VPC Flow Logs connect to CloudWatch to keep an eye on network traffic.
 
-Tag every resource with the environment and owner. Add comments explaining any security or high availability choices.
+The template should properly handle all the resource dependencies, make sure everything is secure by default, and be easy enough to modify when we need to add more resources later.
 
-The template should pass cfn-lint and be ready to deploy as a single YAML file. Keep it modular, readable, and follow AWS best practices.
+Could you help me put together a CloudFormation template called TapStack.yml that covers all this following AWS best practices?
