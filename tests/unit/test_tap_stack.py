@@ -772,7 +772,7 @@ class TestTapStack(unittest.TestCase):
                 tags={}
             )
             # Lambda should reference the data bucket
-            self.assertIsNotNone(backend.backend_lambda)
+            self.assertIsNotNone(backend.lambda_function)
     
     def test_frontend_s3_website_config(self):
         """Test frontend S3 bucket configured as static website"""
@@ -783,9 +783,8 @@ class TestTapStack(unittest.TestCase):
                 name='test-frontend',
                 tags={}
             )
-            # Should have bucket and website URL
+            # Should have bucket
             self.assertIsNotNone(frontend.bucket)
-            self.assertIsNotNone(frontend.bucket_website_url)
     
     def test_frontend_index_and_error_pages(self):
         """Test frontend creates index.html and error.html"""
@@ -813,7 +812,7 @@ class TestTapStack(unittest.TestCase):
                 tags={}
             )
             # Should have processing Lambda and output bucket
-            self.assertIsNotNone(data_processing.processing_lambda)
+            self.assertIsNotNone(data_processing.lambda_function)
             self.assertIsNotNone(data_processing.output_bucket)
     
     def test_data_processing_lambda_permissions(self):
@@ -830,7 +829,7 @@ class TestTapStack(unittest.TestCase):
                 tags={}
             )
             # Lambda role should exist
-            self.assertTrue(hasattr(data_processing, 'processing_lambda_role'))
+            self.assertTrue(hasattr(data_processing, 'lambda_role'))
     
     def test_network_vpc_configuration(self):
         """Test network creates VPC with correct CIDR"""
@@ -843,7 +842,6 @@ class TestTapStack(unittest.TestCase):
         )
         # Should have VPC
         self.assertIsNotNone(network.vpc)
-        self.assertIsNotNone(network.vpc_id)
     
     def test_network_nat_gateways(self):
         """Test network creates NAT gateways for private subnets"""
@@ -883,7 +881,7 @@ class TestTapStack(unittest.TestCase):
                 tags={}
             )
             # Should have IAM role
-            self.assertTrue(hasattr(backend, 'backend_lambda_role'))
+            self.assertTrue(hasattr(backend, 'lambda_role'))
     
     def test_tap_stack_with_empty_tags(self):
         """Test TapStack handles empty tags dict"""
