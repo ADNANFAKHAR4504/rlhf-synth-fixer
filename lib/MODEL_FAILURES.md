@@ -1,19 +1,19 @@
-# 🚨 **CloudFormation Template Issues Analysis**
+#  **CloudFormation Template Issues Analysis**
 
 ## **Critical Issues in Model Response**
 
-### 1. **S3 AccessControl Property Deprecated** ⚠️
+### 1. **S3 AccessControl Property Deprecated** ️
 ```yaml
-# ❌ ISSUE: AccessControl is deprecated and will cause warnings
+#  ISSUE: AccessControl is deprecated and will cause warnings
 AccessControl: Private
 
-# ✅ FIX: Remove this property entirely (PublicAccessBlockConfiguration handles this)
+#  FIX: Remove this property entirely (PublicAccessBlockConfiguration handles this)
 # PublicAccessBlockConfiguration already properly configured
 ```
 
-### 2. **S3 Website Configuration Conflicts with Private Bucket** 🔴
+### 2. **S3 Website Configuration Conflicts with Private Bucket** 
 ```yaml
-# ❌ ISSUE: WebsiteConfiguration on a private bucket accessed via CloudFront OAI
+#  ISSUE: WebsiteConfiguration on a private bucket accessed via CloudFront OAI
 WebsiteConfiguration:
   IndexDocument: index.html
   ErrorDocument: error.html
@@ -22,41 +22,41 @@ WebsiteConfiguration:
 
 **Impact**: Creates confusion about access patterns and may expose unintended endpoints.
 
-### 3. **Hardcoded Bucket Name Creates Deployment Conflicts** 🔴
+### 3. **Hardcoded Bucket Name Creates Deployment Conflicts** 
 ```yaml
-# ❌ ISSUE: Hardcoded bucket name will cause deployment failures
+#  ISSUE: Hardcoded bucket name will cause deployment failures
 BucketName: !Sub '${ApplicationName}-${EnvironmentSuffix}-web-app-bucket'
 ```
 **Problem**: S3 bucket names must be globally unique. This will fail if another AWS account uses the same pattern.
 
 **Impact**: Deployment failures, naming conflicts, inability to deploy in multiple regions/accounts.
 
-### 4. **Using Deprecated Origin Access Identity (OAI) Instead of OAC** ⚠️
+### 4. **Using Deprecated Origin Access Identity (OAI) Instead of OAC** ️
 ```yaml
-# ❌ DEPRECATED: CloudFrontOriginAccessIdentity is legacy
+#  DEPRECATED: CloudFrontOriginAccessIdentity is legacy
 CloudFrontOriginAccessIdentity:
   Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
 
-# ✅ SHOULD USE: CloudFrontOriginAccessControl (OAC) - newer, more secure
+#  SHOULD USE: CloudFrontOriginAccessControl (OAC) - newer, more secure
 CloudFrontOriginAccessControl:
   Type: AWS::CloudFront::OriginAccessControl
 ```
 
-### 5. **Deprecated ForwardedValues in Cache Behavior** ⚠️
+### 5. **Deprecated ForwardedValues in Cache Behavior** ️
 ```yaml
-# ❌ DEPRECATED: ForwardedValues is legacy
+#  DEPRECATED: ForwardedValues is legacy
 ForwardedValues:
   QueryString: false
   Cookies:
     Forward: none
 
-# ✅ SHOULD USE: CachePolicyId for better performance and control
+#  SHOULD USE: CachePolicyId for better performance and control
 CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # Managed caching optimized
 ```
 
-### 6. **Aliases Without Certificate Configuration** 🔴
+### 6. **Aliases Without Certificate Configuration** 
 ```yaml
-# ❌ ISSUE: Custom domain alias without proper SSL certificate handling
+#  ISSUE: Custom domain alias without proper SSL certificate handling
 Aliases:
   - !If [HasDomainAlias, !Ref DomainAlias, !Ref "AWS::NoValue"]
 ViewerCertificate:
@@ -64,16 +64,16 @@ ViewerCertificate:
 ```
 **Problem**: CloudFrontDefaultCertificate cannot be used with custom domain aliases. Will cause deployment failure.
 
-### 7. **Wrong S3 Domain Reference** 🔴
+### 7. **Wrong S3 Domain Reference** 
 ```yaml
-# ❌ ISSUE: Using deprecated DomainName instead of RegionalDomainName
+#  ISSUE: Using deprecated DomainName instead of RegionalDomainName
 DomainName: !GetAtt WebAppS3Bucket.DomainName
 
-# ✅ CORRECT: Use RegionalDomainName for better performance
+#  CORRECT: Use RegionalDomainName for better performance
 DomainName: !GetAtt WebAppS3Bucket.RegionalDomainName
 ```
 
-## **Missing Security Best Practices** 🔒
+## **Missing Security Best Practices** 
 
 ### 8. **No Server-Side Encryption**
 - S3 bucket has no encryption configuration
@@ -100,7 +100,7 @@ DomainName: !GetAtt WebAppS3Bucket.RegionalDomainName
 - No S3 access logging
 - **Impact**: No audit trail, debugging difficulties
 
-## **Missing Operational Best Practices** 📊
+## **Missing Operational Best Practices** 
 
 ### 13. **No Resource Tagging**
 - Resources not properly tagged
@@ -123,7 +123,7 @@ DomainName: !GetAtt WebAppS3Bucket.RegionalDomainName
 - No HTTP/2 or IPv6 settings
 - **Impact**: Higher costs, suboptimal performance
 
-## **Missing Infrastructure Components** 🏗️
+## **Missing Infrastructure Components** ️
 
 ### 17. **No Dedicated Logging Bucket**
 - CloudFront logs mixed with application content
@@ -144,7 +144,7 @@ DomainName: !GetAtt WebAppS3Bucket.RegionalDomainName
 - Using OAI canonical user instead of CloudFront service principal
 - **Impact**: Outdated security model, potential access issues
 
-## **Architecture Issues** 🏛️
+## **Architecture Issues** ️
 
 ### 21. **Mixed Access Patterns**
 - Trying to use both website hosting and CloudFront
@@ -165,14 +165,14 @@ DomainName: !GetAtt WebAppS3Bucket.RegionalDomainName
 
 | Issue | Severity | Impact | Fix Priority |
 |-------|----------|---------|--------------|
-| Hardcoded bucket names | 🔴 Critical | Deployment failure | High |
-| Wrong certificate config | 🔴 Critical | Deployment failure | High |
-| Deprecated OAI | ⚠️ Warning | Future compatibility | Medium |
-| Missing encryption | 🔒 Security | Compliance | High |
-| No security headers | 🔒 Security | Vulnerability | High |
-| Missing error pages | 📱 UX | User experience | Medium |
-| No logging | 📊 Ops | Troubleshooting | Medium |
-| Deprecated ForwardedValues | ⚠️ Warning | Performance | Low |
+| Hardcoded bucket names |  Critical | Deployment failure | High |
+| Wrong certificate config |  Critical | Deployment failure | High |
+| Deprecated OAI | ️ Warning | Future compatibility | Medium |
+| Missing encryption |  Security | Compliance | High |
+| No security headers |  Security | Vulnerability | High |
+| Missing error pages |  UX | User experience | Medium |
+| No logging |  Ops | Troubleshooting | Medium |
+| Deprecated ForwardedValues | ️ Warning | Performance | Low |
 
 ## **Recommended Action Plan**
 

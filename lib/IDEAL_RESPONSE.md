@@ -31,7 +31,7 @@ Conditions:
   HasDomainAlias: !Not [!Equals [!Ref DomainAlias, '']]
   HasCertificate: !And 
     - !Not [!Equals [!Ref CertificateArn, '']]
-    - !Not [!Equals [!Ref DomainAlias, '']]  # ✅ FIXED: Only use certificate if domain is also provided
+    - !Not [!Equals [!Ref DomainAlias, '']]  #  FIXED: Only use certificate if domain is also provided
 
 Resources:
   # S3 Bucket for web app content
@@ -140,7 +140,7 @@ Resources:
         Origins:
           - DomainName: !GetAtt WebAppS3Bucket.RegionalDomainName
             Id: S3Origin
-            # ✅ FIXED: Add S3OriginConfig when using OAC
+            #  FIXED: Add S3OriginConfig when using OAC
             S3OriginConfig:
               OriginAccessIdentity: ''  # Empty for OAC
             OriginAccessControlId: !Ref CloudFrontOriginAccessControl
@@ -183,7 +183,7 @@ Resources:
         HttpVersion: http2
         IPV6Enabled: true
 
-  # ✅ FIXED: S3 Bucket Policy AFTER CloudFront Distribution
+  #  FIXED: S3 Bucket Policy AFTER CloudFront Distribution
   WebAppS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -239,14 +239,14 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-CloudFrontOriginAccessControlId'
 
-  # ✅ ADDED: Website URL output
+  #  ADDED: Website URL output
   WebsiteURL:
     Description: URL of the CloudFront distribution
     Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
     Export:
       Name: !Sub '${AWS::StackName}-WebsiteURL'
 
-  # ✅ ADDED: Custom domain URL if configured
+  #  ADDED: Custom domain URL if configured
   CustomDomainURL:
     Condition: HasDomainAlias
     Description: Custom domain URL

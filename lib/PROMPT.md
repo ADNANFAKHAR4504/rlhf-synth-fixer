@@ -4,7 +4,7 @@ Your task is to **design and implement a secure, reusable AWS infrastructure** f
 
 ---
 
-### 🧩 **Constraints**:
+###  **Constraints**:
 
 * Use **AWS CloudFormation** to define the infrastructure as code.
 * The web application must be hosted on **Amazon S3** using **static website hosting**.
@@ -15,7 +15,7 @@ Your task is to **design and implement a secure, reusable AWS infrastructure** f
 
 ---
 
-### 💡 **Environment**:
+###  **Environment**:
 
 You are setting up a web application hosting environment that includes:
 
@@ -30,7 +30,7 @@ You are setting up a web application hosting environment that includes:
 
 ---
 
-### 🎯 **Expected Output**:
+###  **Expected Output**:
 
 Submit a well-structured CloudFormation template in **YAML format** named:
 `static_web_app_infra.yaml`
