@@ -1,46 +1,43 @@
- Prompt for AWS CDK (Python)
-You are a cloud automation engineer tasked with implementing a serverless application using AWS CDK in Python. Your solution must follow the AWS Free Tier limits and deploy all resources in the us-east-1 region. Use the following folder structure:
+# Serverless REST API with Lambda and API Gateway
 
-bash
-Copy
-Edit
+Need to build a simple serverless API using AWS CDK with Python. The Lambda functions should be exposed through API Gateway so they can handle HTTP requests from the internet.
+
+## What I need
+
+Set up a REST API where API Gateway receives HTTP requests and forwards them to Lambda functions for processing. The Lambda should return responses back through the Gateway to the client.
+
+Key integration: API Gateway connects directly to Lambda using proxy integration, so all request data gets passed through.
+
+## Stack structure
+
+Use this folder layout:
+```
 root/
-├── tap.py              # Entry point, like app.py
+├── tap.py              # CDK app entry point
 └── lib/
-    └── tap_stack.py     # CDK Stack definition
- Requirements:
-Create AWS Lambda functions to handle HTTP requests. These will serve as REST API endpoints.
+    └── tap_stack.py    # Stack with Lambda + API Gateway
+```
 
-Expose the Lambda functions via API Gateway (HTTP API) so that they can be triggered by external HTTP requests.
+## Requirements
 
-Ensure all resources are deployed in the us-east-1 AWS region.
+1. **Lambda Function**: Create a Python Lambda that handles incoming requests. Can be simple, just needs to return a JSON response.
 
-Design within AWS Free Tier limits, particularly using Lambda’s Free Tier allocation (1M invocations, 400,000 GB-seconds/month).
+2. **API Gateway HTTP API**: Set up an HTTP API that routes requests to the Lambda. Should be publicly accessible.
 
-The solution should be:
+3. **Integration**: Wire API Gateway to trigger the Lambda on HTTP requests. Use proxy integration so Lambda gets full request context.
 
-Modular
+4. **Region**: Deploy everything to us-east-1
 
-Scalable
+5. **Cost-conscious**: Stay within Free Tier - Lambda gets 1M free invocations per month
 
-Easy to deploy using cdk deploy
+## Expected deliverables
 
- Expected Output:
-You must provide a CDK Python project with:
+CDK Python project with:
 
-tap.py – Initializes the CDK app and stack.
+- `tap.py` - CDK app initialization
+- `lib/tap_stack.py` - Stack definition with Lambda and API Gateway wired together
+- Lambda handler code inline or in separate file
+- API Gateway configured to route to Lambda
+- README with setup and deployment instructions
 
-lib/tap_stack.py – Contains a stack class that defines:
-
-A simple Lambda function handler (e.g., returning a "Hello, World!" response)
-
-An API Gateway HTTP API that triggers this Lambda
-
-Also include a README.md describing:
-
-How to install dependencies (pip install -r requirements.txt)
-
-How to bootstrap and deploy the stack (cdk bootstrap & cdk deploy)
-
-Cost-awareness tips for staying within the Free Tier
-
+The final result should let me run `cdk deploy` and get a working API endpoint that invokes the Lambda.
