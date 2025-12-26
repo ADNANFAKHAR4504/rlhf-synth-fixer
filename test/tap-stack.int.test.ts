@@ -45,8 +45,24 @@ if (fs.existsSync(outputsFile)) {
 }
 
 const region = process.env.AWS_REGION || 'us-west-2';
-const ec2Client = new EC2Client({ region });
-const s3Client = new S3Client({ region });
+
+// Configure clients for LocalStack if AWS_ENDPOINT_URL is set
+const awsEndpoint = process.env.AWS_ENDPOINT_URL;
+const isLocalStack = awsEndpoint && (awsEndpoint.includes('localhost') || awsEndpoint.includes('4566'));
+
+const clientConfig: any = { region };
+
+if (isLocalStack) {
+  clientConfig.endpoint = awsEndpoint;
+  clientConfig.forcePathStyle = true;
+  clientConfig.credentials = {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
+  };
+}
+
+const ec2Client = new EC2Client(clientConfig);
+const s3Client = new S3Client(clientConfig);
 const testTimeout = 45000;
 
 describe('MigrationStack: Live AWS Integration', () => {
