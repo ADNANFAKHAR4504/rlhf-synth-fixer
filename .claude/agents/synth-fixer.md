@@ -24,22 +24,34 @@ STEP 1: SETUP WORKTREE
 ├── git worktree add worktree/synth-fixer-<PR> origin/<branch>
 └── cd worktree/synth-fixer-<PR>
 
+STEP 1.5: ⚠️ PULL REMOTE CHANGES FIRST (CRITICAL!)
+├── git fetch origin <branch>
+├── git pull origin <branch> --rebase    ← Don't ignore remote changes!
+└── Resolve conflicts if any
+
+STEP 1.6: ⛔ REMOVE "HEY TEAM" IMMEDIATELY! (DO THIS NOW!)
+├── grep -rn "Hey Team" lib/PROMPT.md PROMPT.md
+├── IF FOUND: sed -i '/^#*[Hh]ey [Tt]eam/d' lib/PROMPT.md PROMPT.md
+├── VERIFY: grep -rn "Hey Team" - should return nothing
+└── ⛔ DO NOT PROCEED IF "HEY TEAM" STILL EXISTS!
+
 STEP 2: REBASE WITH MAIN
 ├── git fetch origin main
 ├── git rebase origin/main
 └── Resolve conflicts if any (keep ours for lib/, test/)
 
-STEP 3: RUN ALL LOCAL CI SCRIPTS (⚠️ CRITICAL)
+STEP 3: RUN ALL LOCAL CI SCRIPTS (⚠️ MANDATORY - DO NOT SKIP!)
 │
 │   ┌─ LOOP UNTIL ALL PASS ─────────────────────────────────────┐
 │   │                                                           │
-│   │   1. Detect Project Files                                 │
+│   │   1. Detect Project Files ⚠️ MANDATORY                    │
 │   │      └── ./scripts/ci-validate-wave.sh                    │
 │   │      └── ./scripts/check-project-files.sh                 │
 │   │      └── ./scripts/detect-metadata.sh                     │
 │   │                                                           │
-│   │   2. Prompt Quality                                       │
+│   │   2. Prompt Quality ⚠️ MANDATORY                          │
 │   │      └── bash .claude/scripts/claude-validate-prompt-quality.sh │
+│   │      └── Remove "Hey team" and emojis!                    │
 │   │                                                           │
 │   │   3. Commit Validation                                    │
 │   │      └── npx commitlint --last                            │
@@ -47,30 +59,39 @@ STEP 3: RUN ALL LOCAL CI SCRIPTS (⚠️ CRITICAL)
 │   │   4. Jest Config (ts/js only)                             │
 │   │      └── ./scripts/ci-validate-jest-config.sh             │
 │   │                                                           │
-│   │   5. Build                                                │
+│   │   5. Build ⚠️ MANDATORY                                   │
 │   │      └── ./scripts/build.sh                               │
 │   │                                                           │
-│   │   6. Synth (cdk/cdktf only)                               │
+│   │   6. Synth ⚠️ MANDATORY (cdk/cdktf)                       │
 │   │      └── ./scripts/synth.sh                               │
+│   │      └── DO NOT SKIP for CDK/CDKTF projects!              │
 │   │                                                           │
-│   │   7. Lint                                                 │
+│   │   7. Lint ⚠️ MANDATORY                                    │
 │   │      └── ./scripts/lint.sh                                │
+│   │      └── Fix all ESLint/Pylint errors!                    │
 │   │                                                           │
-│   │   8. Unit Tests                                           │
+│   │   8. Unit Tests ⚠️ MANDATORY                              │
 │   │      └── ./scripts/unit-tests.sh                          │
+│   │      └── All Jest/Pytest tests must pass!                 │
 │   │                                                           │
-│   │   9. IDEAL_RESPONSE                                       │
+│   │   9. IDEAL_RESPONSE ⚠️ MANDATORY                          │
 │   │      └── bash .claude/scripts/validate-ideal-response.sh  │
 │   │                                                           │
+│   │   ════════════════════════════════════════════════════    │
 │   │   ❌ IF FAIL → Analyze → Fix → Re-run same script         │
 │   │   ✅ IF PASS → Move to next script                        │
+│   │   ⚠️ DO NOT SKIP any stage!                               │
+│   │   ════════════════════════════════════════════════════    │
 │   │                                                           │
 │   └───────────────────────────────────────────────────────────┘
 │
 STEP 4: PUSH (Only after ALL local CI passes)
+├── ⛔ FINAL CHECK: grep -rn "Hey Team" lib/ PROMPT.md - MUST RETURN NOTHING!
 ├── git add -A
 ├── git commit -m "fix: local CI/CD fixes"
 └── git push origin HEAD:<branch> --force-with-lease
+
+⛔⛔⛔ NEVER PUSH IF "HEY TEAM" EXISTS! ⛔⛔⛔
 
 STEP 5: MONITOR REMOTE CI
 ├── Wait for GitHub Actions to run
@@ -82,10 +103,60 @@ STEP 5: MONITOR REMOTE CI
 
 | Rule | Description |
 |------|-------------|
+| **PULL FIRST** | ⚠️ Always `git pull origin <branch>` first - don't ignore remote changes! |
 | **LOCAL FIRST** | Run ALL scripts locally before pushing |
 | **FIX LOOP** | Re-run failed script until it passes |
 | **SINGLE COMMIT** | Commit only after ALL local CI passes |
 | **PROTECTED FILES** | Never modify: `package.json`, `tsconfig.json`, `scripts/`, `.github/` |
+| **NO "HEY TEAM"** | ❌ NEVER have informal greetings in PROMPT.md - UNPROFESSIONAL! |
+
+## ⛔ CRITICAL: REMOVE "HEY TEAM" BEFORE ANY PUSH!
+
+**THIS IS MANDATORY - DO NOT SKIP!**
+
+```bash
+# ═══════════════════════════════════════════════════════════════════════════════
+# ⛔ EXECUTE THIS IMMEDIATELY AFTER ENTERING WORKTREE - BEFORE ANYTHING ELSE!
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Step 1: Check for "Hey Team" in all files
+echo "Checking for 'Hey Team'..."
+if grep -rn "Hey Team\|Hey team\|#Hey Team\|# Hey Team" lib/PROMPT.md PROMPT.md 2>/dev/null; then
+  echo "⛔ FOUND 'Hey Team' - REMOVING NOW!"
+  
+  # Step 2: REMOVE IT NOW!
+  for f in lib/PROMPT.md PROMPT.md; do
+    if [ -f "$f" ]; then
+      # Remove the ENTIRE first line if it contains Hey Team
+      sed -i '1{/#*[Hh]ey [Tt]eam/d}' "$f"
+      # Also remove any line starting with #Hey Team
+      sed -i '/^#*[[:space:]]*[Hh]ey [Tt]eam/d' "$f"
+      echo "✓ Removed from $f"
+    fi
+  done
+fi
+
+# Step 3: VERIFY it's gone
+if grep -rn "Hey Team\|Hey team" lib/PROMPT.md PROMPT.md 2>/dev/null; then
+  echo "⛔⛔⛔ STILL FOUND! FIX MANUALLY!"
+  exit 1
+fi
+echo "✓ No 'Hey Team' found - safe to proceed"
+```
+
+**⛔ DO NOT PUSH IF "HEY TEAM" EXISTS IN ANY FILE!**
+
+### ⚠️ MANDATORY LOCAL CI STAGES (DO NOT SKIP!)
+
+| Stage | Script | Required? |
+|-------|--------|-----------|
+| **Detect** | `./scripts/detect-metadata.sh` | ✅ **MANDATORY** |
+| **Prompt Quality** | `.claude/scripts/claude-validate-prompt-quality.sh` | ✅ **MANDATORY** |
+| **Build** | `./scripts/build.sh` | ✅ **MANDATORY** |
+| **Synth** | `./scripts/synth.sh` | ✅ **MANDATORY (CDK/CDKTF)** |
+| **Lint** | `./scripts/lint.sh` | ✅ **MANDATORY** |
+| **Unit Tests** | `./scripts/unit-tests.sh` | ✅ **MANDATORY** |
+| **IDEAL_RESPONSE** | `.claude/scripts/validate-ideal-response.sh` | ✅ **MANDATORY** |
 
 ---
 
@@ -1096,6 +1167,33 @@ setup_worktree_and_rebase() {
   git checkout -B "$branch_name" "origin/$branch_name"
   
   echo "[SYNTH-AGENT] [PR #$pr_number] ✓ Worktree ready"
+  
+  # ════════════════════════════════════════════════════════════════════════════
+  # ⚠️ CRITICAL: PULL REMOTE CHANGES FIRST
+  # ════════════════════════════════════════════════════════════════════════════
+  # Don't ignore remote changes - pull latest first!
+  echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+  echo "║  🤖 SYNTH-AGENT [PR #$pr_number] is pulling remote changes...               ║"
+  echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+  
+  git fetch origin "$branch_name"
+  if git pull origin "$branch_name" --rebase; then
+    echo "[SYNTH-AGENT] [PR #$pr_number] ✓ Remote changes pulled successfully"
+  else
+    echo "[SYNTH-AGENT] [PR #$pr_number] ⚠️ Pull conflict - resolving..."
+    # Resolve conflicts: keep remote changes for protected, ours for lib/test
+    local conflicts=$(git diff --name-only --diff-filter=U 2>/dev/null)
+    for file in $conflicts; do
+      if [[ "$file" == lib/* ]] || [[ "$file" == test/* ]]; then
+        git checkout --ours "$file"
+      else
+        git checkout --theirs "$file"
+      fi
+      git add "$file"
+    done
+    git rebase --continue 2>/dev/null || git rebase --abort
+    echo "[SYNTH-AGENT] [PR #$pr_number] ✓ Conflicts resolved"
+  fi
   
   # Rebase with main
   echo "╔══════════════════════════════════════════════════════════════════════════════╗"
@@ -2635,6 +2733,13 @@ if echo "$UNIQUE_ERRORS" | grep -qiE "Prompt.*quality.*FAILED|LLM-generated.*con
   add_fix "prompt_quality_fix"
 fi
 
+# 17b. INFORMAL GREETINGS (UNPROFESSIONAL!)
+# Check for "Hey team" and similar informal phrases
+if echo "$UNIQUE_ERRORS" | grep -qiE "Hey team|Hi team|Hello team|informal.*greeting"; then
+  echo "    ❌ QUALITY ISSUE: Informal greetings in PROMPT.md"
+  add_fix "documentation_fix"
+fi
+
 # 18. IDEAL_RESPONSE.md VALIDATION ERRORS (NEW!)
 # Claude Review: IDEAL_RESPONSE Code Validation failed
 if echo "$UNIQUE_ERRORS" | grep -qiE "IDEAL_RESPONSE.*FAILED|IDEAL_RESPONSE.*missing|code.*mismatch|character-for-character|not.*included"; then
@@ -2649,22 +2754,40 @@ if echo "$UNIQUE_ERRORS" | grep -qiE "commitlint|commit.*message|conventional co
 fi
 
 # 15. DOCUMENTATION QUALITY (ALWAYS CHECK)
-# Check for emojis or AI-style writing in documentation files
+# Check for emojis, AI-style writing, or INFORMAL GREETINGS in documentation files
 NEEDS_DOC_FIX=false
-for doc in PROMPT.md MODEL_FAILURES.md IDEAL_RESPONSE.md lib/IDEAL_RESPONSE.md; do
+DOC_ISSUES=""
+for doc in PROMPT.md MODEL_RESPONSE.md MODEL_FAILURES.md IDEAL_RESPONSE.md lib/IDEAL_RESPONSE.md lib/PROMPT.md; do
   if [[ -f "$doc" ]]; then
-    # Check for Unicode emojis
+    # ════════════════════════════════════════════════════════════════
+    # CHECK 1: INFORMAL GREETINGS (UNPROFESSIONAL!)
+    # ════════════════════════════════════════════════════════════════
+    # Check for both "#Hey Team" and "Hey Team" patterns
+    if grep -qiE "^#*[[:space:]]*[Hh]ey [Tt]eam|^#*[[:space:]]*[Hh]i [Tt]eam|^#*[[:space:]]*[Hh]ello [Tt]eam|^#*[[:space:]]*[Dd]ear [Tt]eam|^#*[[:space:]]*[Hh]ey [Gg]uys|^#*[[:space:]]*[Hh]ey [Ee]veryone|^#*[[:space:]]*[Hh]ey [Aa]ll" "$doc" 2>/dev/null; then
+      NEEDS_DOC_FIX=true
+      DOC_ISSUES="$DOC_ISSUES\n   ❌ QUALITY: $doc contains informal greetings (Hey team, etc.)"
+    fi
+    
+    # ════════════════════════════════════════════════════════════════
+    # CHECK 2: UNICODE EMOJIS
+    # ════════════════════════════════════════════════════════════════
     if perl -ne 'exit 1 if /[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]|[\x{1F600}-\x{1F64F}]|[\x{1F680}-\x{1F6FF}]/' "$doc" 2>/dev/null; then
       NEEDS_DOC_FIX=true
+      DOC_ISSUES="$DOC_ISSUES\n   ❌ QUALITY: $doc contains Unicode emojis"
     fi
-    # Check for text-based emojis
+    
+    # ════════════════════════════════════════════════════════════════
+    # CHECK 3: TEXT-BASED EMOJIS
+    # ════════════════════════════════════════════════════════════════
     if grep -qE ':white_check_mark:|:x:|:rocket:|:fire:|:thumbsup:|:star:' "$doc" 2>/dev/null; then
       NEEDS_DOC_FIX=true
+      DOC_ISSUES="$DOC_ISSUES\n   ❌ QUALITY: $doc contains text-based emojis"
     fi
   fi
 done
 if [[ "$NEEDS_DOC_FIX" == "true" ]]; then
-  echo "   Documentation contains emojis - will be cleaned"
+  echo "   Documentation quality issues detected:"
+  echo -e "$DOC_ISSUES"
   add_fix "documentation_fix"
 fi
 
@@ -3342,7 +3465,70 @@ const endpoint = process.env.AWS_ENDPOINT_URL || "http://localhost:4566";\
     documentation_fix)
       echo "Validating and fixing documentation files..."
 
-      # Remove emojis from all documentation files
+      # ═══════════════════════════════════════════════════════════════════
+      # STEP 1: REMOVE INFORMAL GREETINGS (QUALITY ISSUE!)
+      # ═══════════════════════════════════════════════════════════════════
+      # These informal phrases are UNPROFESSIONAL and must be removed!
+      for doc in PROMPT.md MODEL_RESPONSE.md MODEL_FAILURES.md IDEAL_RESPONSE.md lib/IDEAL_RESPONSE.md lib/PROMPT.md; do
+        if [[ -f "$doc" ]]; then
+          echo "   Processing: $doc"
+          
+          # ════════════════════════════════════════════════════════════════
+          # EXACT PATTERNS - These MUST be removed (from screenshot: #Hey Team)
+          # ════════════════════════════════════════════════════════════════
+          # "#Hey Team" exact patterns
+          sed -i 's/^#Hey Team.*$//g' "$doc"
+          sed -i 's/^#Hey team.*$//g' "$doc"
+          sed -i 's/^# Hey Team.*$//g' "$doc"
+          sed -i 's/^# Hey team.*$//g' "$doc"
+          sed -i 's/^## Hey Team.*$//g' "$doc"
+          sed -i 's/^## Hey team.*$//g' "$doc"
+          sed -i 's/^### Hey Team.*$//g' "$doc"
+          
+          # "#Hi Team" exact patterns
+          sed -i 's/^#Hi Team.*$//g' "$doc"
+          sed -i 's/^#Hi team.*$//g' "$doc"
+          sed -i 's/^# Hi Team.*$//g' "$doc"
+          sed -i 's/^# Hi team.*$//g' "$doc"
+          
+          # "#Hello Team" exact patterns
+          sed -i 's/^#Hello Team.*$//g' "$doc"
+          sed -i 's/^#Hello team.*$//g' "$doc"
+          sed -i 's/^# Hello Team.*$//g' "$doc"
+          sed -i 's/^# Hello team.*$//g' "$doc"
+          
+          # "#Dear Team" exact patterns
+          sed -i 's/^#Dear Team.*$//g' "$doc"
+          sed -i 's/^# Dear Team.*$//g' "$doc"
+          
+          # Without # prefix
+          sed -i 's/^Hey Team.*$//g' "$doc"
+          sed -i 's/^Hey team.*$//g' "$doc"
+          sed -i 's/^Hi Team.*$//g' "$doc"
+          sed -i 's/^Hi team.*$//g' "$doc"
+          sed -i 's/^Hello Team.*$//g' "$doc"
+          sed -i 's/^Hello team.*$//g' "$doc"
+          sed -i 's/^Dear Team.*$//g' "$doc"
+          sed -i 's/^Dear team.*$//g' "$doc"
+          sed -i 's/^Hey everyone.*$//g' "$doc"
+          sed -i 's/^Hi everyone.*$//g' "$doc"
+          sed -i 's/^Hey guys.*$//g' "$doc"
+          sed -i 's/^Hi guys.*$//g' "$doc"
+          
+          # Remove empty lines at start of file (multiple passes)
+          sed -i '1{/^$/d}' "$doc"
+          sed -i '1{/^$/d}' "$doc"
+          sed -i '1{/^$/d}' "$doc"
+          sed -i '1{/^[[:space:]]*$/d}' "$doc"
+          sed -i '1{/^[[:space:]]*$/d}' "$doc"
+          
+          echo "   ✓ Removed informal greetings from: $doc"
+        fi
+      done
+
+      # ═══════════════════════════════════════════════════════════════════
+      # STEP 2: REMOVE EMOJIS
+      # ═══════════════════════════════════════════════════════════════════
       for doc in PROMPT.md MODEL_FAILURES.md IDEAL_RESPONSE.md lib/IDEAL_RESPONSE.md; do
         if [[ -f "$doc" ]]; then
           echo "   Processing: $doc"
@@ -3364,6 +3550,66 @@ const endpoint = process.env.AWS_ENDPOINT_URL || "http://localhost:4566";\
       if [[ -f "PROMPT.md" ]]; then
         echo "   Checking PROMPT.md for human-written style..."
 
+        # Check for informal greetings (UNPROFESSIONAL!)
+        # Also check lib/PROMPT.md
+        for prompt_file in PROMPT.md lib/PROMPT.md; do
+          if [[ -f "$prompt_file" ]]; then
+            GREETING_FOUND=0
+            
+            # Check for "#Hey Team" pattern (markdown heading) - EXACT MATCH
+            if grep -qi "^#.*[Hh]ey [Tt]eam" "$prompt_file"; then
+              echo "   ❌ QUALITY ISSUE: $prompt_file contains '#Hey Team'"
+              # Remove exact patterns
+              sed -i 's/^#Hey Team.*$//g' "$prompt_file"
+              sed -i 's/^#Hey team.*$//g' "$prompt_file"
+              sed -i 's/^# Hey Team.*$//g' "$prompt_file"
+              sed -i 's/^# Hey team.*$//g' "$prompt_file"
+              sed -i 's/^## Hey Team.*$//g' "$prompt_file"
+              # Clean empty lines
+              sed -i '1{/^$/d}' "$prompt_file"
+              sed -i '1{/^$/d}' "$prompt_file"
+              echo "   ✓ Auto-removed: '#Hey Team'"
+              ((GREETING_FOUND++))
+            fi
+            
+            # Check for other informal greetings
+            INFORMAL_GREETINGS=(
+              "Hey team"
+              "Hey there"
+              "Hi team"
+              "Hi there"
+              "Hello team"
+              "Hello there"
+              "Dear team"
+              "Hey guys"
+              "Hi guys"
+              "Hey everyone"
+              "Hi everyone"
+              "Hey all"
+              "Hi all"
+              "Greetings team"
+              "Good morning team"
+              "Good afternoon team"
+            )
+            for pattern in "${INFORMAL_GREETINGS[@]}"; do
+              if grep -qi "^#*[[:space:]]*$pattern" "$prompt_file"; then
+                echo "   ❌ QUALITY ISSUE: $prompt_file contains '$pattern'"
+                # Auto-fix: Remove the greeting (with or without # prefix)
+                sed -i "s/^#*[[:space:]]*$pattern[,!.]*//gi" "$prompt_file"
+                sed -i '1{/^[[:space:]]*$/d}' "$prompt_file"
+                echo "   ✓ Auto-removed: '$pattern'"
+                ((GREETING_FOUND++))
+              fi
+            done
+            
+            if [[ $GREETING_FOUND -gt 0 ]]; then
+              # Clean up empty lines at start
+              sed -i '/./,$!d' "$prompt_file"
+              echo "   ✓ Removed $GREETING_FOUND informal greeting(s) from $prompt_file"
+            fi
+          fi
+        done
+        
         # Check for overly formal AI-style phrases
         AI_PATTERNS=(
           "I would like you to"

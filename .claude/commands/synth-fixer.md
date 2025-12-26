@@ -7,6 +7,20 @@ description: 🤖 SYNTH-AGENT - Fix PR until CI passes
 
 This command fixes PRs until CI/CD passes.
 
+## ⛔ FIRST THING: REMOVE "HEY TEAM"!
+
+**EXECUTE IMMEDIATELY AFTER ENTERING WORKTREE:**
+
+```bash
+# REMOVE "Hey Team" from PROMPT.md - DO THIS FIRST!
+for f in lib/PROMPT.md PROMPT.md; do
+  [ -f "$f" ] && sed -i '/^#*[[:space:]]*[Hh]ey [Tt]eam/d' "$f"
+done
+# VERIFY: grep -rn "Hey Team" lib/PROMPT.md PROMPT.md  # Must return nothing!
+```
+
+**⛔ DO NOT PUSH IF "HEY TEAM" EXISTS!**
+
 ## How to Use
 
 ```
@@ -198,10 +212,23 @@ Pulumi.yaml   ← Pulumi settings
 │                              MANDATORY FLOW                                     │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
-1. Setup Worktree → 2. Rebase Main → 3. RUN LOCAL CI → 4. Fix Errors → 5. Push
+1. Setup Worktree → 2. ⚠️ PULL REMOTE → 3. Rebase Main → 4. RUN LOCAL CI → 5. Fix → 6. Push
 
                     ⚠️ DO NOT PUSH UNTIL LOCAL CI PASSES!
+                    ⚠️ PULL FIRST - Don't ignore remote changes!
 ```
+
+### ⚠️ MANDATORY LOCAL CI STAGES (DO NOT SKIP!)
+
+| Stage | Script | Required? |
+|-------|--------|-----------|
+| **Detect** | `./scripts/detect-metadata.sh` | ✅ **MANDATORY** |
+| **Prompt Quality** | `.claude/scripts/claude-validate-prompt-quality.sh` | ✅ **MANDATORY** |
+| **Build** | `./scripts/build.sh` | ✅ **MANDATORY** |
+| **Synth** | `./scripts/synth.sh` | ✅ **MANDATORY (CDK/CDKTF)** |
+| **Lint** | `./scripts/lint.sh` | ✅ **MANDATORY** |
+| **Unit Tests** | `./scripts/unit-tests.sh` | ✅ **MANDATORY** |
+| **IDEAL_RESPONSE** | `.claude/scripts/validate-ideal-response.sh` | ✅ **MANDATORY** |
 
 ### Local CI Scripts (Run in Order)
 
@@ -209,13 +236,20 @@ Pulumi.yaml   ← Pulumi settings
 # In worktree directory ($WORK)
 cd "$WORK"
 
-# 1️⃣ Detect Project Files
+# ═══════════════════════════════════════════════════════════════════════════════
+# 0️⃣ ⚠️ PULL REMOTE CHANGES FIRST (CRITICAL!)
+# ═══════════════════════════════════════════════════════════════════════════════
+git fetch origin "$BRANCH"
+git pull origin "$BRANCH" --rebase    # Don't ignore remote changes!
+
+# 1️⃣ Detect Project Files ⚠️ MANDATORY
 ./scripts/ci-validate-wave.sh        # Fix: metadata.json wave field
 ./scripts/check-project-files.sh     # Fix: create missing files  
 ./scripts/detect-metadata.sh         # Fix: metadata.json fields
 
-# 2️⃣ Prompt Quality
+# 2️⃣ Prompt Quality ⚠️ MANDATORY
 bash .claude/scripts/claude-validate-prompt-quality.sh  # Fix: PROMPT.md formatting
+# ⚠️ Remove "Hey team" and informal greetings!
 
 # 3️⃣ Commit Validation
 npx commitlint --last                # Cannot auto-fix - report error
@@ -226,23 +260,23 @@ if [[ "$LANG" == "ts" || "$LANG" == "js" ]]; then
   ./scripts/ci-validate-jest-config.sh  # Fix: jest.config.js
 fi
 
-# 5️⃣ Build
+# 5️⃣ Build ⚠️ MANDATORY
 ./scripts/build.sh                   # Fix: TypeScript/code errors
 
-# 6️⃣ Synth (cdk/cdktf only)
+# 6️⃣ Synth ⚠️ MANDATORY (cdk/cdktf only)
 PLATFORM=$(jq -r '.platform' metadata.json)
 if [[ "$PLATFORM" == "cdk" || "$PLATFORM" == "cdktf" ]]; then
-  ./scripts/synth.sh                 # Fix: CDK/CDKTF errors
+  ./scripts/synth.sh                 # Fix: CDK/CDKTF errors - DO NOT SKIP!
 fi
 
-# 7️⃣ Lint
-./scripts/lint.sh                    # Fix: eslint --fix or manual
+# 7️⃣ Lint ⚠️ MANDATORY
+./scripts/lint.sh                    # Fix: eslint --fix or manual - DO NOT SKIP!
 
-# 8️⃣ Unit Tests
-./scripts/unit-tests.sh              # Fix: tests OR remove ResourceNotFound
+# 8️⃣ Unit Tests ⚠️ MANDATORY
+./scripts/unit-tests.sh              # Fix: tests - DO NOT SKIP!
 
-# 9️⃣ IDEAL_RESPONSE Validation
-bash .claude/scripts/validate-ideal-response.sh  # Fix: regenerate IDEAL_RESPONSE
+# 9️⃣ IDEAL_RESPONSE ⚠️ MANDATORY
+bash .claude/scripts/validate-ideal-response.sh  # Fix: regenerate IDEAL_RESPONSE - DO NOT SKIP!
 ```
 
 ### Error Fix Loop

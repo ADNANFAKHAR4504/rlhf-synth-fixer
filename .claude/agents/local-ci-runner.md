@@ -7,7 +7,29 @@ model: opus
 
 # Local CI Runner Agent
 
-**سب کچھ locally چلائیں - push کرنے سے پہلے سب کچھ pass ہونا چاہیے!**
+**Run everything locally - all stages must pass before pushing!**
+
+## ⛔⛔⛔ CRITICAL: REMOVE "HEY TEAM" FIRST! ⛔⛔⛔
+
+**EXECUTE THIS IMMEDIATELY WHEN ENTERING ANY WORKTREE:**
+
+```bash
+# Check and remove "Hey Team" - THIS IS BLOCKING!
+for f in lib/PROMPT.md PROMPT.md; do
+  if [ -f "$f" ] && grep -qi "Hey Team" "$f"; then
+    echo "⛔ FOUND 'Hey Team' in $f - REMOVING!"
+    sed -i '/^#*[[:space:]]*[Hh]ey [Tt]eam/d' "$f"
+    echo "✓ Removed"
+  fi
+done
+
+# VERIFY - Must return nothing!
+grep -rn "Hey Team" lib/PROMPT.md PROMPT.md 2>/dev/null && echo "⛔ STILL EXISTS!" && exit 1
+```
+
+**⛔ DO NOT PROCEED UNTIL "HEY TEAM" IS GONE!**
+
+---
 
 ## 📋 PHASES OVERVIEW
 
@@ -19,26 +41,28 @@ model: opus
 ║  PHASE 1: WORKTREE SETUP                                                         ║
 ║  ├── 1.1 Repository Detection                                                    ║
 ║  ├── 1.2 Fetch & Create Worktree                                                 ║
-║  └── 1.3 Branch Checkout                                                         ║
+║  ├── 1.3 Branch Checkout                                                         ║
+║  ├── 1.4 ⚠️ PULL REMOTE CHANGES (git pull origin <branch>)                       ║
+║  └── 1.5 ⛔ REMOVE "HEY TEAM" IMMEDIATELY! (sed -i delete it!)                   ║
 ║                                                                                   ║
 ║  PHASE 2: PROTECTED FILES CHECK                                                  ║
 ║  ├── 2.1 Detect Protected Files in PR                                            ║
 ║  ├── 2.2 Checkout from main (if found)                                           ║
 ║  └── 2.3 Rebase with main (if checkout doesn't resolve)                          ║
 ║                                                                                   ║
-║  PHASE 3: LOCAL CI STAGES                                                        ║
-║  ├── 3.1 Detect Project Files                                                    ║
-║  ├── 3.2 Claude Review: Prompt Quality                                           ║
+║  PHASE 3: LOCAL CI STAGES (⚠️ DO NOT SKIP!)                                      ║
+║  ├── 3.1 Detect Project Files ⚠️ MANDATORY                                       ║
+║  ├── 3.2 Prompt Quality ⚠️ MANDATORY (remove "Hey team")                         ║
 ║  ├── 3.3 Commit Validation                                                       ║
 ║  ├── 3.4 Jest Config (ts/js only)                                                ║
-║  ├── 3.5 Build                                                                   ║
-║  ├── 3.6 Synth (cdk/cdktf only)                                                  ║
-║  ├── 3.7 Lint                                                                    ║
-║  ├── 3.8 Unit Tests                                                              ║
+║  ├── 3.5 Build ⚠️ MANDATORY                                                      ║
+║  ├── 3.6 Synth ⚠️ MANDATORY (cdk/cdktf)                                          ║
+║  ├── 3.7 Lint ⚠️ MANDATORY                                                       ║
+║  ├── 3.8 Unit Tests ⚠️ MANDATORY                                                 ║
 ║  ├── 3.9 Deploy (LocalStack only)                                                ║
 ║  ├── 3.10 Integration Tests (LocalStack only)                                    ║
 ║  ├── 3.11 Claude Review: Main (Local Validation)                                 ║
-║  └── 3.12 Claude Review: IDEAL_RESPONSE Validation                               ║
+║  └── 3.12 IDEAL_RESPONSE ⚠️ MANDATORY                                            ║
 ║                                                                                   ║
 ║  PHASE 4: PUSH & MONITOR                                                         ║
 ║  ├── 4.1 Commit All Fixes                                                        ║
@@ -66,7 +90,7 @@ model: opus
 
 ## 🔑 API CONFIGURATION
 
-**config.env** میں API keys موجود ہیں:
+**config.env** contains API keys:
 
 ```bash
 # Location: /home/adnan/Desktop/rlhf-synth-fixer/config.env
@@ -128,7 +152,7 @@ fi
 
 # 📌 PHASE 1: WORKTREE SETUP
 
-**Purpose**: Worktree میں isolated environment تیار کریں
+**Purpose**: Create isolated environment in worktree
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -247,6 +271,32 @@ setup_worktree() {
   cd "$worktree_path"
   git checkout -B "$branch_name" "origin/$branch_name"
   
+  # ════════════════════════════════════════════════════════════════════════════
+  # ⚠️ CRITICAL: PULL REMOTE CHANGES FIRST
+  # ════════════════════════════════════════════════════════════════════════════
+  # Don't ignore remote changes - pull latest first!
+  echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+  echo "║  🏠 LOCAL-CI [PR #$pr_number] Pulling remote changes...                      ║"
+  echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+  
+  git fetch origin "$branch_name"
+  if git pull origin "$branch_name" --rebase; then
+    echo "[LOCAL-CI] [PR #$pr_number] ✓ Remote changes pulled successfully"
+  else
+    echo "[LOCAL-CI] [PR #$pr_number] ⚠️ Pull conflict - resolving..."
+    local conflicts=$(git diff --name-only --diff-filter=U 2>/dev/null)
+    for file in $conflicts; do
+      if [[ "$file" == lib/* ]] || [[ "$file" == test/* ]]; then
+        git checkout --ours "$file"
+      else
+        git checkout --theirs "$file"
+      fi
+      git add "$file"
+    done
+    git rebase --continue 2>/dev/null || git rebase --abort
+    echo "[LOCAL-CI] [PR #$pr_number] ✓ Conflicts resolved"
+  fi
+  
   echo "[LOCAL-CI] [PR #$pr_number] ✓ Worktree ready at: $worktree_path"
   
   # Export for next phases
@@ -260,7 +310,7 @@ setup_worktree() {
 
 # 📌 PHASE 2: PROTECTED FILES CHECK
 
-**Purpose**: Protected files کو detect کریں اور main سے restore کریں
+**Purpose**: Detect protected files and restore from main
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -294,7 +344,7 @@ setup_worktree() {
 
 ```yaml
 # ══════════════════════════════════════════════════════════════════════════════
-# PROTECTED FILES - کبھی modify نہیں کرنا!
+# PROTECTED FILES - NEVER modify these!
 # ══════════════════════════════════════════════════════════════════════════════
 
 protected_files:
@@ -526,7 +576,7 @@ rebase_with_main() {
 
 # 📌 PHASE 3: LOCAL CI STAGES
 
-**Purpose**: تمام CI scripts locally چلائیں - ہر ایک pass ہونا ضروری ہے!
+**Purpose**: Run all CI scripts locally - every stage must pass!
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -836,35 +886,194 @@ stage_prompt_quality() {
 fix_prompt_quality() {
   echo "[LOCAL-CI] 🔧 Fixing Prompt Quality..."
   
-  if [ -f "PROMPT.md" ]; then
-    # Remove emojis (commonly flagged issue)
-    sed -i 's/[🎯📝✅❌💡🚀🔧⚠️📌🎉💻🌟⭐🔥💪👍✨🤖🏠]//g' PROMPT.md
+  # Process all PROMPT.md locations
+  for prompt_file in PROMPT.md lib/PROMPT.md; do
+    if [ -f "$prompt_file" ]; then
+      echo "[LOCAL-CI] Processing: $prompt_file"
+      
+      # ══════════════════════════════════════════════════════════════════
+      # FIX 1: Remove informal greetings (QUALITY ISSUE!)
+      # ══════════════════════════════════════════════════════════════════
+      # These informal phrases are UNPROFESSIONAL and must be removed!
+      
+      # EXACT PATTERNS - These MUST be removed:
+      # Pattern: "#Hey Team" (exact match from screenshot)
+      sed -i 's/^#Hey Team.*$//g' "$prompt_file"
+      sed -i 's/^#Hey team.*$//g' "$prompt_file"
+      sed -i 's/^# Hey Team.*$//g' "$prompt_file"
+      sed -i 's/^# Hey team.*$//g' "$prompt_file"
+      sed -i 's/^## Hey Team.*$//g' "$prompt_file"
+      sed -i 's/^## Hey team.*$//g' "$prompt_file"
+      
+      # Hi Team variants
+      sed -i 's/^#Hi Team.*$//g' "$prompt_file"
+      sed -i 's/^#Hi team.*$//g' "$prompt_file"
+      sed -i 's/^# Hi Team.*$//g' "$prompt_file"
+      sed -i 's/^# Hi team.*$//g' "$prompt_file"
+      
+      # Hello Team variants
+      sed -i 's/^#Hello Team.*$//g' "$prompt_file"
+      sed -i 's/^#Hello team.*$//g' "$prompt_file"
+      sed -i 's/^# Hello Team.*$//g' "$prompt_file"
+      sed -i 's/^# Hello team.*$//g' "$prompt_file"
+      
+      # Dear Team variants
+      sed -i 's/^#Dear Team.*$//g' "$prompt_file"
+      sed -i 's/^# Dear Team.*$//g' "$prompt_file"
+      
+      # Without # prefix
+      sed -i 's/^Hey Team.*$//g' "$prompt_file"
+      sed -i 's/^Hey team.*$//g' "$prompt_file"
+      sed -i 's/^Hi Team.*$//g' "$prompt_file"
+      sed -i 's/^Hi team.*$//g' "$prompt_file"
+      sed -i 's/^Hello Team.*$//g' "$prompt_file"
+      sed -i 's/^Hello team.*$//g' "$prompt_file"
+      sed -i 's/^Dear Team.*$//g' "$prompt_file"
+      sed -i 's/^Dear team.*$//g' "$prompt_file"
+      
+      # Remove empty lines at start of file (multiple passes)
+      sed -i '1{/^$/d}' "$prompt_file"
+      sed -i '1{/^$/d}' "$prompt_file"
+      sed -i '1{/^$/d}' "$prompt_file"
+      
+      # Remove any line that is ONLY whitespace at start
+      sed -i '1{/^[[:space:]]*$/d}' "$prompt_file"
+      sed -i '1{/^[[:space:]]*$/d}' "$prompt_file"
+      
+      echo "[LOCAL-CI] ✓ Removed informal greetings from $prompt_file"
+    fi
+  done
     
-    # Remove trailing whitespace
+    # ══════════════════════════════════════════════════════════════════
+    # FIX 2: Remove emojis (commonly flagged issue)
+    # ══════════════════════════════════════════════════════════════════
+    sed -i 's/[🎯📝✅❌💡🚀🔧⚠️📌🎉💻🌟⭐🔥💪👍✨🤖🏠😀😊👋🙏💯🔴🟢🟡⭕✔️❎]//g' PROMPT.md
+    echo "[LOCAL-CI] ✓ Removed emojis from PROMPT.md"
+    
+    # ══════════════════════════════════════════════════════════════════
+    # FIX 3: Remove trailing whitespace
+    # ══════════════════════════════════════════════════════════════════
     sed -i 's/[[:space:]]*$//' PROMPT.md
     
-    # Ensure proper line endings
+    # ══════════════════════════════════════════════════════════════════
+    # FIX 4: Ensure proper line endings (remove Windows CR)
+    # ══════════════════════════════════════════════════════════════════
     sed -i 's/\r$//' PROMPT.md
     
-    echo "[LOCAL-CI] ✓ PROMPT.md fixed"
+    # ══════════════════════════════════════════════════════════════════
+    # FIX 5: Remove multiple consecutive blank lines
+    # ══════════════════════════════════════════════════════════════════
+    sed -i '/^$/N;/^\n$/d' PROMPT.md
+    
+    echo "[LOCAL-CI] ✓ PROMPT.md quality fixed"
   fi
   
-  # Also check MODEL_RESPONSE.md
+  # Also fix MODEL_RESPONSE.md
   if [ -f "MODEL_RESPONSE.md" ]; then
-    sed -i 's/[🎯📝✅❌💡🚀🔧⚠️📌🎉💻🌟⭐🔥💪👍✨🤖🏠]//g' MODEL_RESPONSE.md
-    echo "[LOCAL-CI] ✓ MODEL_RESPONSE.md fixed"
+    # Remove informal greetings
+    sed -i 's/^[Hh]ey [Tt]eam[,!.]*//g' MODEL_RESPONSE.md
+    sed -i 's/^[Hh]i [Tt]eam[,!.]*//g' MODEL_RESPONSE.md
+    sed -i 's/[Hh]ey [Tt]eam[,!.]* //g' MODEL_RESPONSE.md
+    
+    # Remove emojis
+    sed -i 's/[🎯📝✅❌💡🚀🔧⚠️📌🎉💻🌟⭐🔥💪👍✨🤖🏠😀😊👋🙏💯🔴🟢🟡⭕✔️❎]//g' MODEL_RESPONSE.md
+    
+    echo "[LOCAL-CI] ✓ MODEL_RESPONSE.md quality fixed"
+  fi
+  
+  # Also fix IDEAL_RESPONSE.md
+  if [ -f "IDEAL_RESPONSE.md" ] || [ -f "lib/IDEAL_RESPONSE.md" ]; then
+    local ideal_file="IDEAL_RESPONSE.md"
+    [ -f "lib/IDEAL_RESPONSE.md" ] && ideal_file="lib/IDEAL_RESPONSE.md"
+    
+    # Remove informal greetings
+    sed -i 's/^[Hh]ey [Tt]eam[,!.]*//g' "$ideal_file"
+    sed -i 's/[Hh]ey [Tt]eam[,!.]* //g' "$ideal_file"
+    
+    # Remove emojis
+    sed -i 's/[🎯📝✅❌💡🚀🔧⚠️📌🎉💻🌟⭐🔥💪👍✨🤖🏠😀😊👋🙏💯🔴🟢🟡⭕✔️❎]//g' "$ideal_file"
+    
+    echo "[LOCAL-CI] ✓ IDEAL_RESPONSE.md quality fixed"
   fi
 }
 ```
 
 ### Prompt Quality Validation Rules
 
-| Rule | Description |
-|------|-------------|
-| No emojis | PROMPT.md میں emojis نہیں ہونے چاہیے |
-| Proper formatting | Markdown formatting correct ہونی چاہیے |
-| Required sections | Task description, requirements موجود ہوں |
-| No trailing whitespace | Lines کے آخر میں spaces نہیں ہونے چاہیے |
+| Rule | Description | Fix |
+|------|-------------|-----|
+| ❌ **No "Hey team"** | Informal greetings are UNPROFESSIONAL! | Remove completely |
+| ❌ **No "Hi team"** | Informal greetings are UNPROFESSIONAL! | Remove completely |
+| ❌ **No "Hello team"** | Informal greetings are UNPROFESSIONAL! | Remove completely |
+| ❌ **No emojis** | Emojis are unprofessional | Remove all emojis |
+| ❌ **No trailing whitespace** | No spaces at end of lines | Remove whitespace |
+| ❌ **No Windows line endings** | CR characters | Convert to LF |
+| ✅ **Proper formatting** | Markdown formatting must be correct | Fix formatting |
+| ✅ **Required sections** | Task description, requirements | Add if missing |
+
+### ⚠️ QUALITY ISSUES TO CHECK
+
+```bash
+# Check for informal greetings (MUST NOT EXIST!)
+# ═══════════════════════════════════════════════════════════════════
+# Pattern 1: "#Hey Team" or "# Hey Team" (markdown heading)
+grep -n -iE "^#.*hey team|^#.*hi team|^#.*hello team" PROMPT.md lib/PROMPT.md 2>/dev/null
+
+# Pattern 2: "Hey Team" (without # prefix)  
+grep -n -i "hey team" PROMPT.md MODEL_RESPONSE.md IDEAL_RESPONSE.md lib/PROMPT.md lib/MODEL_RESPONSE.md lib/IDEAL_RESPONSE.md 2>/dev/null
+grep -n -i "hi team" PROMPT.md MODEL_RESPONSE.md IDEAL_RESPONSE.md lib/PROMPT.md lib/MODEL_RESPONSE.md lib/IDEAL_RESPONSE.md 2>/dev/null
+grep -n -i "hello team" PROMPT.md MODEL_RESPONSE.md IDEAL_RESPONSE.md lib/PROMPT.md lib/MODEL_RESPONSE.md lib/IDEAL_RESPONSE.md 2>/dev/null
+grep -n -i "dear team" PROMPT.md MODEL_RESPONSE.md IDEAL_RESPONSE.md lib/PROMPT.md lib/MODEL_RESPONSE.md lib/IDEAL_RESPONSE.md 2>/dev/null
+
+# If any match found → QUALITY ISSUE! Must remove.
+# ═══════════════════════════════════════════════════════════════════
+```
+
+### Informal Phrases to REMOVE
+
+```yaml
+# These phrases are UNPROFESSIONAL and must be removed:
+# ═══════════════════════════════════════════════════════════════════
+# Pattern 1: WITH MARKDOWN HEADING (#)
+# ═══════════════════════════════════════════════════════════════════
+remove_markdown_headings:
+  - "#Hey Team"       # ← Screenshot example!
+  - "# Hey Team"
+  - "#Hey team"
+  - "# Hey team"
+  - "#Hi Team"
+  - "# Hi Team"
+  - "#Hello Team"
+  - "# Hello Team"
+  - "#Dear Team"
+  - "## Hey Team"     # Double ## also
+  - "### Hey Team"    # Triple ### also
+
+# ═══════════════════════════════════════════════════════════════════
+# Pattern 2: WITHOUT # (plain text)
+# ═══════════════════════════════════════════════════════════════════
+remove_patterns:
+  - "Hey team"
+  - "Hey there"
+  - "Hi team"
+  - "Hi there"
+  - "Hello team"
+  - "Hello there"
+  - "Dear team"
+  - "Team,"
+  - "Hey guys"
+  - "Hi guys"
+  - "Hello guys"
+  - "Hey everyone"
+  - "Hi everyone"
+  - "Hello everyone"
+  - "Hey all"
+  - "Hi all"
+  - "Hello all"
+  - "Greetings team"
+  - "Good morning team"
+  - "Good afternoon team"
+```
 
 ---
 
@@ -1249,7 +1458,7 @@ fix_integration_tests() {
 
 **CI/CD Job**: `claude-code-action`
 
-✅ **API Key Available**: `config.env` میں `ANTHROPIC_API_KEY` موجود ہے - Claude reviews locally چل سکتی ہیں!
+✅ **API Key Available**: `config.env` has `ANTHROPIC_API_KEY` - Claude reviews can run locally!
 
 ```bash
 #!/bin/bash
@@ -1535,11 +1744,11 @@ EOF
 
 | Rule | Description |
 |------|-------------|
-| File exists | IDEAL_RESPONSE.md موجود ہونا چاہیے |
-| Contains code | Code blocks موجود ہونے چاہیے |
-| Matches lib/ | lib/ کے code سے match ہونا چاہیے |
-| No emojis | Emojis نہیں ہونے چاہیے |
-| Proper formatting | Markdown formatting correct ہو |
+| File exists | IDEAL_RESPONSE.md must exist |
+| Contains code | Code blocks must be present |
+| Matches lib/ | Must match code in lib/ |
+| No emojis | No emojis allowed |
+| Proper formatting | Markdown formatting must be correct |
 
 ---
 
@@ -1737,7 +1946,7 @@ run_all_stages() {
 
 # 📌 PHASE 4: PUSH & MONITOR
 
-**Purpose**: Changes commit کریں، push کریں، اور remote CI monitor کریں
+**Purpose**: Commit changes, push, and monitor remote CI
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -2070,28 +2279,152 @@ PULUMI_BUCKET_REGION: 'us-east-1'
 - ✅ Stage 3.11 passes (Claude Review: Main)
 - ✅ Stage 3.12 passes (Claude Review: IDEAL_RESPONSE)
 
-**سب کچھ ✅ green ہونا چاہیے → پھر push کریں!**
+**Everything must be ✅ green → then push!**
 
 ---
 
 # 🔧 FILE STRUCTURE BY PLATFORM
 
-## metadata.json Schema (REQUIRED FIELDS)
+## metadata.json Schema (COMPLETE REFERENCE)
+
+### REQUIRED FIELDS (12 fields - ALL must be present!)
 
 ```json
 {
-  "platform": "cdk|cdktf|cfn|tf|pulumi|analysis|cicd",
-  "language": "ts|js|py|java|go|hcl|yaml|json|sh|yml",
-  "complexity": "medium|hard|expert",
-  "turn_type": "single|multi",
-  "po_id": "string (task ID)",
-  "team": "synth",                    // ⚠️ MUST be "synth" for LocalStack!
-  "startedAt": "ISO 8601 timestamp",
-  "subtask": "one of 7 subtask types",
-  "provider": "aws|localstack",       // ⚠️ "localstack" for local CI
-  "subject_labels": ["array of labels"],
-  "aws_services": ["array of services"],
-  "wave": "P0|P1"                     // ⚠️ P0 for tf/hcl, P1 for others
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 1: platform
+  // ═══════════════════════════════════════════════════════════════════
+  "platform": "cdk",
+  // Valid values: "cdk", "cdktf", "cfn", "tf", "pulumi", "analysis", "cicd"
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 2: language
+  // ═══════════════════════════════════════════════════════════════════
+  "language": "ts",
+  // Valid values: "ts", "js", "py", "java", "go", "hcl", "yaml", "json", "sh", "yml"
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 3: complexity
+  // ═══════════════════════════════════════════════════════════════════
+  "complexity": "hard",
+  // Valid values: "medium", "hard", "expert"
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 4: turn_type
+  // ═══════════════════════════════════════════════════════════════════
+  "turn_type": "single",
+  // Valid values: "single", "multi"
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 5: po_id
+  // ═══════════════════════════════════════════════════════════════════
+  "po_id": "12345",
+  // Type: string (any value, but must not be empty)
+  // For LocalStack migrations: "LS-{ORIGINAL_PO_ID}"
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 6: team ⚠️ CRITICAL!
+  // ═══════════════════════════════════════════════════════════════════
+  "team": "synth",
+  // Valid values: "2", "3", "4", "5", "6", "synth", "synth-1", "synth-2", "stf"
+  // ⚠️ FOR LOCALSTACK: MUST be "synth" (not synth-1, synth-2, or numbers!)
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 7: startedAt
+  // ═══════════════════════════════════════════════════════════════════
+  "startedAt": "2025-12-26T10:00:00.000Z",
+  // Type: ISO 8601 date-time string
+  // Examples: "2025-12-26T10:00:00.000Z", "2025-12-26T15:31:33-05:00"
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 8: subtask
+  // ═══════════════════════════════════════════════════════════════════
+  "subtask": "Provisioning of Infrastructure Environments",
+  // Valid values (EXACTLY these 7):
+  //   - "Provisioning of Infrastructure Environments"
+  //   - "Application Deployment"
+  //   - "CI/CD Pipeline Integration"
+  //   - "Failure Recovery and High Availability"
+  //   - "Security, Compliance, and Governance"
+  //   - "IaC Program Optimization"
+  //   - "Infrastructure QA and Management"
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 9: provider ⚠️ CRITICAL!
+  // ═══════════════════════════════════════════════════════════════════
+  "provider": "localstack",
+  // Valid values: "aws", "localstack"
+  // ⚠️ FOR LOCAL CI: MUST be "localstack"
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 10: subject_labels
+  // ═══════════════════════════════════════════════════════════════════
+  "subject_labels": ["Cloud Environment Setup"],
+  // Type: array of strings (at least 1 item)
+  // Valid values (EXACTLY these 12):
+  //   - "Environment Migration"
+  //   - "Cloud Environment Setup"
+  //   - "Multi-Environment Consistency"
+  //   - "Web Application Deployment"
+  //   - "Serverless Infrastructure (Functions as Code)"
+  //   - "CI/CD Pipeline"
+  //   - "Failure Recovery Automation"
+  //   - "Security Configuration as Code"
+  //   - "IaC Diagnosis/Edits"
+  //   - "IaC Optimization"
+  //   - "Infrastructure Analysis/Monitoring"
+  //   - "General Infrastructure Tooling QA"
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 11: aws_services
+  // ═══════════════════════════════════════════════════════════════════
+  "aws_services": ["VPC", "Lambda", "S3", "DynamoDB"],
+  // Type: array of strings (can be empty)
+  // Common values: "VPC", "EC2", "Lambda", "S3", "DynamoDB", "RDS", 
+  //   "IAM", "CloudWatch", "API Gateway", "SNS", "SQS", etc.
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // FIELD 12: wave ⚠️ CRITICAL!
+  // ═══════════════════════════════════════════════════════════════════
+  "wave": "P1"
+  // Valid values: "P0", "P1"
+  // ⚠️ RULES:
+  //   - P0: ONLY for language="hcl" OR platform="tf"
+  //   - P1: ALL other languages (ts, js, py, java, go, yaml, json, etc.)
+}
+```
+
+### OPTIONAL FIELDS (allowed but not required)
+
+```json
+{
+  // ═══════════════════════════════════════════════════════════════════
+  // OPTIONAL: migrated_from (for LocalStack migrations only)
+  // ═══════════════════════════════════════════════════════════════════
+  "migrated_from": {
+    "po_id": "trainr97",      // Original PO ID
+    "pr": "Pr7179"            // Original PR number (pattern: Pr{NUMBER})
+  }
+}
+```
+
+### ❌ INVALID FIELDS (MUST BE REMOVED!)
+
+```json
+{
+  // ❌ These fields are NOT in the schema and MUST be removed:
+  "task_id": "...",              // ❌ REMOVE
+  "training_quality": 9,         // ❌ REMOVE (added by Claude review)
+  "coverage": {                  // ❌ REMOVE (added by CI)
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "username-turing",   // ❌ REMOVE (added by CI)
+  "reviewer": "...",             // ❌ REMOVE
+  "dockerS3Location": "",        // ❌ REMOVE
+  "region": "us-east-1",         // ❌ REMOVE
+  "pr_id": "...",                // ❌ REMOVE
+  "original_pr_id": "..."        // ❌ REMOVE
 }
 ```
 
@@ -2165,6 +2498,191 @@ PULUMI_BUCKET_REGION: 'us-east-1'
 |----------|----------|
 | `"localstack"` | ✅ Local CI (use this!) |
 | `"aws"` | Remote CI (real AWS) |
+
+---
+
+## Metadata Validation Function
+
+```bash
+#!/bin/bash
+# Complete metadata.json validation
+
+validate_metadata() {
+  local file="metadata.json"
+  local errors=0
+  
+  if [ ! -f "$file" ]; then
+    echo "❌ metadata.json not found!"
+    return 1
+  fi
+  
+  echo "[LOCAL-CI] Validating metadata.json..."
+  
+  # Load metadata
+  local meta=$(cat "$file")
+  
+  # ══════════════════════════════════════════════════════════════════
+  # CHECK REQUIRED FIELDS
+  # ══════════════════════════════════════════════════════════════════
+  
+  local required_fields=(
+    "platform"
+    "language"
+    "complexity"
+    "turn_type"
+    "po_id"
+    "team"
+    "startedAt"
+    "subtask"
+    "provider"
+    "subject_labels"
+    "aws_services"
+    "wave"
+  )
+  
+  for field in "${required_fields[@]}"; do
+    if ! echo "$meta" | jq -e ".$field" &>/dev/null; then
+      echo "❌ Missing required field: $field"
+      errors=$((errors + 1))
+    fi
+  done
+  
+  # ══════════════════════════════════════════════════════════════════
+  # VALIDATE PLATFORM
+  # ══════════════════════════════════════════════════════════════════
+  local platform=$(echo "$meta" | jq -r '.platform // ""')
+  local valid_platforms=("cdk" "cdktf" "cfn" "tf" "pulumi" "analysis" "cicd")
+  if [[ ! " ${valid_platforms[*]} " =~ " ${platform} " ]]; then
+    echo "❌ Invalid platform: $platform"
+    errors=$((errors + 1))
+  fi
+  
+  # ══════════════════════════════════════════════════════════════════
+  # VALIDATE LANGUAGE
+  # ══════════════════════════════════════════════════════════════════
+  local language=$(echo "$meta" | jq -r '.language // ""')
+  local valid_languages=("ts" "js" "py" "java" "go" "hcl" "yaml" "json" "sh" "yml")
+  if [[ ! " ${valid_languages[*]} " =~ " ${language} " ]]; then
+    echo "❌ Invalid language: $language"
+    errors=$((errors + 1))
+  fi
+  
+  # ══════════════════════════════════════════════════════════════════
+  # VALIDATE COMPLEXITY
+  # ══════════════════════════════════════════════════════════════════
+  local complexity=$(echo "$meta" | jq -r '.complexity // ""')
+  local valid_complexity=("medium" "hard" "expert")
+  if [[ ! " ${valid_complexity[*]} " =~ " ${complexity} " ]]; then
+    echo "❌ Invalid complexity: $complexity"
+    errors=$((errors + 1))
+  fi
+  
+  # ══════════════════════════════════════════════════════════════════
+  # VALIDATE TURN_TYPE
+  # ══════════════════════════════════════════════════════════════════
+  local turn_type=$(echo "$meta" | jq -r '.turn_type // ""')
+  if [[ "$turn_type" != "single" ]] && [[ "$turn_type" != "multi" ]]; then
+    echo "❌ Invalid turn_type: $turn_type (must be 'single' or 'multi')"
+    errors=$((errors + 1))
+  fi
+  
+  # ══════════════════════════════════════════════════════════════════
+  # VALIDATE TEAM (for LocalStack)
+  # ══════════════════════════════════════════════════════════════════
+  local team=$(echo "$meta" | jq -r '.team // ""')
+  local provider=$(echo "$meta" | jq -r '.provider // ""')
+  
+  if [[ "$provider" == "localstack" ]] && [[ "$team" != "synth" ]]; then
+    echo "⚠️ Warning: team='$team' should be 'synth' for LocalStack tasks"
+  fi
+  
+  # ══════════════════════════════════════════════════════════════════
+  # VALIDATE SUBTASK
+  # ══════════════════════════════════════════════════════════════════
+  local subtask=$(echo "$meta" | jq -r '.subtask // ""')
+  local valid_subtasks=(
+    "Provisioning of Infrastructure Environments"
+    "Application Deployment"
+    "CI/CD Pipeline Integration"
+    "Failure Recovery and High Availability"
+    "Security, Compliance, and Governance"
+    "IaC Program Optimization"
+    "Infrastructure QA and Management"
+  )
+  
+  local subtask_valid=false
+  for s in "${valid_subtasks[@]}"; do
+    if [[ "$subtask" == "$s" ]]; then
+      subtask_valid=true
+      break
+    fi
+  done
+  
+  if [[ "$subtask_valid" == "false" ]]; then
+    echo "❌ Invalid subtask: $subtask"
+    errors=$((errors + 1))
+  fi
+  
+  # ══════════════════════════════════════════════════════════════════
+  # VALIDATE PROVIDER
+  # ══════════════════════════════════════════════════════════════════
+  if [[ "$provider" != "aws" ]] && [[ "$provider" != "localstack" ]]; then
+    echo "❌ Invalid provider: $provider (must be 'aws' or 'localstack')"
+    errors=$((errors + 1))
+  fi
+  
+  # ══════════════════════════════════════════════════════════════════
+  # VALIDATE WAVE
+  # ══════════════════════════════════════════════════════════════════
+  local wave=$(echo "$meta" | jq -r '.wave // ""')
+  
+  if [[ "$wave" != "P0" ]] && [[ "$wave" != "P1" ]]; then
+    echo "❌ Invalid wave: $wave (must be 'P0' or 'P1')"
+    errors=$((errors + 1))
+  fi
+  
+  # Check wave matches language/platform
+  local expected_wave="P1"
+  if [[ "$language" == "hcl" ]] || [[ "$platform" == "tf" ]]; then
+    expected_wave="P0"
+  fi
+  
+  if [[ "$wave" != "$expected_wave" ]]; then
+    echo "⚠️ Warning: wave='$wave' but expected '$expected_wave' for $platform-$language"
+  fi
+  
+  # ══════════════════════════════════════════════════════════════════
+  # VALIDATE SUBJECT_LABELS
+  # ══════════════════════════════════════════════════════════════════
+  local labels_count=$(echo "$meta" | jq '.subject_labels | length')
+  if [[ "$labels_count" -lt 1 ]]; then
+    echo "❌ subject_labels must have at least 1 item"
+    errors=$((errors + 1))
+  fi
+  
+  # ══════════════════════════════════════════════════════════════════
+  # CHECK FOR INVALID FIELDS
+  # ══════════════════════════════════════════════════════════════════
+  local invalid_fields=("task_id" "training_quality" "coverage" "author" "reviewer" "dockerS3Location" "region" "pr_id" "original_pr_id")
+  
+  for field in "${invalid_fields[@]}"; do
+    if echo "$meta" | jq -e ".$field" &>/dev/null; then
+      echo "⚠️ Warning: Invalid field found: $field (should be removed)"
+    fi
+  done
+  
+  # ══════════════════════════════════════════════════════════════════
+  # RESULT
+  # ══════════════════════════════════════════════════════════════════
+  if [[ $errors -gt 0 ]]; then
+    echo "[LOCAL-CI] ❌ metadata.json validation failed with $errors errors"
+    return 1
+  else
+    echo "[LOCAL-CI] ✅ metadata.json validation passed"
+    return 0
+  fi
+}
+```
 
 ---
 
@@ -2331,7 +2849,7 @@ worktree/local-ci-<PR>/
 
 ```yaml
 # ══════════════════════════════════════════════════════════════════════════════
-# ABSOLUTELY BLOCKED - کبھی modify نہیں کرنا!
+# ABSOLUTELY BLOCKED - NEVER modify these!
 # ══════════════════════════════════════════════════════════════════════════════
 
 absolutely_blocked:
@@ -2599,8 +3117,8 @@ conditional:
 ### API Key Status
 
 ```
-✅ ANTHROPIC_API_KEY موجود ہے: config.env میں
-   - Full Claude reviews locally چل سکتی ہیں
+✅ ANTHROPIC_API_KEY available in config.env
+   - Full Claude reviews can run locally
    - Code review, suggestions, auto-fixes available
 ```
 
