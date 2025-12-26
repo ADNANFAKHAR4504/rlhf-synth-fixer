@@ -1,19 +1,11 @@
-I need to build a reusable, multi-region application infrastructure on AWS using Pulumi with TypeScript. The setup must follow best practices for scalability, maintainability, and security. All resources should be designed to support consistent deployments across at least two AWS regions using parameterized inputs. Here are the components I need:
+I need to set up a multi-region application infrastructure on AWS using Pulumi with TypeScript that can be deployed consistently across different regions. The infrastructure needs to support an application that stores transaction data in RDS and writes operational logs to S3.
 
-1. Define a reusable Pulumi stack that can be deployed in different AWS regions by passing region-specific configurations via Pulumi config or stack files (e.g., AMI IDs, instance types, subnet CIDRs).
-2. Create a VPC with at least two public subnets and two private subnets, each placed in separate availability zones for high availability.
-3. Provision an RDS instance within the private subnet:
-   - Enable encryption at rest.
-   - Ensure automated backups are configured.
-4. Create an S3 bucket to store application logs:
-   - Apply server-side encryption at rest.
-   - Configure lifecycle policies to transition or expire log objects over time.
-5. Define IAM roles and policies that follow the principle of least privilege:
-   - Restrict access to only necessary AWS services and resources.
-   - Avoid use of overly permissive wildcards.
-6. Ensure all storage components (S3 and RDS) use encryption at rest, preferably using AWS-managed or customer-managed KMS keys.
-7. Design the codebase to be scalable and maintainable, using component abstractions or Pulumi Component Resources where appropriate.
-8. Explicitly associate all AWS resources with a region-specific Pulumi provider object to control deployments per region and support isolated environment setups.
-9. Ensure to use provider configuration that is for different region to control the infra
+The setup should work like this: deploy a VPC with public and private subnets spread across multiple availability zones for high availability. The RDS instance runs in the private subnet and stores the application's transaction data with encryption at rest and automated backups enabled. Application servers that connect to this RDS instance will be deployed in the public subnets.
 
-Please provide the Pulumi TypeScript code implementing this infrastructure. The code must be modular, reusable across regions, and production-ready. Avoid boilerplate or scaffolding — focus only on the core infrastructure logic that aligns with AWS security and availability best practices.
+For logging, create an S3 bucket that receives application logs from the servers with server-side encryption enabled. The logs should have lifecycle policies to automatically transition old files to cheaper storage or expire them over time.
+
+IAM roles need to grant the application servers permissions to write logs to the S3 bucket and connect to the RDS database, following least privilege principles. Storage encryption should use KMS keys to protect data at rest in both S3 and RDS.
+
+The whole setup needs to be parameterized so I can deploy the same infrastructure to different AWS regions just by changing configuration values like AMI IDs, instance types, and subnet CIDRs through Pulumi config or stack files. Use Pulumi Component Resources to make the code modular and reusable. Each region deployment should use its own Pulumi provider object to keep them isolated and control which region the resources get created in.
+
+Focus on the core infrastructure logic without boilerplate - I want production-ready code that follows AWS security and availability best practices.
