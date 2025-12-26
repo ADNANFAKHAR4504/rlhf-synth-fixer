@@ -42,16 +42,15 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 40, // Reduced for LocalStack: isLocalStack conditional branches not executed in unit tests, actual coverage ~40%
+      branches: 50, // Reduced for LocalStack: defensive conditional (database.secret?.secretArn || fallback) can't be fully tested without mocking
       functions: 72, // Reduced for LocalStack: some functions not called due to architectural constraints
-      lines: 82, // Reduced for LocalStack: isLocalStack conditional branches (lines 58,71,94,113,180-212,253) only execute during actual deployment
-      statements: 82, // Reduced for LocalStack: isLocalStack conditional branches cannot be fully covered in unit tests (evaluated at module load time)
+      lines: 95, // Reduced for LocalStack: private subnet code paths not executed (empty array operations)
+      statements: 95, // Reduced for LocalStack: PRIVATE_ISOLATED architecture (empty array operations)
     },
   },
   testTimeout: 60000,
   silent: false,
   verbose: true,
-  passWithNoTests: true, // CloudFormation YAML projects don't have unit tests
   globals: {
     'ts-jest': {
       isolatedModules: true,
