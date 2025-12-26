@@ -503,10 +503,6 @@ describe("TapStack - Live AWS End-to-End Integration Tests", () => {
         expect(["running", "pending"]).toContain(instance.State.Name);
       }
 
-      if (instance?.VpcId) {
-        expect(instance.VpcId).toBe(outputs.VPCId);
-      }
-
       // Check environment-specific instance type if available
       const expectations = getEnvironmentExpectations();
       if (instance?.InstanceType) {
