@@ -27,10 +27,12 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Parameters', () => {
     const expectedParams = [
-      'Environment',
+      'EnvironmentSuffix',
       'ApplicationName',
       'DBUsername',
       'InstanceType',
+      'KeyPairName',
+      'UseLocalStack',
     ];
     test('should have all required parameters', () => {
       expectedParams.forEach(param => {
@@ -39,14 +41,18 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('should have correct default values and types', () => {
-      expect(template.Parameters.Environment.Type).toBe('String');
-      expect(template.Parameters.Environment.Default).toBe('prod');
+      expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
+      expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
       expect(template.Parameters.ApplicationName.Type).toBe('String');
       expect(template.Parameters.ApplicationName.Default).toBe('webapp');
       expect(template.Parameters.DBUsername.Type).toBe('String');
       expect(template.Parameters.DBUsername.Default).toBe('admin');
       expect(template.Parameters.InstanceType.Type).toBe('String');
       expect(template.Parameters.InstanceType.Default).toBe('t3.medium');
+      expect(template.Parameters.KeyPairName.Type).toBe('String');
+      expect(template.Parameters.KeyPairName.Default).toBe('localstack-key');
+      expect(template.Parameters.UseLocalStack.Type).toBe('String');
+      expect(template.Parameters.UseLocalStack.Default).toBe('false');
     });
   });
 
