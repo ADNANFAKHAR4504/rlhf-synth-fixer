@@ -18,5 +18,6 @@
     "KMS",
     "IAM"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 8
 }
