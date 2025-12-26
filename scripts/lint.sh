@@ -143,7 +143,7 @@ elif [ "$PLATFORM" = "cfn" ]; then
 
         echo "🔍 Linting templates under lib/ using pipenv environment..."
         find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
-            -print0 | xargs -0 -r pipenv run cfn-lint --ignore-checks W2531 -t
+            -print0 | xargs -0 -r pipenv run cfn-lint -t
 
     else
         echo "ℹ️ No Pipfile found — using system Python environment"
@@ -154,7 +154,7 @@ elif [ "$PLATFORM" = "cfn" ]; then
 
         echo "🔍 Linting templates under lib/ ..."
         find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
-            -print0 | xargs -0 -r cfn-lint --ignore-checks W2531 -t
+            -print0 | xargs -0 -r cfn-lint -t
     fi
 
 elif [ "$PLATFORM" = "cicd" ] && [ "$LANGUAGE" = "yml" ]; then
