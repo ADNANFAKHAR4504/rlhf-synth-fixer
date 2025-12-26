@@ -386,7 +386,7 @@ Outputs:
 
 ## File: lib/src/app.py
 
-```python
+```
 import json
 import boto3
 import os
