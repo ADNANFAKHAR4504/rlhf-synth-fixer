@@ -1,45 +1,13 @@
-You are an expert AWS architect.
+Create a CloudFormation YAML template for a VPC-based infrastructure in us-west-2 where EC2 instances connect to S3 through IAM roles for read-only access.
 
-Objective: Write a production-ready AWS CloudFormation YAML template.
+The VPC should have public and private subnets deployed in different Availability Zones. Public subnets connect to the internet through an Internet Gateway, while private subnets route outbound traffic through a NAT Gateway for secure internet access.
 
-Region: us-west-2
+Deploy t3.micro EC2 instances in the public subnet with an attached IAM instance profile. The IAM role grants S3 read-only permissions, allowing the instances to retrieve objects from S3 buckets.
 
-Constraints and Requirements:
+Create an S3 bucket that receives CloudWatch Logs exports. The bucket policy should allow the CloudWatch Logs service to write log data to the bucket.
 
-Create a new VPC with the following:
+Configure route tables that direct traffic appropriately - public route table connects to the Internet Gateway, and private route table routes through the NAT Gateway.
 
-At least one public and one private subnet (in different Availability Zones).
+Tag all resources with Name and Environment keys for identification and cost tracking.
 
-Proper route tables and NAT gateway setup to allow internet access from the private subnet via NAT.
-
-All AWS resources must include tags with the keys:
-
-Name
-
-Environment
-
-Launch EC2 instances (type t3.micro) in the public subnet.
-
-Attach an IAM Role to the EC2 instances with a policy allowing read-only access to S3.
-
-Provision an S3 bucket to store CloudWatch Logs.
-
-Use best practices for IAM, logging, subnetting, and resource isolation.
-
-Ensure the template passes AWS CloudFormation linter validation (e.g., cfn-lint) and is deployable without modification.
-
-Expected Output:
-
-A single, well-structured YAML CloudFormation template.
-
-Use YAML anchors/aliases or Mappings for reusability if applicable.
-
-Follow naming conventions and formatting standards.
-
-Include metadata and comments to make the template self-explanatory.
-
-Do not use hardcoded values for sensitive configurations.
-Use pseudo parameters, mappings, or parameterized inputs for environment-specific values where necessary.
-
-Begin with AWSTemplateFormatVersion: '2010-09-09'.
-Provide only the YAML code – no additional explanation.
+Output a single YAML CloudFormation template that validates with cfn-lint and deploys without modification.
