@@ -1,0 +1,37 @@
+{
+  "provider": "localstack",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291274",
+  "team": "synth-2",
+  "startedAt": "2025-08-20T18:36:13.085Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "ALB",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Auto Scaling",
+    "SNS",
+    "Route53"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
+}
