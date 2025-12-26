@@ -5,8 +5,13 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 // Stack configuration
-const STACK_NAME = 'TapStackpr119';
+// In CI/CD, the stack name is based on ENVIRONMENT_SUFFIX (e.g., pr9368)
+// Format: localstack-stack-${ENVIRONMENT_SUFFIX}
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'pr119';
+const STACK_NAME = `localstack-stack-${ENVIRONMENT_SUFFIX}`;
 const REGION = 'us-east-1';
+
+console.log(`Using stack name: ${STACK_NAME}`);
 
 interface StackOutput {
   OutputKey: string;
