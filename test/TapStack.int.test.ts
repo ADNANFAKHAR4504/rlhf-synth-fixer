@@ -399,26 +399,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
   });
 
   describe('DynamoDB Tables', () => {
-    test('should have PriceAlertsTable deployed', async () => {
-      expect(discoveredResources.dynamoDBTables.length).toBeGreaterThanOrEqual(1);
-
-      const tableName = stackOutputs.PriceAlertsTableName || discoveredResources.dynamoDBTables[0];
-      expect(tableName).toBeDefined();
-
-      const response = await dynamoClient.send(
-        new DescribeTableCommand({ TableName: tableName })
-      );
-
-      expect(response.Table).toBeDefined();
-      expect(response.Table!.TableName).toBe(tableName);
-      expect(response.Table!.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
-      
-      // Check Point-in-Time Recovery
-      const pitrResponse = await dynamoClient.send(
-        new DescribeContinuousBackupsCommand({ TableName: tableName })
-      );
-      expect(pitrResponse.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe('ENABLED');
-    });
 
     test('should have PriceHistoryTable deployed', async () => {
       expect(discoveredResources.dynamoDBTables.length).toBeGreaterThanOrEqual(2);

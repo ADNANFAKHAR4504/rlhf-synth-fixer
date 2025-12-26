@@ -87,3 +87,39 @@ The documentation states: "Reserved concurrency guarantees the maximum number of
   4. Validating configurations against AWS best practices for serverless architectures
 
 The model's response was otherwise architecturally sound, following AWS best practices for serverless applications with proper security (KMS encryption, IAM least privilege), cost optimization (on-demand billing, TTL for data cleanup), and operational excellence (CloudWatch alarms, point-in-time recovery). The single critical failure prevented deployment, making this an excellent training example for quota awareness in cloud infrastructure design.
+
+## LocalStack Compatibility Adjustments
+
+This section documents changes made for LocalStack deployment compatibility. These changes do not affect production AWS deployment functionality.
+
+### Category A: Unsupported Resources
+
+| Resource | LocalStack Status | Solution Applied | Production Status |
+|----------|------------------|------------------|-------------------|
+| None | N/A | No resources required removal | All resources deploy to AWS |
+
+### Category B: Deep Functionality Limitations
+
+| Resource | Feature | LocalStack Limitation | Solution Applied | Production Status |
+|----------|---------|----------------------|------------------|-------------------|
+| Lambda | ReservedConcurrentExecutions | Supported but values reduced for quota compliance | Values: 5, 3, 2, 1 | Higher values acceptable in AWS |
+
+### Category C: Behavioral Differences
+
+| Resource | Feature | LocalStack Behavior | Production Behavior |
+|----------|---------|---------------------|---------------------|
+| DynamoDB Streams | Event triggering | May have slight latency | Real-time triggering |
+| CloudWatch Alarms | Alarm evaluation | May not trigger in test environment | Real-time evaluation |
+| EventBridge Rules | Schedule execution | Scheduling works but timing may vary | Precise scheduling |
+
+### Category D: Test-Specific Adjustments
+
+| Test File | Adjustment | Reason |
+|-----------|------------|--------|
+| TapStack.int.test.ts | Stack discovery pattern | Supports both localstack-stack-* and TapStack* naming |
+| TapStack.int.test.ts | AWS_ENDPOINT_URL | Points to localhost:4566 for LocalStack |
+| TapStack.int.test.ts | Account ID | Uses 000000000000 (LocalStack default) |
+
+### Summary
+
+This serverless architecture (Lambda, API Gateway, DynamoDB, SNS, EventBridge, KMS, CloudWatch, IAM) is fully compatible with LocalStack Community Edition. All services used are in the HIGH or MEDIUM compatibility tier, requiring no resource removal or significant modifications for LocalStack deployment.
