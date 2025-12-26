@@ -994,9 +994,18 @@ deploy_pulumi() {
     pulumi config set aws:s3UsePathStyle true
     pulumi config set aws:endpoints '[{"s3":"'$AWS_ENDPOINT_URL'","dynamodb":"'$AWS_ENDPOINT_URL'","lambda":"'$AWS_ENDPOINT_URL'","apigateway":"'$AWS_ENDPOINT_URL'","iam":"'$AWS_ENDPOINT_URL'","sts":"'$AWS_ENDPOINT_URL'","cloudformation":"'$AWS_ENDPOINT_URL'","sqs":"'$AWS_ENDPOINT_URL'","sns":"'$AWS_ENDPOINT_URL'","cloudwatch":"'$AWS_ENDPOINT_URL'","cloudwatchevents":"'$AWS_ENDPOINT_URL'","cloudwatchlogs":"'$AWS_ENDPOINT_URL'"}]'
 
+    # Build TypeScript/JavaScript projects before deployment
+    if [ "$language" == "ts" ] || [ "$language" == "js" ]; then
+        if [ -f "tsconfig.json" ]; then
+            print_status $YELLOW "🔨 Building TypeScript..."
+            npm run build --if-present || npx tsc || true
+            print_status $GREEN "✅ TypeScript build completed"
+        fi
+    fi
+
     # Deploy based on language
     print_status $YELLOW "🚀 Deploying to LocalStack..."
-    
+
     case "$language" in
         "ts"|"js")
             pulumi up --yes --skip-preview 2>&1

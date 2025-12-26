@@ -976,7 +976,9 @@ export class Infrastructure extends pulumi.ComponentResource {
       skipFinalSnapshot: isLocalStack,
       monitoringInterval: isLocalStack ? 0 : 60,
       performanceInsightsEnabled: false,
-      enabledCloudwatchLogsExports: isLocalStack ? [] : ['error', 'general', 'slowquery'],
+      enabledCloudwatchLogsExports: isLocalStack
+        ? []
+        : ['error', 'general', 'slowquery'],
       multiAz: !isLocalStack,
       tags: {
         ...resourceTags,
@@ -986,7 +988,8 @@ export class Infrastructure extends pulumi.ComponentResource {
 
     // Add conditional fields for production
     if (!isLocalStack) {
-      rdsInstanceConfig.maxAllocatedStorage = config.rdsConfig.allocatedStorage * 2;
+      rdsInstanceConfig.maxAllocatedStorage =
+        config.rdsConfig.allocatedStorage * 2;
       rdsInstanceConfig.monitoringRoleArn = rdsMonitoringRole.arn;
       rdsInstanceConfig.finalSnapshotIdentifier = pulumi.interpolate`${createResourceName(
         'db-final-snapshot',
