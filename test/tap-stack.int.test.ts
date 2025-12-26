@@ -2,8 +2,37 @@
 import fs from 'fs';
 import AWS from 'aws-sdk';
 
+// =====================================================
+// LOCALSTACK CONFIGURATION
+// Detect LocalStack environment and configure AWS SDK
+// =====================================================
+const LOCALSTACK_ENDPOINT = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+const isLocalStack = LOCALSTACK_ENDPOINT.includes('localhost') || LOCALSTACK_ENDPOINT.includes('4566');
+
+// LocalStack-specific S3 endpoint (required for path-style access)
+const S3_ENDPOINT = process.env.AWS_ENDPOINT_URL_S3 ||
+  (isLocalStack ? 'http://s3.localhost.localstack.cloud:4566' : undefined);
+
+// Configure AWS SDK for LocalStack
+if (isLocalStack) {
+  console.log('LocalStack environment detected');
+  console.log('AWS_ENDPOINT_URL:', LOCALSTACK_ENDPOINT);
+  console.log('S3_ENDPOINT:', S3_ENDPOINT);
+
+  AWS.config.update({
+    region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
+  });
+}
+
 // Function to fetch AWS account ID
 const getAccountId = async (): Promise<string> => {
+  // For LocalStack, use default account ID
+  if (isLocalStack) {
+    return '000000000000';
+  }
+
   const sts = new AWS.STS();
   try {
     const result = await sts.getCallerIdentity().promise();
@@ -23,16 +52,25 @@ let outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Configure AWS SDK with region from outputs
-AWS.config.update({ region: outputs.Region });
+// Configure AWS SDK with region from outputs (fallback)
+if (!isLocalStack) {
+  AWS.config.update({ region: outputs.Region });
+}
+
+// Common endpoint configuration for LocalStack
+const endpointConfig = isLocalStack ? { endpoint: LOCALSTACK_ENDPOINT } : {};
+const s3EndpointConfig = isLocalStack ? {
+  endpoint: S3_ENDPOINT,
+  s3ForcePathStyle: true,
+} : {};
 
 // Initialize AWS service clients for CI/CD pipeline components
-const s3 = new AWS.S3();
-const codepipeline = new AWS.CodePipeline();
-const codebuild = new AWS.CodeBuild();
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-const lambda = new AWS.Lambda();
-const secretsManager = new AWS.SecretsManager();
+const s3 = new AWS.S3(s3EndpointConfig);
+const codepipeline = new AWS.CodePipeline(endpointConfig);
+const codebuild = new AWS.CodeBuild(endpointConfig);
+const dynamodb = new AWS.DynamoDB.DocumentClient(endpointConfig);
+const lambda = new AWS.Lambda(endpointConfig);
+const secretsManager = new AWS.SecretsManager(endpointConfig);
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -48,7 +86,22 @@ const isValidResourceId = (id: string): boolean => {
   return Boolean(id && !id.includes('***') && !id.includes('placeholder'));
 };
 
-
+// Get API Gateway endpoint URL for LocalStack
+const getApiEndpoint = (): string => {
+  if (isLocalStack) {
+    // For LocalStack, construct the API Gateway URL from the API ID in outputs
+    // LocalStack API Gateway URL format: http://localhost:4566/restapis/{api-id}/{stage}/_user_request_
+    // Or for HTTP API: http://{api-id}.execute-api.localhost.localstack.cloud:4566/{stage}
+    const apiId = outputs.ApiId || outputs.HttpApiId;
+    if (apiId) {
+      // Try HTTP API format first (more common in LocalStack)
+      return `http://${apiId}.execute-api.localhost.localstack.cloud:4566`;
+    }
+    // Fallback to direct LocalStack endpoint
+    return `${LOCALSTACK_ENDPOINT}/restapis`;
+  }
+  return outputs.ApiEndpoint || '';
+};
 
 // Test configuration
 const TEST_TIMEOUT = 30000; // 30 seconds
@@ -351,7 +404,7 @@ describe('CI/CD Pipeline Infrastructure Integration Tests', () => {
       };
 
       // 1. Call API Gateway endpoint
-      const apiResponse = await fetch(`${outputs.ApiEndpoint}/api/workflow`, {
+      const apiResponse = await fetch(`${getApiEndpoint()}/api/workflow`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
