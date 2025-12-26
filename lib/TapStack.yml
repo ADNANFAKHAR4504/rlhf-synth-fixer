@@ -405,12 +405,12 @@ Resources:
       DBInstanceIdentifier: !Sub 'tap-database-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.39'
+      EngineVersion: '5.7.44'
       MasterUsername: admin
       MasterUserPassword: !Sub '{{resolve:secretsmanager:tap-database-password-${EnvironmentSuffix}:SecretString:password}}'
       AllocatedStorage: '20'
       StorageType: gp2
-      MultiAZ: false
+      MultiAZ: true
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
