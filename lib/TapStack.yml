@@ -405,7 +405,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'tap-database-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '5.7.44'
+      EngineVersion: '8.0.39'
       MasterUsername: admin
       MasterUserPassword: !Sub '{{resolve:secretsmanager:tap-database-password-${EnvironmentSuffix}:SecretString:password}}'
       AllocatedStorage: '20'

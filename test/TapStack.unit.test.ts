@@ -256,10 +256,10 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
-    test('Database should use MySQL 5.7', () => {
+    test('Database should use MySQL 8.0', () => {
       const db = template.Resources.Database.Properties;
       expect(db.Engine).toBe('mysql');
-      expect(db.EngineVersion).toBe('5.7.44');
+      expect(db.EngineVersion).toBe('8.0.39');
     });
 
     test('Database should be Multi-AZ', () => {
