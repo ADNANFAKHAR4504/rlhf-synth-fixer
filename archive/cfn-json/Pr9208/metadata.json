@@ -12,14 +12,21 @@
   ],
   "aws_services": [
     "Lambda",
-    "API Gateway",
     "DynamoDB",
-    "SNS",
+    "API Gateway",
     "CloudWatch",
-    "EventBridge",
+    "SNS",
+    "IAM",
     "KMS",
-    "IAM"
+    "EventBridge"
   ],
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
