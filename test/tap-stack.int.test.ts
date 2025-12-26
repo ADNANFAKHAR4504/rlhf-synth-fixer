@@ -54,14 +54,41 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'prod';
 const awsRegion = fs.readFileSync('lib/AWS_REGION', 'utf8').trim();
 
 // Initialize AWS SDK clients
-const asgClient = new AutoScalingClient({ region: awsRegion });
-const ssmClient = new SSMClient({ region: awsRegion });
-const cloudwatchClient = new CloudWatchClient({ region: awsRegion });
-const ec2Client = new EC2Client({ region: awsRegion });
-const secretsClient = new SecretsManagerClient({ region: awsRegion });
-const rdsClient = new RDSClient({ region: awsRegion });
-const s3Client = new S3Client({ region: awsRegion });
-const dynamoClient = new DynamoDBClient({ region: awsRegion });
+const clientConfig: any = {
+  region: awsRegion,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
+  },
+};
+
+// Add endpoint if AWS_ENDPOINT_URL is set (for LocalStack)
+if (process.env.AWS_ENDPOINT_URL) {
+  clientConfig.endpoint = process.env.AWS_ENDPOINT_URL;
+}
+
+const s3Config: any = {
+  region: awsRegion,
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
+  },
+};
+
+// Add S3 endpoint if AWS_ENDPOINT_URL_S3 or AWS_ENDPOINT_URL is set
+if (process.env.AWS_ENDPOINT_URL_S3 || process.env.AWS_ENDPOINT_URL) {
+  s3Config.endpoint = process.env.AWS_ENDPOINT_URL_S3 || process.env.AWS_ENDPOINT_URL;
+}
+
+const asgClient = new AutoScalingClient(clientConfig);
+const ssmClient = new SSMClient(clientConfig);
+const cloudwatchClient = new CloudWatchClient(clientConfig);
+const ec2Client = new EC2Client(clientConfig);
+const secretsClient = new SecretsManagerClient(clientConfig);
+const rdsClient = new RDSClient(clientConfig);
+const s3Client = new S3Client(s3Config);
+const dynamoClient = new DynamoDBClient(clientConfig);
 
 // Helper function to wait for SSM command completion
 async function waitForCommand(
