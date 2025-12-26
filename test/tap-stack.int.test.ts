@@ -139,7 +139,7 @@ describe('TapStack Integration Tests', () => {
         (route.GatewayId === outputs.InternetGatewayId || route.GatewayId?.includes('igw-')) &&
         route.DestinationCidrBlock === '0.0.0.0/0'
       );
-      expect(hasIgwRoute || publicRouteTable?.Routes?.length).toBeGreaterThanOrEqual(1);
+      expect(hasIgwRoute || (publicRouteTable?.Routes?.length || 0) > 0).toBe(true);
 
       // Check private route table has NAT gateway route
       const privateRouteTable = routeTables.find(rt => rt.RouteTableId === outputs.PrivateRouteTable1Id);
@@ -149,7 +149,7 @@ describe('TapStack Integration Tests', () => {
         (route.NatGatewayId === outputs.NatGateway1Id || route.NatGatewayId?.includes('nat-')) &&
         route.DestinationCidrBlock === '0.0.0.0/0'
       );
-      expect(hasNatRoute || privateRouteTable?.Routes?.length).toBeGreaterThanOrEqual(1);
+      expect(hasNatRoute || (privateRouteTable?.Routes?.length || 0) > 0).toBe(true);
     });
   });
 
