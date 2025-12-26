@@ -25,7 +25,7 @@ Create a serverless cryptocurrency price alert system using **CloudFormation wit
    - CheckAlerts function triggered by DynamoDB streams to evaluate thresholds
    - SendNotification function as SNS topic subscriber for SMS delivery
    - CleanupHistory function to remove old price data periodically
-   - All functions must use ARM-based Graviton2 processors (arm64 architecture)
+   - All functions must use ARM-based Graviton2 processors with arm64 architecture
    - Reserved concurrent executions to prevent throttling
    - Environment variables encrypted with KMS
 
@@ -58,13 +58,13 @@ Create a serverless cryptocurrency price alert system using **CloudFormation wit
 - Use **CloudWatch** for monitoring and alarms
 - Use **EventBridge** for scheduled cleanup tasks
 - Use **KMS** for encrypting Lambda environment variables
-- Resource names must include **EnvironmentSuffix** parameter for uniqueness
+- All infrastructure names must include **EnvironmentSuffix** parameter for uniqueness
 - Follow naming convention: resource-type-EnvironmentSuffix
 - Deploy to **us-east-1** region
 
 ### Constraints
 
-- Lambda functions must use ARM-based Graviton2 (arm64) not x86
+- Lambda functions must use ARM-based Graviton2 with arm64 architecture not x86
 - DynamoDB tables must use on-demand billing mode not provisioned
 - All Lambda functions must have reserved concurrent executions configured
 - API Gateway must implement usage plans with API keys for authentication
@@ -90,7 +90,7 @@ Create a serverless cryptocurrency price alert system using **CloudFormation wit
 - Security: Lambda environment variables encrypted with KMS
 - Security: IAM roles implement least privilege principle with scoped access
 - Monitoring: CloudWatch alarms configured for Lambda errors and DynamoDB throttling
-- Resource Naming: All resources include EnvironmentSuffix parameter
+- Naming Convention: All infrastructure includes EnvironmentSuffix parameter
 - Code Quality: Clean JSON CloudFormation template, well-organized, documented
 
 ## What to deliver
