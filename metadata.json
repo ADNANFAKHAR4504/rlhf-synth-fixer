@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349112",
+  "team": "synth",
+  "startedAt": "2025-11-05T15:00:39.743Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch",
+    "Internet Gateway",
+    "Security Groups",
+    "Secrets Manager",
+    "SSM Parameter Store"
+  ],
+  "provider": "localstack",
+  "wave": "P1"
+}
