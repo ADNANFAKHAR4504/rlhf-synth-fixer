@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-284215",
+  "team": "synth-2",
+  "startedAt": "2025-07-30T08:36:10.151Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "EC2",
+    "Lambda",
+    "S3",
+    "IAM",
+    "EventBridge",
+    "CloudWatch Logs"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "284215",
+    "pr": "Pr307"
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
