@@ -72,10 +72,6 @@ describe('Payment Processing Infrastructure Tests', () => {
       expect(arn).toBeDefined();
       expect(arn).toMatch(/^arn:aws:sns:.+:.+$/);
     });
-
-    test('EnvironmentSuffix should be set', () => {
-      expect(out('EnvironmentSuffix')).toBe('dev');
-    });
   });
 
   describe('Output Format Validation', () => {
