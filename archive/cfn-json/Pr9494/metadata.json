@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-348923",
+  "team": "synth-2",
+  "startedAt": "2025-10-11T10:47:06.795Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "KMS",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "wave": "P1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}
