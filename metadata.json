@@ -4,8 +4,8 @@
   "provider": "localstack",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291524",
-  "team": "5",
+  "po_id": "LS-291524",
+  "team": "synth-2",
   "startedAt": "2025-08-16T17:19:28.698Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
@@ -22,5 +22,5 @@
     "CloudWatch",
     "Budgets"
   ],
-  "wave": "P1"
+  "wave": "P0"
 }
