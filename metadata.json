@@ -1,0 +1,24 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291470_ls",
+  "team": "2",
+  "startedAt": "2025-12-25T21:39:54.998Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "DynamoDB",
+    "IAM",
+    "Lambda",
+    "CloudWatch Logs",
+    "Secrets Manager"
+  ],
+  "wave": "P0"
+}
