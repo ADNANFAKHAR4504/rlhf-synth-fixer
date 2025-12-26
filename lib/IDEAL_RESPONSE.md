@@ -499,38 +499,6 @@ The infrastructure design balances cost optimization with reliability by deployi
         "VpcId": {
           "Ref": "VPC"
         },
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 80,
-            "ToPort": 80,
-            "CidrIp": "0.0.0.0/0",
-            "Description": "Allow HTTP from internet"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "CidrIp": "0.0.0.0/0",
-            "Description": "Allow HTTPS from internet"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 22,
-            "ToPort": 22,
-            "CidrIp": {
-              "Ref": "SSHAllowedCIDR"
-            },
-            "Description": "Allow SSH from specified IP range"
-          }
-        ],
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": "-1",
-            "CidrIp": "0.0.0.0/0",
-            "Description": "Allow all outbound traffic"
-          }
-        ],
         "Tags": [
           {
             "Key": "Name",
@@ -545,6 +513,47 @@ The infrastructure design balances cost optimization with reliability by deployi
         ]
       }
     },
+    "EC2SecurityGroupIngressHTTP": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EC2SecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 80,
+        "ToPort": 80,
+        "CidrIp": "0.0.0.0/0",
+        "Description": "Allow HTTP from internet"
+      }
+    },
+    "EC2SecurityGroupIngressHTTPS": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EC2SecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "CidrIp": "0.0.0.0/0",
+        "Description": "Allow HTTPS from internet"
+      }
+    },
+    "EC2SecurityGroupIngressSSH": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EC2SecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 22,
+        "ToPort": 22,
+        "CidrIp": {
+          "Ref": "SSHAllowedCIDR"
+        },
+        "Description": "Allow SSH from specified IP range"
+      }
+    },
     "RDSSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -552,26 +561,6 @@ The infrastructure design balances cost optimization with reliability by deployi
         "VpcId": {
           "Ref": "VPC"
         },
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 3306,
-            "ToPort": 3306,
-            "SourceSecurityGroupId": {
-              "Ref": "EC2SecurityGroup"
-            },
-            "Description": "Allow MySQL/MariaDB from EC2 instances"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 5432,
-            "ToPort": 5432,
-            "SourceSecurityGroupId": {
-              "Ref": "EC2SecurityGroup"
-            },
-            "Description": "Allow PostgreSQL from EC2 instances"
-          }
-        ],
         "Tags": [
           {
             "Key": "Name",
@@ -584,6 +573,36 @@ The infrastructure design balances cost optimization with reliability by deployi
             "Value": "Production"
           }
         ]
+      }
+    },
+    "RDSSecurityGroupIngressMySQL": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "RDSSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 3306,
+        "ToPort": 3306,
+        "SourceSecurityGroupId": {
+          "Ref": "EC2SecurityGroup"
+        },
+        "Description": "Allow MySQL/MariaDB from EC2 instances"
+      }
+    },
+    "RDSSecurityGroupIngressPostgreSQL": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "RDSSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "SourceSecurityGroupId": {
+          "Ref": "EC2SecurityGroup"
+        },
+        "Description": "Allow PostgreSQL from EC2 instances"
       }
     },
     "DBSecret": {
@@ -841,12 +860,7 @@ The infrastructure design balances cost optimization with reliability by deployi
           "LaunchTemplateId": {
             "Ref": "LaunchTemplate"
           },
-          "Version": {
-            "Fn::GetAtt": [
-              "LaunchTemplate",
-              "LatestVersionNumber"
-            ]
-          }
+          "Version": "$Latest"
         },
         "MinSize": {
           "Ref": "MinSize"
@@ -883,6 +897,9 @@ The infrastructure design balances cost optimization with reliability by deployi
     "ScaleUpPolicy": {
       "Type": "AWS::AutoScaling::ScalingPolicy",
       "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "ScaleUp-${EnvironmentSuffix}"
+        },
         "AdjustmentType": "ChangeInCapacity",
         "AutoScalingGroupName": {
           "Ref": "AutoScalingGroup"
@@ -894,6 +911,9 @@ The infrastructure design balances cost optimization with reliability by deployi
     "ScaleDownPolicy": {
       "Type": "AWS::AutoScaling::ScalingPolicy",
       "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "ScaleDown-${EnvironmentSuffix}"
+        },
         "AdjustmentType": "ChangeInCapacity",
         "AutoScalingGroupName": {
           "Ref": "AutoScalingGroup"
