@@ -306,13 +306,21 @@ describe('CloudFormation Stack Integration Tests', () => {
 
   describe('Resource Naming', () => {
     test('should use environment suffix in resource names', () => {
-      // Check that all outputs contain the expected patterns
-      expect(outputs.ReportBucketName).toContain('pr3495');
-      expect(outputs.LambdaFunctionName).toContain('pr3495');
-      expect(outputs.SNSTopicArn).toContain('pr3495');
-      expect(outputs.DatabaseSecretArn).toContain('pr3495');
-      expect(outputs.EventRuleArn).toContain('pr3495');
-      expect(outputs.CloudWatchLogGroup).toContain('pr3495');
+      // Extract suffix from bucket name (format: production-rprt-{suffix}-{account}-{region})
+      const bucketMatch = outputs.ReportBucketName.match(/production-rprt-([^-]+)/);
+      expect(bucketMatch).toBeTruthy();
+      const suffix = bucketMatch![1];
+
+      // Verify all resources use the same consistent suffix
+      expect(outputs.ReportBucketName).toContain(suffix);
+      expect(outputs.LambdaFunctionName).toContain(suffix);
+      expect(outputs.SNSTopicArn).toContain(suffix);
+      expect(outputs.DatabaseSecretArn).toContain(suffix);
+      expect(outputs.EventRuleArn).toContain(suffix);
+      expect(outputs.CloudWatchLogGroup).toContain(suffix);
+
+      // Suffix should be in pr#### or similar format
+      expect(suffix).toMatch(/^pr\d+$/);
     });
   });
 });
