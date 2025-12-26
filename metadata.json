@@ -19,5 +19,5 @@
     "AWS Systems Manager"
   ],
   "provider": "localstack",
-  "wave": "p0"
+  "wave": "P0"
 }
