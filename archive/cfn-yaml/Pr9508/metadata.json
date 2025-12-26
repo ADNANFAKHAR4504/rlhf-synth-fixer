@@ -24,6 +24,15 @@
     "Security Groups",
     "Route Tables",
     "NAT Gateway",
-    "Elastic IP"
-  ]
+    "Elastic IP",
+    "S3",
+    "Secrets Manager"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "michael-adeteye",
+  "dockerS3Location": ""
 }
