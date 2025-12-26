@@ -22,7 +22,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Secure data processing infrastructure for PCI-DSS compliant financial transaction processing'
+        'Payment Processing Infrastructure - Single Stack'
       );
     });
   });
@@ -37,7 +37,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.Description).toBe(
-        'Unique suffix for resource naming to prevent conflicts'
+        'Unique suffix for resource naming'
       );
     });
   });
@@ -46,16 +46,13 @@ describe('TapStack CloudFormation Template', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
         'VPCId',
-        'PrivateSubnet1Id',
-        'PrivateSubnet2Id',
-        'DataBucketName',
-        'DataBucketArn',
-        'LambdaFunctionName',
+        'APIEndpoint',
+        'SessionTableName',
+        'TransactionQueueUrl',
+        'TransactionLogBucket',
         'LambdaFunctionArn',
-        'KMSKeyId',
-        'KMSKeyArn',
-        'VPCFlowLogsLogGroupName',
-        'LambdaSecurityGroupId',
+        'AlertTopicArn',
+        'EnvironmentSuffix',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -63,44 +60,30 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('KMSKeyId output should be correct', () => {
-      const output = template.Outputs.KMSKeyId;
-      expect(output.Description).toBe('KMS Key ID');
-      expect(output.Value).toEqual({ Ref: 'KMSKey' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-KMSKeyId',
-      });
+    test('VPCId output should be correct', () => {
+      const output = template.Outputs.VPCId;
+      expect(output.Description).toBe('VPC ID');
+      expect(output.Value).toEqual({ Ref: 'VPC' });
     });
 
     test('LambdaFunctionArn output should be correct', () => {
       const output = template.Outputs.LambdaFunctionArn;
-      expect(output.Description).toBe('Lambda Function ARN');
+      expect(output.Description).toBe('Payment Processor Lambda ARN');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['DataProcessorFunction', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-LambdaFunctionArn',
+        'Fn::GetAtt': ['PaymentProcessorFunction', 'Arn'],
       });
     });
 
-    test('LambdaFunctionName output should be correct', () => {
-      const output = template.Outputs.LambdaFunctionName;
-      expect(output.Description).toBe('Lambda Function Name');
-      expect(output.Value).toEqual({ Ref: 'DataProcessorFunction' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-LambdaFunctionName',
-      });
+    test('SessionTableName output should be correct', () => {
+      const output = template.Outputs.SessionTableName;
+      expect(output.Description).toBe('DynamoDB Session Table Name');
+      expect(output.Value).toEqual({ Ref: 'SessionTable' });
     });
 
-    test('DataBucketName output should be correct', () => {
-      const output = template.Outputs.DataBucketName;
-      expect(output.Description).toBe(
-        'S3 Bucket Name for secure data storage'
-      );
-      expect(output.Value).toEqual({ Ref: 'DataBucket' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-DataBucketName',
-      });
+    test('TransactionLogBucket output should be correct', () => {
+      const output = template.Outputs.TransactionLogBucket;
+      expect(output.Description).toBe('S3 Bucket for Transaction Logs');
+      expect(output.Value).toEqual({ Ref: 'TransactionLogBucket' });
     });
   });
 
@@ -118,30 +101,86 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have correct resource count', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(16);
+      // Payment Processing stack has 28 resources
+      expect(resourceCount).toBe(28);
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have correct parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(7);
+      expect(parameterCount).toBe(1);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have correct output count', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(11);
+      expect(outputCount).toBe(8);
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+  describe('Core Resources', () => {
+    test('should have VPC resource', () => {
+      expect(template.Resources.VPC).toBeDefined();
+      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
+    });
+
+    test('should have Lambda function resource', () => {
+      expect(template.Resources.PaymentProcessorFunction).toBeDefined();
+      expect(template.Resources.PaymentProcessorFunction.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('should have DynamoDB table resource', () => {
+      expect(template.Resources.SessionTable).toBeDefined();
+      expect(template.Resources.SessionTable.Type).toBe('AWS::DynamoDB::Table');
+    });
+
+    test('should have S3 bucket resource', () => {
+      expect(template.Resources.TransactionLogBucket).toBeDefined();
+      expect(template.Resources.TransactionLogBucket.Type).toBe('AWS::S3::Bucket');
+    });
+
+    test('should have SQS queue resource', () => {
+      expect(template.Resources.TransactionQueue).toBeDefined();
+      expect(template.Resources.TransactionQueue.Type).toBe('AWS::SQS::Queue');
+    });
+
+    test('should have API Gateway resource', () => {
+      expect(template.Resources.PaymentAPI).toBeDefined();
+      expect(template.Resources.PaymentAPI.Type).toBe('AWS::ApiGatewayV2::Api');
+    });
+
+    test('should have KMS key resource', () => {
+      expect(template.Resources.KMSKey).toBeDefined();
+      expect(template.Resources.KMSKey.Type).toBe('AWS::KMS::Key');
+    });
+
+    test('should have SNS topic resource', () => {
+      expect(template.Resources.AlertTopic).toBeDefined();
+      expect(template.Resources.AlertTopic.Type).toBe('AWS::SNS::Topic');
+    });
+  });
+
+  describe('Security Configuration', () => {
+    test('S3 bucket should have encryption enabled', () => {
+      const bucket = template.Resources.TransactionLogBucket;
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+    });
+
+    test('S3 bucket should block public access', () => {
+      const bucket = template.Resources.TransactionLogBucket;
+      expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
+      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+    });
+
+    test('DynamoDB table should have encryption enabled', () => {
+      const table = template.Resources.SessionTable;
+      expect(table.Properties.SSESpecification).toBeDefined();
+      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+    });
+
+    test('SQS queue should have KMS encryption', () => {
+      const queue = template.Resources.TransactionQueue;
+      expect(queue.Properties.KmsMasterKeyId).toBeDefined();
     });
   });
 });
