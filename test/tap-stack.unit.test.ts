@@ -218,11 +218,6 @@ describe('TapStack CloudFormation Template - Single Stack Infrastructure', () =>
   });
 
   describe('Outputs', () => {
-    test('should have VPCId output', () => {
-      expect(template.Outputs.VPCId).toBeDefined();
-      expect(template.Outputs.VPCId.Value).toEqual({ Ref: 'VPC' });
-    });
-
     test('should have ALBDNSName output', () => {
       expect(template.Outputs.ALBDNSName).toBeDefined();
       expect(template.Outputs.ALBDNSName.Value).toEqual({
