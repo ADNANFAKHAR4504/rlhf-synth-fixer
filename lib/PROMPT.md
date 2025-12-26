@@ -1,5 +1,5 @@
 <task_context>
-You are an expert AWS infrastructure engineer building a production-grade crowdfunding platform using CloudFormation (YAML). The platform manages 5,000 active campaigns with milestone-based fund release, backer rewards, and fraud prevention capabilities. This infrastructure will be deployed in us-west-2 for a production environment.
+You are an expert AWS infrastructure engineer building a production-grade crowdfunding platform using CloudFormation. The platform manages 5,000 active campaigns with milestone-based fund release, backer rewards, and fraud prevention capabilities. This infrastructure will be deployed in us-west-2 for a production environment.
 </task_context>
 
 <objective>
@@ -23,10 +23,10 @@ You must ONLY modify and output code for these three files:
 - Integrate with Cognito for authentication/authorization
 
 **Compute Layer:**
-- Lambda functions (Node.js 18 runtime) for:
-  - Campaign management operations
-  - Payment processing with retry logic
-  - Contribution screening integration
+- Lambda functions with Node.js 18 runtime for:
+ - Campaign management operations
+ - Payment processing with retry logic
+ - Contribution screening integration
 - Grant necessary IAM permissions for all integrations
 
 **Data Layer:**
@@ -49,7 +49,7 @@ You must ONLY modify and output code for these three files:
 **Storage and Content Delivery:**
 - S3 bucket for campaign media with versioning
 - CloudFront distribution connected to S3 origin
-- Configure OAI (Origin Access Identity) for secure access
+- Configure Origin Access Identity for secure S3 access from CloudFront
 - Set appropriate cache behaviors
 
 **Authentication:**
@@ -58,7 +58,7 @@ You must ONLY modify and output code for these three files:
 - Configure app clients for API Gateway integration
 
 **Notifications:**
-- SES for campaign update emails (configure verified identities)
+- SES for campaign update emails with verified sender identities
 - SNS topics for milestone notifications
 - Subscribe relevant endpoints to SNS topics
 
@@ -84,7 +84,7 @@ You must ONLY modify and output code for these three files:
 
 <critical_implementation_details>
 
-**Resource Connection Priorities:**
+### Resource Connection Priorities
 1. DynamoDB transactions must support atomic writes across campaigns and contributions tables
 2. Lambda functions require environment variables pointing to DynamoDB table names, SNS topic ARNs, and KMS key IDs
 3. Step Functions must orchestrate multi-step workflows with proper error handling and retries
@@ -94,7 +94,7 @@ You must ONLY modify and output code for these three files:
 7. All sensitive data paths must use KMS encryption
 8. IAM roles must follow principle of least privilege with explicit resource ARNs
 
-**Transaction Patterns:**
+### Transaction Patterns
 - Implement DynamoDB TransactWriteItems for atomic contribution processing
 - Include conditional checks to prevent double-spending
 - Handle transaction conflicts with appropriate error responses
@@ -116,10 +116,10 @@ You must ONLY modify and output code for these three files:
 
 For lib/TapStack.yml:
 - Write production-ready CloudFormation YAML with proper indentation
-- Use !Ref and !GetAtt for resource references (not Fn:: syntax)
-- Include descriptive resource names following convention: ResourceTypePurpose (e.g., CampaignDynamoDBTable)
+- Use !Ref and !GetAtt for resource references instead of Fn:: syntax
+- Include descriptive resource names following convention: ResourceTypePurpose, like CampaignDynamoDBTable
 - Add Outputs section exporting critical resource ARNs and endpoints
-- Include Parameters section for configurable values (environment, bucket names)
+- Include Parameters section for configurable values like environment and bucket names
 - Group related resources with comments for readability
 - Ensure all cross-resource dependencies are properly defined
 - Total stack should contain 25-30 interconnected resources
@@ -129,7 +129,7 @@ For tests/tap-stack.unit.test.ts:
 - Test each resource type has correct properties
 - Verify IAM policies have required permissions
 - Validate environment variables are properly set
-- Check DynamoDB table configurations (billing mode, encryption, GSIs)
+- Check DynamoDB table configurations including billing mode, encryption, and GSIs
 - Confirm Lambda runtime and handler configurations
 - Test Step Functions state machine has all required states
 - Minimum 15 test cases covering all critical resources
@@ -167,7 +167,7 @@ Your implementation is successful when:
 6. Fraud Detector integration is functional in payment processing flow
 7. All tests pass and provide meaningful coverage
 8. The stack can be deployed without errors
-9. Services can communicate as designed (API -> Lambda -> DynamoDB, etc.)
+9. Services can communicate as designed: API Gateway connects to Lambda which connects to DynamoDB
 10. Security best practices are followed throughout
 </success_criteria>
 
