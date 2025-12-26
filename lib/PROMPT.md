@@ -15,7 +15,7 @@ Deploy a payment processing app with:
 
 ## Environment Handling
 
-The stack should accept an Environment parameter (dev or prod) to control resource sizing and configuration:
+The stack should accept an Environment parameter - either dev or prod - to control resource sizing and configuration:
 
 - dev uses t3.micro for EC2, prod uses m5.large
 - dev has single-AZ RDS, prod has multi-AZ
@@ -65,8 +65,7 @@ No hardcoded account IDs, ARNs, or regions. Use intrinsic functions like !Sub, !
 - Alarm thresholds differ by environment
 
 ### Resource Naming
-All resources follow this pattern using !Sub:
-Name: ${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc
+All resources follow this pattern: StackName-Region-EnvironmentSuffix-ResourceType
 
 Examples:
 - VPC to paymentapp-us-east-1-pr4056-vpc
