@@ -1,0 +1,520 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless Video Processing System with S3, Lambda, SNS, and CloudWatch for handling 1,500+ daily video uploads",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix to append to resource names",
+            "Default": "dev"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Description": "Email address for SNS notifications",
+            "Default": "admin@example.com",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "ConstraintDescription": "Must be a valid email address"
+        }
+    },
+    "Resources": {
+        "VideoProcessingTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "video-processing-notifications-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Video Processing Notifications",
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "NotificationEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "VideoProcessingTopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Ref": "VideoProcessingTopic"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AllowLambdaPublish",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": [
+                                "SNS:Publish"
+                            ],
+                            "Resource": {
+                                "Ref": "VideoProcessingTopic"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "VideoProcessingPolicy-${EnvironmentSuffix}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject",
+                                        "s3:PutObjectTagging"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::video-uploads-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::video-uploads-${EnvironmentSuffix}-${AWS::AccountId}"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "VideoProcessingTopic"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "VideoProcessingLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/video-processor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "VideoProcessingFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "video-processor-${EnvironmentSuffix}"
+                },
+                "Runtime": "nodejs22.x",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "MemorySize": 1024,
+                "Environment": {
+                    "Variables": {
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "VideoProcessingTopic"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "const { S3Client, HeadObjectCommand, PutObjectTaggingCommand } = require('@aws-sdk/client-s3');\nconst { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');\nconst { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');\n\nconst s3Client = new S3Client();\nconst snsClient = new SNSClient();\nconst cloudwatchClient = new CloudWatchClient();\n\nexports.handler = async (event) => {\n  console.log('Event received:', JSON.stringify(event, null, 2));\n  \n  const startTime = Date.now();\n  const results = [];\n\n  for (const record of event.Records) {\n    try {\n      const bucket = record.s3.bucket.name;\n      const key = decodeURIComponent(record.s3.object.key.replace(/\\+/g, ' '));\n      const size = record.s3.object.size;\n\n      console.log(`Processing video: ${key} from bucket: ${bucket}`);\n\n      // Get object metadata\n      const headCommand = new HeadObjectCommand({\n        Bucket: bucket,\n        Key: key\n      });\n      const metadata = await s3Client.send(headCommand);\n\n      // Process video (simulate processing logic)\n      const processingResult = {\n        bucket,\n        key,\n        size,\n        sizeInMB: (size / (1024 * 1024)).toFixed(2),\n        contentType: metadata.ContentType,\n        uploadTime: record.eventTime,\n        status: 'success'\n      };\n\n      // Tag the object as processed\n      const taggingCommand = new PutObjectTaggingCommand({\n        Bucket: bucket,\n        Key: key,\n        Tagging: {\n          TagSet: [\n            { Key: 'ProcessingStatus', Value: 'Completed' },\n            { Key: 'ProcessedAt', Value: new Date().toISOString() }\n          ]\n        }\n      });\n      await s3Client.send(taggingCommand);\n\n      // Send SNS notification\n      const snsParams = {\n        TopicArn: process.env.SNS_TOPIC_ARN,\n        Subject: `Video Upload Successful - ${key}`,\n        Message: `\n          Video Processing Completed Successfully\n\n          Details:\n          - File Name: ${key}\n          - File Size: ${processingResult.sizeInMB} MB\n          - Content Type: ${metadata.ContentType}\n          - Upload Time: ${record.eventTime}\n          - Processing Status: Completed\n          - Environment: ${process.env.ENVIRONMENT}\n\n          The video has been successfully uploaded and processed.\n        `\n      };\n\n      await snsClient.send(new PublishCommand(snsParams));\n      console.log(`Notification sent for: ${key}`);\n\n      results.push(processingResult);\n\n    } catch (error) {\n      console.error('Error processing video:', error);\n      \n      // Send error notification\n      const errorSnsParams = {\n        TopicArn: process.env.SNS_TOPIC_ARN,\n        Subject: `Video Processing Failed - ${record.s3.object.key}`,\n        Message: `\n          Video Processing Failed\n\n          Error Details:\n          - File: ${record.s3.object.key}\n          - Error: ${error.message}\n          - Environment: ${process.env.ENVIRONMENT}\n\n          Please check the logs for more details.\n        `\n      };\n\n      await snsClient.send(new PublishCommand(errorSnsParams));\n      \n      results.push({\n        key: record.s3.object.key,\n        status: 'failed',\n        error: error.message\n      });\n    }\n  }\n\n  // Publish CloudWatch metrics\n  const processingTime = Date.now() - startTime;\n  const metricParams = {\n    Namespace: 'VideoProcessing',\n    MetricData: [\n      {\n        MetricName: 'VideosProcessed',\n        Value: results.length,\n        Unit: 'Count',\n        Timestamp: new Date(),\n        Dimensions: [\n          {\n            Name: 'Environment',\n            Value: process.env.ENVIRONMENT\n          }\n        ]\n      },\n      {\n        MetricName: 'ProcessingDuration',\n        Value: processingTime,\n        Unit: 'Milliseconds',\n        Timestamp: new Date(),\n        Dimensions: [\n          {\n            Name: 'Environment',\n            Value: process.env.ENVIRONMENT\n          }\n        ]\n      },\n      {\n        MetricName: 'SuccessfulProcessing',\n        Value: results.filter(r => r.status === 'success').length,\n        Unit: 'Count',\n        Timestamp: new Date(),\n        Dimensions: [\n          {\n            Name: 'Environment',\n            Value: process.env.ENVIRONMENT\n          }\n        ]\n      }\n    ]\n  };\n\n  await cloudwatchClient.send(new PutMetricDataCommand(metricParams));\n\n  return {\n    statusCode: 200,\n    body: JSON.stringify({\n      message: 'Video processing completed',\n      processed: results.length,\n      results: results\n    })\n  };\n};\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "VideoProcessingFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "s3.amazonaws.com",
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                },
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:s3:::video-uploads-${EnvironmentSuffix}-${AWS::AccountId}"
+                }
+            }
+        },
+        "VideoUploadBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DependsOn": "LambdaInvokePermission",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "video-uploads-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 30
+                        }
+                    ]
+                },
+                "NotificationConfiguration": {
+                    "LambdaConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "VideoProcessingFunction",
+                                    "Arn"
+                                ]
+                            },
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "suffix",
+                                            "Value": ".mp4"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "VideoProcessingFunction",
+                                    "Arn"
+                                ]
+                            },
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "suffix",
+                                            "Value": ".mov"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "VideoProcessingFunction",
+                                    "Arn"
+                                ]
+                            },
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "suffix",
+                                            "Value": ".avi"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "VideoProcessing"
+                    }
+                ]
+            }
+        },
+        "VideoUploadBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "VideoUploadBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "VideoUploadBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${VideoUploadBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "VideoProcessingDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "video-processing-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"VideoProcessing\", \"VideosProcessed\", {\"stat\": \"Sum\", \"label\": \"Total Videos Processed\"}],\n          [\".\", \"SuccessfulProcessing\", {\"stat\": \"Sum\", \"label\": \"Successful\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Video Processing Volume\",\n        \"period\": 300,\n        \"yAxis\": {\n          \"left\": {\n            \"label\": \"Count\"\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"VideoProcessing\", \"ProcessingDuration\", {\"stat\": \"Average\", \"label\": \"Avg Duration\"}],\n          [\"...\", {\"stat\": \"Maximum\", \"label\": \"Max Duration\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Processing Duration\",\n        \"period\": 300,\n        \"yAxis\": {\n          \"left\": {\n            \"label\": \"Milliseconds\"\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Lambda Invocations\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Errors\"}],\n          [\".\", \"Throttles\", {\"stat\": \"Sum\", \"label\": \"Throttles\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Metrics\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": [\"video-processor-${EnvironmentSuffix}\"]\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/S3\", \"NumberOfObjects\", {\"stat\": \"Average\", \"label\": \"Objects in Bucket\"}],\n          [\".\", \"BucketSizeBytes\", {\"stat\": \"Average\", \"label\": \"Bucket Size\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Storage Metrics\",\n        \"period\": 86400,\n        \"dimensions\": {\n          \"BucketName\": [\"video-uploads-${EnvironmentSuffix}-${AWS::AccountId}\"],\n          \"StorageType\": [\"AllStorageTypes\"]\n        }\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "video-processing-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Lambda function encounters errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "VideoProcessingFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "VideoProcessingTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "video-processing-throttles-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Lambda function is throttled",
+                "MetricName": "Throttles",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "VideoProcessingFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "VideoProcessingTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        }
+    },
+    "Outputs": {
+        "S3BucketName": {
+            "Description": "Name of the S3 bucket for video uploads",
+            "Value": {
+                "Ref": "VideoUploadBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BucketName"
+                }
+            }
+        },
+        "S3BucketArn": {
+            "Description": "ARN of the S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "VideoUploadBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BucketArn"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Name of the Lambda function",
+            "Value": {
+                "Ref": "VideoProcessingFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunction"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "ARN of the Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "VideoProcessingFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaArn"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "ARN of the SNS topic for notifications",
+            "Value": {
+                "Ref": "VideoProcessingTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SNSTopic"
+                }
+            }
+        },
+        "CloudWatchDashboardURL": {
+            "Description": "URL to the CloudWatch Dashboard",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=video-processing-${EnvironmentSuffix}"
+            }
+        },
+        "Environment": {
+            "Description": "Environment suffix used",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            }
+        }
+    }
+}

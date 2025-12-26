@@ -1,0 +1,22 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-CLO_YML_MED_S3_EVENT_9s1t2u_3p4q5r6sWX",
+  "team": "synth-2",
+  "startedAt": "2025-10-07T05:37:57.759Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "Sns",
+    "Lambda",
+    "CloudWatch",
+    "IAM"
+  ],
+  "wave": "P1"
+}
