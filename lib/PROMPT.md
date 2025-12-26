@@ -22,10 +22,10 @@ Design a **CloudFormation YAML template** that enforces **least-privilege IAM de
      - One for **EC2** instances that connects to S3 to read configuration data, writes application logs to CloudWatch Logs, queries DynamoDB tables, and retrieves secrets from SSM Parameter Store
      - One for **Lambda** functions that publishes execution logs to CloudWatch Logs, reads and writes data to DynamoDB tables, and stores processed results in S3 buckets
    - Each must have **inline policies** granting only the **minimum required permissions**.
-   - Explicitly **deny any wildcard actions (`Action: "*"`)**.
+   - Explicitly **deny any wildcard actions** (no asterisk wildcards allowed).
 
 2. **Permission Boundaries**
-   - Apply a **permissions boundary policy** that restricts privilege escalation (no `iam:*`, `sts:*`, or `organizations:*`).
+   - Apply a **permissions boundary policy** that restricts privilege escalation (deny all IAM, STS, and Organizations actions).
    - All roles created by the stack must reference this boundary.
 
 3. **Validation**
@@ -63,7 +63,7 @@ Return the solution in **4 sections**, in this order:
 1. **Security Architecture (ASCII)** — visualize IAM roles, boundaries, inline policies, and their relationships.
 2. **Policy Design Rationale** — justify principle of least privilege for each service.
 3. **CloudFormation YAML Template** — fully functional, validated with `cfn-nag`.
-4. **Validation Guidance** — commands and expected results for confirming compliance (`grep Action:\*`, `cfn-nag-scan` output).
+4. **Validation Guidance** — commands and expected results for confirming compliance (check for wildcard actions, `cfn-nag-scan` output).
 
 ---
 
@@ -77,7 +77,7 @@ No placeholders — use production-safe resource naming with `!Sub` and tagging.
 ### **M — MODEL-SPECIFIC**
 
 - Use **CloudFormation YAML**, not JSON.
-- Follow AWS IAM best practices (no `*` actions or resources).
+- Follow AWS IAM best practices (no wildcard actions or resources).
 - Include **explicit denies**, **permission boundaries**, and **inline policy scoping**.
 - Ensure **cfn-nag** passes with 0 warnings/errors.
 
