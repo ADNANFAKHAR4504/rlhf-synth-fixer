@@ -1,0 +1,17 @@
+Create a single CloudFormation template that establishes a comprehensive web application infrastructure for an enterprise grade deployment while maintaining operational excellence and security best practices.
+
+The infrastructure should be designed around a custom VPC that provides network isolation with carefully planned CIDR blocks distributed across at least two Availability Zones to ensure high availability and fault tolerance. Within this network architecture, you'll need to establish proper internet connectivity through an Internet Gateway with appropriately configured routing tables that enable public subnet communication while maintaining security boundaries.
+
+For the application tier, implement a public facing Elastic Load Balancer that distributes incoming traffic across an Auto Scaling Group configured to maintain a minimum of two t2.micro instances, ensuring the application remains available even during instance failures or maintenance windows. The Auto Scaling Group should be intelligently linked to the load balancer to automatically register and deregister instances as they scale in and out based on demand.
+
+The data persistence layer requires an RDS instance configured as the primary database with automated backups enabled to protect against data loss. This database should be positioned within private subnets and accessible only from the application tier through proper security group configurations.
+
+From a security and compliance perspective, the infrastructure must incorporate comprehensive logging capabilities where application logs are systematically stored in a dedicated S3 bucket with appropriate access policies, and VPC flow logs are enabled and directed to a separate S3 bucket for network traffic analysis. Additionally, implement a bastion host architecture that serves as a secure entry point for SSH access to internal resources, effectively restricting direct access to the private network components.
+
+Each compute resource must be assigned IAM roles following the principle of least privilege. The EC2 instances should have scoped permissions limited to reading from specific S3 buckets and writing logs to CloudWatch. The bastion host requires only SSH access without any AWS service permissions. Data protection requirements mandate that all data at rest be encrypted using AWS managed keys, including RDS storage, S3 buckets, and EBS volumes.
+
+The security architecture should include carefully crafted security groups that exclusively permit HTTP and HTTPS traffic to reach the application tier while blocking any other unnecessary ports and protocols. Throughout the template, adhere to a consistent naming convention such as webapp-loadbalancer, webapp-asg, webapp-database for all resources to maintain clarity and ease of management.
+
+Your CloudFormation template should exemplify best practices by utilizing Parameters for configurable values such as instance types, CIDR blocks, and database specifications, while providing comprehensive Outputs that expose critical resource information like load balancer DNS names, VPC IDs, and S3 bucket names for integration with other systems or future reference.
+
+The expected deliverable is a valid, production ready AWS CloudFormation YAML file that can be deployed without errors and successfully provisions all specified resources with their interdependencies properly configured.
