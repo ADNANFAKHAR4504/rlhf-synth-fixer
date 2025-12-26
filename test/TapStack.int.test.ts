@@ -17,13 +17,23 @@ import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from '@aws-sdk/cl
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = 'us-west-2';
+const region = process.env.AWS_REGION || 'us-east-1';
+const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
 
-// AWS clients
-const ec2Client = new EC2Client({ region });
-const elbClient = new ElasticLoadBalancingV2Client({ region });
-const rdsClient = new RDSClient({ region });
-const asgClient = new AutoScalingClient({ region });
+// AWS clients configuration for LocalStack or AWS
+const clientConfig: any = { region };
+if (isLocalStack) {
+  clientConfig.endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+  clientConfig.credentials = {
+    accessKeyId: 'test',
+    secretAccessKey: 'test'
+  };
+}
+
+const ec2Client = new EC2Client(clientConfig);
+const elbClient = new ElasticLoadBalancingV2Client(clientConfig);
+const rdsClient = new RDSClient(clientConfig);
+const asgClient = new AutoScalingClient(clientConfig);
 
 let outputs: any = {};
 
