@@ -1,0 +1,356 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless Payment Notification Processor - CloudFormation Template",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    }
+  },
+  "Resources": {
+    "PaymentDLQ": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "payment-dlq-${EnvironmentSuffix}"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "SqsManagedSseEnabled": true,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "PaymentQueue": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "payment-queue-${EnvironmentSuffix}"
+        },
+        "VisibilityTimeout": 1800,
+        "SqsManagedSseEnabled": true,
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "PaymentDLQ",
+              "Arn"
+            ]
+          },
+          "maxReceiveCount": 3
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "PaymentTransactionsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "PaymentTransactions-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "transactionId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "transactionId",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "PaymentProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/payment-processor-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "PaymentProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "payment-processor-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "PaymentProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "PaymentQueue",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "PaymentTransactionsTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "PaymentProcessorLogGroup",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "PaymentProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DeletionPolicy": "Delete",
+      "DependsOn": "PaymentProcessorLogGroup",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "payment-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.12",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "PaymentProcessorRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 1024,
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE_NAME": {
+              "Ref": "PaymentTransactionsTable"
+            },
+            "AWS_REGION_NAME": {
+              "Ref": "AWS::Region"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom datetime import datetime\nimport logging\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\n# Initialize AWS clients\ndynamodb = boto3.resource('dynamodb')\ntable_name = os.environ['DYNAMODB_TABLE_NAME']\ntable = dynamodb.Table(table_name)\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Process payment notifications from SQS and store in DynamoDB\n    \"\"\"\n    logger.info(f\"Processing {len(event['Records'])} messages\")\n\n    successful_messages = 0\n    failed_messages = 0\n\n    for record in event['Records']:\n        try:\n            # Parse SQS message body\n            message_body = json.loads(record['body'])\n\n            # Extract payment details\n            transaction_id = message_body.get('transactionId')\n\n            if not transaction_id:\n                logger.error(\"Missing transactionId in message\")\n                failed_messages += 1\n                continue\n\n            # Prepare item for DynamoDB\n            item = {\n                'transactionId': transaction_id,\n                'amount': message_body.get('amount', 0),\n                'currency': message_body.get('currency', 'USD'),\n                'status': message_body.get('status', 'pending'),\n                'paymentMethod': message_body.get('paymentMethod', 'unknown'),\n                'customerId': message_body.get('customerId', ''),\n                'processedAt': datetime.utcnow().isoformat(),\n                'rawMessage': json.dumps(message_body)\n            }\n\n            # Write to DynamoDB\n            response = table.put_item(Item=item)\n\n            logger.info(f\"Successfully processed transaction: {transaction_id}\")\n            successful_messages += 1\n\n        except json.JSONDecodeError as e:\n            logger.error(f\"JSON decode error: {str(e)}\")\n            failed_messages += 1\n        except Exception as e:\n            logger.error(f\"Error processing message: {str(e)}\")\n            failed_messages += 1\n            # Re-raise to trigger DLQ after max retries\n            raise\n\n    logger.info(f\"Batch complete - Success: {successful_messages}, Failed: {failed_messages}\")\n\n    return {\n        'statusCode': 200,\n        'body': json.dumps({\n            'processed': successful_messages,\n            'failed': failed_messages\n        })\n    }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "PaymentProcessorEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "PaymentQueue",
+            "Arn"
+          ]
+        },
+        "FunctionName": {
+          "Ref": "PaymentProcessorFunction"
+        },
+        "BatchSize": 10,
+        "Enabled": true
+      }
+    }
+  },
+  "Outputs": {
+    "PaymentQueueUrl": {
+      "Description": "URL of the payment notification queue",
+      "Value": {
+        "Ref": "PaymentQueue"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentQueueUrl"
+        }
+      }
+    },
+    "PaymentQueueArn": {
+      "Description": "ARN of the payment notification queue",
+      "Value": {
+        "Fn::GetAtt": [
+          "PaymentQueue",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentQueueArn"
+        }
+      }
+    },
+    "PaymentDLQUrl": {
+      "Description": "URL of the dead letter queue",
+      "Value": {
+        "Ref": "PaymentDLQ"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentDLQUrl"
+        }
+      }
+    },
+    "PaymentProcessorFunctionArn": {
+      "Description": "ARN of the payment processor Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "PaymentProcessorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentProcessorFunctionArn"
+        }
+      }
+    },
+    "PaymentProcessorFunctionName": {
+      "Description": "Name of the payment processor Lambda function",
+      "Value": {
+        "Ref": "PaymentProcessorFunction"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentProcessorFunctionName"
+        }
+      }
+    },
+    "PaymentTransactionsTableName": {
+      "Description": "Name of the DynamoDB table for payment transactions",
+      "Value": {
+        "Ref": "PaymentTransactionsTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentTransactionsTableName"
+        }
+      }
+    },
+    "PaymentTransactionsTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "PaymentTransactionsTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentTransactionsTableArn"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}

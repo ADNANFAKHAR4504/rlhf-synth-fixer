@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291993",
+  "team": "synth-2",
+  "startedAt": "2025-08-16T05:55:24.547Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "provider": "localstack",
+  "aws_services": [
+    "AWS KMS",
+    "AWS IAM",
+    "Amazon SNS",
+    "Amazon DynamoDB",
+    "AWS Lambda",
+    "Amazon SQS",
+    "Amazon API Gateway V2",
+    "Amazon CloudWatch Logs",
+    "Amazon CloudWatch Alarms",
+    "AWS X-Ray"
+  ],
+  "wave": "P0",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

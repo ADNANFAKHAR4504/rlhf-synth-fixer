@@ -1,0 +1,40 @@
+{
+  "platform": "pulumi",
+  "language": "js",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-trainr125-new",
+  "team": "synth-2",
+  "startedAt": "2025-08-22T13:09:38+05:30",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "wave": "P0",
+  "migrated_from": {
+    "po_id": "trainr125-new",
+    "pr": "Pr1988"
+  },
+  "training_quality": 9,
+  "aws_services": [
+    "ECS",
+    "Fargate",
+    "VPC",
+    "EC2 (Security Groups)",
+    "Application Load Balancer (ALB)",
+    "ECR",
+    "CloudWatch",
+    "Service Discovery",
+    "Secrets Manager",
+    "IAM",
+    "Auto Scaling"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}
