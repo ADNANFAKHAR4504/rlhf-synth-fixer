@@ -131,7 +131,7 @@ resource "aws_s3_bucket" "corp_bucket" {
 
 ---
 
-### 5. 🔐 **Inadequate IAM Least Privilege Implementation**
+### 5. **Inadequate IAM Least Privilege Implementation**
 
 **Problem:** The original IAM policies were too broad and didn't implement true least privilege principles.
 
@@ -146,7 +146,7 @@ statement {
     "logs:CreateLogGroup",
     "logs:CreateLogStream"
   ]
-  resources = ["*"]  # ❌ Too broad
+  resources = ["*"]  # Too broad
 }
 ```
 
@@ -184,7 +184,7 @@ statement {
 
 ---
 
-### 6. 🔒 **Missing Secrets Management Implementation**
+### 6. **Missing Secrets Management Implementation**
 
 **Problem:** The original implementation required manual password management and didn't integrate with AWS Secrets Manager.
 
@@ -225,7 +225,7 @@ resource "aws_secretsmanager_secret_version" "db_password" {
 
 ---
 
-### 7. 🧪 **Inadequate Test Coverage and Integration Testing**
+### 7. **Inadequate Test Coverage and Integration Testing**
 
 **Problem:** The original implementation lacked comprehensive test coverage and proper integration testing framework.
 
@@ -269,7 +269,7 @@ describe('VPC and Network Infrastructure', () => {
 
 ---
 
-### 8. 🏗️ **Missing Conditional Resource Creation Logic**
+### 8. **Missing Conditional Resource Creation Logic**
 
 **Problem:** The original implementation attempted to create resources without checking if prerequisites existed, leading to deployment failures.
 

@@ -681,11 +681,11 @@ output "deployment_info" {
 output "security_requirements_compliance" {
   description = "Complete security requirements compliance matrix"
   value = {
-    iam_policies_version_controlled = "✓ All IAM policies defined in Terraform with version control"
-    security_groups_http_https_only = "✓ Security groups allow only HTTP (80) and HTTPS (443)"
-    iam_least_privilege            = "✓ Ultra-minimal IAM permissions following strict least privilege"
-    s3_encryption_enabled          = "✓ All S3 buckets encrypted with AES256"
-    cloudwatch_api_logging         = "✓ CloudTrail captures all management and data events"
+    iam_policies_version_controlled = "[PASS] All IAM policies defined in Terraform with version control"
+    security_groups_http_https_only = "[PASS] Security groups allow only HTTP (80) and HTTPS (443)"
+    iam_least_privilege            = "[PASS] Ultra-minimal IAM permissions following strict least privilege"
+    s3_encryption_enabled          = "[PASS] All S3 buckets encrypted with AES256"
+    cloudwatch_api_logging         = "[PASS] CloudTrail captures all management and data events"
     approved_amis_only            = "✓ EC2 uses only approved Amazon Linux 2 AMIs"
     mfa_console_access            = "✓ MFA strictly enforced for all console operations"
     rds_encryption_at_rest        = "✓ RDS storage encrypted with AWS managed keys"
