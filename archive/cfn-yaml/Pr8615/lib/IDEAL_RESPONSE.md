@@ -1,0 +1,1000 @@
+# Secure AWS Infrastructure CloudFormation Template
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure AWS Infrastructure with VPC, EC2, RDS, S3, CloudWatch, and CloudTrail'
+
+Parameters:
+  Project:
+    Type: String
+    Default: secure-infra-pr1811
+    Description: Project name for resource tagging
+
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name (e.g., dev, staging, prod)
+
+  AllowedIPRange:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for vpc'
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+    ConstraintDescription: 'Must be a valid CIDR block'
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t3.medium, t3.large]
+    Description: EC2 instance type for Auto Scaling Group
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Resources:
+  # ===========================
+  # KMS Key & Alias
+  # ===========================
+  SecureKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS Key for encrypting sensitive data'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRoot
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudTrailEncryptLogs
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:GenerateDataKeyWithoutPlaintext
+              - kms:DescribeKey
+            Resource: "*"
+          - Sid: AllowS3Service
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: AllowRDSUseOfTheKey
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: AllowCloudWatchLogsUseOfTheKey
+            Effect: Allow
+            Principal:
+              Service: logs.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-kms'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  SecureKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${Project}-${Environment}-kms'
+      TargetKeyId: !Ref SecureKMSKey
+
+  # ===========================
+  # VPC & Internet Gateway
+  # ===========================
+  SecureVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-vpc'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  SecureInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-igw'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SecureVPC
+      InternetGatewayId: !Ref SecureInternetGateway
+
+  # ===========================
+  # Subnets
+  # ===========================
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-public-subnet1'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: '10.0.4.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-public-subnet2'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-private-subnet1'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: '10.0.3.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-private-subnet2'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ===========================
+  # EIPs & NAT Gateways
+  # ===========================
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-nat-eip1'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-nat-eip2'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-nat-gateway1'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-nat-gateway2'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ===========================
+  # Route Tables
+  # ===========================
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-public-routes'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref SecureInternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-private-routes1'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-private-routes2'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway1
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # ===========================
+  # Security Groups
+  # ===========================
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for EC2 instances with restricted SSH access'
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedIPRange
+          Description: 'SSH access from allowed IP range only'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedIPRange
+          Description: 'HTTP access from allowed IP range only'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AllowedIPRange
+          Description: 'HTTPS access from allowed IP range only'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-ec2-sg'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: 'MySQL access from EC2 instances'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-rds-sg'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ===========================
+  # IAM (EC2 Role / Instance Profile / CloudTrail Role)
+  # ===========================
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Project}-${Environment}-ec2-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: !Sub '${Project}-${Environment}-ec2-s3-kms-cw'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt SecureKMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${Project}-${Environment}-ec2-instance-profile'
+      Roles:
+        - !Ref EC2Role
+
+  CloudTrailRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Project}-${Environment}-cloudtrail-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub '${Project}-${Environment}-cloudtrail-cw'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/${Project}-${Environment}:*'
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ===========================
+  # S3 Buckets (Data, CloudTrail, Logs)
+  # ===========================
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Project}-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecureKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-${AWS::AccountId}-${AWS::Region}'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AllowLogDeliveryGroup
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${LoggingBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AllowGetBucketAcl
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt LoggingBucket.Arn
+
+  SecureS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Project}-${Environment}-data-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecureKMSKey
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: 'data-bucket-access-logs/'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-data-${AWS::AccountId}-${AWS::Region}'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Project}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecureKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: 'cloudtrail-access-logs/'
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${CloudTrailBucket}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
+
+          - Sid: AllowCloudTrailBucketACL
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+              - s3:GetBucketLocation
+            Resource: !Sub "arn:aws:s3:::${CloudTrailBucket}"
+
+  # ===========================
+  # RDS Subnet Group & Instance
+  # ===========================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-db-subnet-group'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Project}-db-secret'
+      Description: RDS database credentials
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\\` '
+        ExcludeUppercase: false
+        ExcludeLowercase: false
+        ExcludeNumbers: false
+        ExcludePunctuation: false
+        RequireEachIncludedType: true
+
+  RDSEnhancedMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+
+  # RDS Database
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${Project}-database'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: 8.0.40
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId: !Ref SecureKMSKey
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      MultiAZ: true
+      PubliclyAccessible: false
+      DeletionProtection: false
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-database'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+
+  # ===========================
+  # EC2 Instance & KeyPair
+  # ===========================
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub '${Project}-${Environment}-keypair'
+      KeyType: rsa
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-keypair'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  SecureEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref EC2KeyPair
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<h1>Hello from ${Project}</h1>" > /var/www/html/index.html
+          echo "OK" > /var/www/html/health
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-ec2-instance'
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ===========================
+  # CloudWatch Log Groups
+  # ===========================
+  EC2LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/${Project}-${Environment}-instance'
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt SecureKMSKey.Arn
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  RDSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/rds/instance/${Project}-${Environment}-database/error'
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt SecureKMSKey.Arn
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  S3LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/s3/${Project}-${Environment}-bucket'
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt SecureKMSKey.Arn
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  CloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/cloudtrail/${Project}-${Environment}'
+      RetentionInDays: 90
+      KmsKeyId: !GetAtt SecureKMSKey.Arn
+      Tags:
+        - Key: Project
+          Value: !Ref Project
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ===========================
+  # CloudTrail
+  # ===========================
+#  SecureCloudTrail:
+#    Type: AWS::CloudTrail::Trail
+#    DependsOn: CloudTrailBucketPolicy
+#    Properties:
+#      TrailName: !Sub '${Project}-${Environment}-cloudtrail'
+#      S3BucketName: !Ref CloudTrailBucket
+#      S3KeyPrefix: 'cloudtrail-logs/'
+#      IncludeGlobalServiceEvents: true
+#      IsMultiRegionTrail: false
+#      EnableLogFileValidation: true
+#      KMSKeyId: !Ref SecureKMSKey
+#      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+#      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+#      IsLogging: true
+#      Tags:
+#        - Key: Name
+#          Value: !Sub '${Project}-${Environment}-cloudtrail'
+#        - Key: Project
+#          Value: !Ref Project
+#        - Key: Environment
+#          Value: !Ref Environment
+Outputs:
+  # Networking
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref SecureVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
+
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
+
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+
+  PublicRouteTableId:
+    Description: 'Public Route Table ID'
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicRouteTable-ID'
+
+  PrivateRouteTable1Id:
+    Description: 'Private Route Table 1 ID'
+    Value: !Ref PrivateRouteTable1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateRouteTable1-ID'
+
+  PrivateRouteTable2Id:
+    Description: 'Private Route Table 2 ID'
+    Value: !Ref PrivateRouteTable2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateRouteTable2-ID'
+
+  NatGateway1Id:
+    Description: 'NAT Gateway 1 ID'
+    Value: !Ref NatGateway1
+    Export:
+      Name: !Sub '${AWS::StackName}-NatGateway1-ID'
+
+  NatGateway2Id:
+    Description: 'NAT Gateway 2 ID'
+    Value: !Ref NatGateway2
+    Export:
+      Name: !Sub '${AWS::StackName}-NatGateway2-ID'
+
+  NatGateway1EipAllocationId:
+    Description: 'EIP AllocationId for NAT GW 1'
+    Value: !GetAtt NatGateway1EIP.AllocationId
+    Export:
+      Name: !Sub '${AWS::StackName}-NatEIP1-AllocationId'
+
+  NatGateway2EipAllocationId:
+    Description: 'EIP AllocationId for NAT GW 2'
+    Value: !GetAtt NatGateway2EIP.AllocationId
+    Export:
+      Name: !Sub '${AWS::StackName}-NatEIP2-AllocationId'
+
+  # Security Groups
+  EC2SecurityGroupId:
+    Description: 'EC2 Security Group ID'
+    Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2SecurityGroup-ID'
+
+  RDSSecurityGroupId:
+    Description: 'RDS Security Group ID'
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSSecurityGroup-ID'
+
+  # IAM / Instance Profile
+  EC2RoleArn:
+    Description: 'EC2 IAM Role ARN'
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2Role-ARN'
+
+  EC2InstanceProfileName:
+    Description: 'EC2 Instance Profile Name'
+    Value: !Ref EC2InstanceProfile
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2InstanceProfile-Name'
+
+  CloudTrailRoleArn:
+    Description: 'CloudTrail Role ARN'
+    Value: !GetAtt CloudTrailRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailRole-ARN'
+
+  # S3
+  SecureDataBucketName:
+    Description: 'Secure S3 Data Bucket'
+    Value: !Ref SecureS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-SecureDataBucket'
+
+  CloudTrailBucketName:
+    Description: 'CloudTrail Logs Bucket'
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailBucket'
+
+  LoggingBucketName:
+    Description: 'Access Logs Bucket'
+    Value: !Ref LoggingBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LoggingBucket'
+
+  # RDS
+  RDSEndpoint:
+    Description: 'RDS Endpoint'
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
+
+  # EC2
+  EC2InstanceId:
+    Description: 'EC2 Instance ID'
+    Value: !Ref SecureEC2Instance
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-ID'
+
+  # KMS
+  KMSKeyId:
+    Description: 'KMS Key ID'
+    Value: !Ref SecureKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key'
+
+  KMSAliasName:
+    Description: 'KMS Alias Name'
+    Value: !Ref SecureKMSKeyAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Alias'
+
+  # CloudWatch Log Groups
+  EC2LogGroupName:
+    Description: 'EC2 CloudWatch Log Group'
+    Value: !Ref EC2LogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2LogGroup'
+
+  RDSLogGroupName:
+    Description: 'RDS CloudWatch Log Group'
+    Value: !Ref RDSLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSLogGroup'
+
+  S3LogGroupName:
+    Description: 'S3 CloudWatch Log Group'
+    Value: !Ref S3LogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-S3LogGroup'
+
+  CloudTrailLogGroupName:
+    Description: 'CloudTrail CloudWatch Log Group'
+    Value: !Ref CloudTrailLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailLogGroup'
+
+  # CloudTrail
+#  CloudTrailArn:
+#    Description: 'CloudTrail ARN'
+#    Value: !GetAtt SecureCloudTrail.Arn
+#    Export:
+#      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
+
+```
