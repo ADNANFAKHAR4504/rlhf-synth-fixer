@@ -1,6 +1,7 @@
 """
-Unit tests for A2 TapStack infrastructure (Lambda + DynamoDB + API Gateway).
+Unit tests for TapStack infrastructure (Lambda + S3 + API Gateway).
 
+LocalStack-compatible serverless infrastructure tests.
 Tests stack initialization, configuration, and resource creation
 without deploying actual AWS infrastructure.
 """
@@ -40,12 +41,12 @@ class TestTapStackCreation(unittest.TestCase):
   @patch("lib.tap_stack.apigateway.Resource")
   @patch("lib.tap_stack.apigateway.Deployment")
   @patch("lib.tap_stack.aws_lambda.Permission")
-  @patch("lib.tap_stack.sns.Topic")
+  @patch("lib.tap_stack.s3.Bucket")
   @patch("lib.tap_stack.cloudwatch.MetricAlarm")
   def test_stack_initialization_with_defaults(
       self,
       mock_metric_alarm,
-      mock_sns_topic,
+      mock_s3_bucket,
       mock_lambda_permission,
       mock_apigw_deployment,
       mock_apigw_resource,
@@ -67,16 +68,16 @@ class TestTapStackCreation(unittest.TestCase):
     mock_iam_role.assert_called()
     mock_lambda_function.assert_called()
     mock_apigw_restapi.assert_called()
-    mock_sns_topic.assert_called()
+    mock_s3_bucket.assert_called()
     mock_metric_alarm.assert_called()
 
   @patch("lib.tap_stack.aws_lambda.Function")
   @patch("lib.tap_stack.iam.Role")
   @patch("lib.tap_stack.apigateway.RestApi")
-  @patch("lib.tap_stack.sns.Topic")
+  @patch("lib.tap_stack.s3.Bucket")
   def test_stack_initialization_with_custom_args(
       self,
-      mock_sns_topic,
+      mock_s3_bucket,
       mock_apigw_restapi,
       mock_iam_role,
       mock_lambda_function,
@@ -95,7 +96,7 @@ class TestTapStackCreation(unittest.TestCase):
     mock_iam_role.assert_called()
     mock_lambda_function.assert_called()
     mock_apigw_restapi.assert_called()
-    mock_sns_topic.assert_called()
+    mock_s3_bucket.assert_called()
 
   @patch("lib.tap_stack.aws_lambda.Function")
   def test_lambda_function_configuration(self, mock_lambda_function):
@@ -111,19 +112,20 @@ class TestTapStackCreation(unittest.TestCase):
     self.assertIn("python3.9", called_kwargs.get("runtime"))
     self.assertIn("handler", called_kwargs.get("handler"))
 
-  @patch("lib.tap_stack.sns.Topic")
-  def test_sns_topic_creation(self, mock_sns_topic):
+  @patch("lib.tap_stack.s3.Bucket")
+  def test_s3_bucket_creation(self, mock_s3_bucket):
     """
-    Verify SNS topic is created with correct tags.
+    Verify S3 bucket is created with correct tags and force_destroy enabled.
     """
-    tags = {"Service": "Alerting"}
+    tags = {"Service": "Storage"}
     args = TapStackArgs(tags=tags)
-    TapStack("snsTest", args)
+    TapStack("s3Test", args)
 
-    called_args, called_kwargs = mock_sns_topic.call_args
-    expected_tags = {"Service": "Alerting",
+    called_args, called_kwargs = mock_s3_bucket.call_args
+    expected_tags = {"Service": "Storage",
                      "Project": "IaC-Nova-Test", "Owner": "LLM-Eval"}
     self.assertEqual(called_kwargs.get("tags"), expected_tags)
+    self.assertTrue(called_kwargs.get("force_destroy"))
 
 
 if __name__ == "__main__":
