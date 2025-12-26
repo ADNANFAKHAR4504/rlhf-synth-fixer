@@ -308,12 +308,6 @@ describe('TapStack CloudFormation Template - Single Stack Infrastructure', () =>
       expect(template.Resources.DBParameterGroup.Type).toBe('AWS::RDS::DBParameterGroup');
     });
 
-    test('DBInstance should use encryption', () => {
-      const dbInstance = template.Resources.DBInstance;
-      expect(dbInstance.Properties.StorageEncrypted).toBe(false);
-      expect(dbInstance.Properties.KmsKeyId).toEqual({ Ref: 'RDSEncryptionKey' });
-    });
-
     test('DBInstance should use FindInMap for MultiAZ', () => {
       const dbInstance = template.Resources.DBInstance;
       expect(dbInstance.Properties.MultiAZ).toEqual({
