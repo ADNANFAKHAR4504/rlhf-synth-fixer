@@ -1,5 +1,9 @@
 # Overview
 
+**Platform:** CloudFormation (cfn)
+**Language:** JSON
+
+This is a **CloudFormation JSON template** (platform: cfn, language: json). The test files are written in TypeScript for testing purposes, but the infrastructure code itself is pure CloudFormation JSON.
 
 ## CloudFormation Stack Overview
 
@@ -1403,6 +1407,12 @@ This CloudFormation template (cfn/json) creates a comprehensive document automat
 ## CloudFormation Template Information
 
 This is a CloudFormation JSON template that defines all infrastructure resources. The template uses CloudFormation parameters, intrinsic functions (Fn::Sub, Fn::GetAtt, Ref), and outputs to create a comprehensive document automation system.
+
+---
+
+# Test Files
+
+**Note:** The test files below are written in TypeScript for ease of testing. This does NOT change the platform/language of the infrastructure code, which remains CloudFormation JSON (cfn/json).
 
 ## ./test/tap-stack.int.test.ts
 
