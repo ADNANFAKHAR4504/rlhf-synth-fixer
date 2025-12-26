@@ -1,4 +1,4 @@
-🚨 High Priority Issues
+# High Priority Issues
 
     Hard-coded Database Password:
 
@@ -14,7 +14,7 @@
         Risk: Excessive permissions
         Fix: Create custom policy with minimal required permissions
 
-⚠️ Medium Priority Issues
+## Medium Priority Issues
 
     CloudWatch Alarm Metric Queries:
         Issue: Metric query configuration may not trigger properly for unauthorized access
