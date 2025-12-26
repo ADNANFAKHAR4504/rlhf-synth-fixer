@@ -299,23 +299,33 @@ export function createVpcResources(
     { provider }
   );
 
-  // Create VPC Flow Log
-  const vpcFlowLog = new aws.ec2.FlowLog(
-    `vpc-flow-log-${environment}`,
-    {
-      iamRoleArn: flowLogRole.arn,
-      logDestination: flowLogGroup.arn,
-      logDestinationType: 'cloud-watch-logs',
-      vpcId: vpc.id,
-      trafficType: 'ALL',
-      tags: {
-        Name: `vpc-flow-log-${environment}`,
-        Environment: environment,
-        ManagedBy: 'Pulumi',
-      },
-    },
-    { provider }
-  );
+  // Check if deploying to LocalStack (VPC Flow Log has parameter compatibility issues)
+  const isLocalStack =
+    process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+    process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
+    environment.toLowerCase().includes('localstack');
+
+  // Create VPC Flow Log (skip for LocalStack due to parameter compatibility issues)
+  const vpcFlowLog = !isLocalStack
+    ? new aws.ec2.FlowLog(
+        `vpc-flow-log-${environment}`,
+        {
+          iamRoleArn: flowLogRole.arn,
+          logDestination: flowLogGroup.arn,
+          logDestinationType: 'cloud-watch-logs',
+          vpcId: vpc.id,
+          trafficType: 'ALL',
+          tags: {
+            Name: `vpc-flow-log-${environment}`,
+            Environment: environment,
+            ManagedBy: 'Pulumi',
+          },
+        },
+        { provider }
+      )
+    : ({
+        id: 'flow-log-skipped-for-localstack',
+      } as any as aws.ec2.FlowLog);
 
   return {
     vpc,

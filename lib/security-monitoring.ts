@@ -225,9 +225,10 @@ export function createSecurityMonitoring(
   );
 
   // Check if deploying to LocalStack (GuardDuty not supported in LocalStack free tier)
-  const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                       process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
-                       environment.toLowerCase().includes('localstack');
+  const isLocalStack =
+    process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+    process.env.AWS_ENDPOINT_URL?.includes('localstack') ||
+    environment.toLowerCase().includes('localstack');
 
   // GuardDuty detector ID (placeholder for LocalStack)
   let guardDutyDetectorId: pulumi.Output<string>;
@@ -301,7 +302,9 @@ export function createSecurityMonitoring(
     );
   } else {
     // For LocalStack, return a placeholder ID since GuardDuty is not supported
-    guardDutyDetectorId = pulumi.output('guardduty-not-available-in-localstack');
+    guardDutyDetectorId = pulumi.output(
+      'guardduty-not-available-in-localstack'
+    );
   }
 
   // Create S3 bucket for Config
