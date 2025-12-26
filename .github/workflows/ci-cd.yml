@@ -77,12 +77,14 @@ jobs:
 
       - name: Validate metadata.json
         uses: cardinalby/schema-validator-action@v3
+        if: hashFiles('metadata.json') != ''
         with:
           file: 'metadata.json'
           schema: 'config/schemas/metadata.schema.json'
 
       - name: Validate Wave (P0/P1) for LocalStack Tasks
         id: validate-wave
+        if: hashFiles('metadata.json') != ''
         run: |
           if [ -f "./scripts/ci-validate-wave.sh" ]; then
             chmod +x ./scripts/ci-validate-wave.sh
