@@ -11,21 +11,23 @@ Create a secure AWS environment for a web application hosting use case using Ter
 ## Requirements:
 
 1. **Define Infrastructure Using Terraform HCL**
-   - Implement all resources directly in `main.tf` or `tap_stack.tf` (do not use external modules).
-   - The variable `aws_region` should be declared in (`main.tf`or `tap_stack.tf`) and passed to `provider.tf`.
+   - Implement all resources directly in main.tf or tap_stack.tf without using external modules.
+   - The variable aws_region should be declared in main.tf or tap_stack.tf and passed to provider.tf.
 
 2. **S3 Bucket Encryption with AWS KMS**
-   - Secure all S3 buckets using AWS Key Management Service (KMS) for encryption.
+   - Secure all S3 buckets using AWS Key Management Service for encryption.
 
 3. **IAM Roles and Policies**
    - Use IAM roles and policies that follow the principle of least privilege.
    - Ensure appropriate access restrictions are applied to resources based on roles.
+   - Avoid using wildcards in Resource ARNs - specify exact resource ARNs instead.
+   - Do not use Action wildcards like s3:* or iam:* - list specific actions needed.
 
 4. **Security Groups Configuration**
-   - Configure security groups to allow only incoming traffic over HTTPS (port 443).
+   - Configure security groups to allow only incoming traffic over HTTPS on port 443.
 
 5. **Encryption in Transit**
-   - Ensure that all data communications between AWS services (e.g., between EC2 and RDS) are encrypted in transit.
+   - Ensure that all data communications between AWS services like EC2 and RDS are encrypted in transit.
 
 6. **CloudWatch Alarms**
    - Set up CloudWatch alarms to monitor and alert on unauthorized access attempts or IAM policy violations.
@@ -34,12 +36,12 @@ Create a secure AWS environment for a web application hosting use case using Ter
 
 1. **Use of Terraform HCL**
    - Use Terraform HCL to define all the infrastructure. Do not use external modules.
-   - The `provider` block should remain in `provider.tf`.
+   - The provider block should remain in provider.tf.
 
 2. **Security Configurations**
    - Use AWS KMS to encrypt S3 buckets.
-   - Implement IAM roles and policies with least privilege access.
-   - Enforce HTTPS (port 443) traffic only via security groups.
+   - Implement IAM roles and policies with least privilege access - no wildcards for Resources or Actions.
+   - Enforce HTTPS traffic only via security groups on port 443.
    - Enforce encryption in transit for communications between AWS services.
    - Create CloudWatch alarms for unauthorized access and IAM policy violations.
 
@@ -47,17 +49,17 @@ Create a secure AWS environment for a web application hosting use case using Ter
    - The Terraform configuration should emit useful outputs for integration with CI/CD pipelines and testing. Outputs should not include secrets.
 
 4. **Terraform File Structure**
-   - **Variables**: Declare the necessary variables (e.g., `aws_region`) in (`main.tf` or `tap_stack.tf`).
-   - **Resources**: Define all AWS resources (e.g., S3 buckets, IAM roles, security groups) directly in (`main.tf` or `tap_stack.tf`).
+   - **Variables**: Declare the necessary variables like aws_region in main.tf or tap_stack.tf.
+   - **Resources**: Define all AWS resources such as S3 buckets, IAM roles, and security groups directly in main.tf or tap_stack.tf.
    - **Outputs**: Emit useful outputs for CI/CD integration and testing.
    - **No secrets in outputs**: Avoid including any sensitive information in outputs.
 
 5. **Non-Negotiables**
-   - Keep **all Terraform logic in (`lib/main.tf` or `lib/tap_stack.tf)**.
-   - The `provider.tf` file already exists and contains the AWS provider and S3 backend.
-   - Do **not** include a `provider` block in `main.tf`.
-   - Do **not** use any external Terraform modules; resources must be defined directly in (`main.tf`or `tap_stack.tf`).
-   - Ensure that integration tests **do not** trigger `terraform init/plan/apply` during the test case execution stage.
+   - Keep all Terraform logic in lib/main.tf or lib/tap_stack.tf.
+   - The provider.tf file already exists and contains the AWS provider and S3 backend.
+   - Do not include a provider block in main.tf.
+   - Do not use any external Terraform modules; resources must be defined directly in main.tf or tap_stack.tf.
+   - Ensure that integration tests do not trigger terraform init/plan/apply during the test case execution stage.
 
 ## Expected Output:
 
