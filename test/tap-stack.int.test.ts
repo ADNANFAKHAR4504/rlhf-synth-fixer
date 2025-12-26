@@ -26,9 +26,9 @@ const localstackEndpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:456
 const isLocalStack = localstackEndpoint.includes('localhost') || localstackEndpoint.includes('4566');
 
 // Stack name varies between LocalStack and real AWS
-// LocalStack deployment script uses: tap-stack-localstack
+// LocalStack deployment script uses: localstack-stack-${environmentSuffix}
 // Real AWS uses: TapStack${environmentSuffix}
-const stackName = isLocalStack ? 'tap-stack-localstack' : `TapStack${environmentSuffix}`;
+const stackName = isLocalStack ? `localstack-stack-${environmentSuffix}` : `TapStack${environmentSuffix}`;
 
 // Initialize AWS SDK clients with LocalStack endpoint configuration
 const s3 = new S3Client({
