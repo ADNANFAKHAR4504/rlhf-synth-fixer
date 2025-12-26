@@ -1,22 +1,17 @@
-Create a CloudFormation template for a report generation service that produces 2,800 daily PDF reports from database queries with email delivery.
+I need a CloudFormation template for our daily report generation service. We have to produce 2,800 PDF reports every morning at 6 AM from our database and email them to users.
 
-Requirements:
-- EventBridge rules scheduled for daily 6 AM report generation
-- Lambda function using Python 3.10 runtime for report generation logic
-- RDS PostgreSQL database (Aurora Serverless v2 for quick deployment) to store report data
-- S3 bucket for storing generated PDF reports with lifecycle rules
-- S3 presigned URLs with 7-day expiration for secure report access
-- SES configuration for sending emails with report attachments
-- Lambda layer for PDF generation libraries (reportlab)
-- CloudWatch metrics tracking report generation success/failure rates
-- SNS topic for failure notifications to administrators
-- IAM roles with least privilege for Lambda to access RDS, S3, and SES
-- Environment variables for Lambda configuration
-- VPC configuration for secure RDS access
-- Security group allowing Lambda to RDS connection
-- Dead letter queue for failed report generation attempts
-- CloudWatch Logs for Lambda execution monitoring
-- Use AWS Lambda Extensions for enhanced monitoring capabilities
-- Implement S3 Intelligent-Tiering for cost-optimized storage
+Here's what needs to connect together:
 
-The infrastructure should handle 2,800 reports daily efficiently with proper error handling and monitoring. Generate CloudFormation YAML template code blocks for each required file.
+EventBridge should trigger a Lambda function every day at 6 AM. The Lambda needs to query our PostgreSQL database to get the report data, generate PDFs, store them in S3, and send emails via SES with presigned URLs.
+
+For the database connection, Lambda needs to run inside a VPC with a security group that allows it to reach the RDS instance. Store database credentials in Secrets Manager so Lambda can retrieve them securely.
+
+The Lambda function should write generated PDF reports to S3, then create presigned URLs valid for 7 days that get included in the emails sent through SES. Set up S3 lifecycle rules to delete old reports after a year.
+
+When reports fail to generate, Lambda should send messages to an SNS topic that notifies our ops team. Also configure a dead letter queue on the Lambda to catch any failed invocations.
+
+For monitoring, Lambda should push custom CloudWatch metrics showing how many reports succeeded vs failed. CloudWatch Logs need to capture all execution details.
+
+IAM roles should give Lambda minimal permissions: read from Secrets Manager, read/write to S3, send emails through SES, publish to SNS, write logs to CloudWatch, and connect to RDS through the VPC.
+
+The whole setup needs to handle 2,800 reports efficiently with proper error handling. Use CloudFormation YAML format.
