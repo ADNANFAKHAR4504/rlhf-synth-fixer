@@ -1,0 +1,588 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Infrastructure Compliance Validation System - LocalStack Compatible
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for resource naming to ensure uniqueness across deployments
+    Default: dev
+    AllowedPattern: ^[a-z0-9-]+$
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
+  NotificationEmail:
+    Type: String
+    Description: Email address for compliance notifications
+    Default: compliance-team@example.com
+    AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+
+Resources:
+  # KMS Key for encryption (LocalStack Pro supported)
+  ComplianceKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub KMS key for compliance validation system encryption ${EnvironmentSuffix}
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: '*'
+
+  ComplianceKmsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/compliance-validation-${EnvironmentSuffix}
+      TargetKeyId: !Ref ComplianceKmsKey
+
+  # S3 Bucket for data storage (LocalStack Pro supported)
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub config-compliance-data-${EnvironmentSuffix}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt ComplianceKmsKey.Arn
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldConfigData
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub config-bucket-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: ComplianceValidation
+
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowBucketAccess
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 
+              - s3:GetBucketAcl
+              - s3:ListBucket
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AllowObjectAccess
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub ${ConfigBucket.Arn}/*
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub ${ConfigBucket.Arn}/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: aws:kms
+
+  # SNS Topic for notifications (LocalStack Pro supported)
+  ComplianceNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub compliance-notifications-${EnvironmentSuffix}
+      DisplayName: Compliance Validation Notifications
+      Subscription:
+        - Endpoint: !Ref NotificationEmail
+          Protocol: email
+      Tags:
+        - Key: Name
+          Value: !Sub compliance-topic-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ComplianceNotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref ComplianceNotificationTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowLambdaToPublish
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: SNS:Publish
+            Resource: !Ref ComplianceNotificationTopic
+
+  # CloudWatch Log Group for Lambda functions (LocalStack Pro supported)
+  ComplianceLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/compliance-validator-${EnvironmentSuffix}
+      RetentionInDays: 14
+
+  # IAM Role for Lambda functions (LocalStack Pro supported)
+  ComplianceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub compliance-lambda-role-${EnvironmentSuffix}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaLogging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt ComplianceLambdaLogGroup.Arn
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt ComplianceKmsKey.Arn
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                  - s3:GetEncryptionConfiguration
+                  - s3:GetBucketPublicAccessBlock
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !GetAtt ConfigBucket.Arn
+                  - !Sub ${ConfigBucket.Arn}/*
+        - PolicyName: ResourceAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:Describe*
+                  - rds:Describe*
+                  - kms:DescribeKey
+                  - cloudwatch:PutMetricData
+                  - sns:Publish
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub compliance-lambda-role-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda function for compliance validation (LocalStack Pro supported)
+  CustomComplianceValidatorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub compliance-validator-${EnvironmentSuffix}
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt ComplianceLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
+          SNS_TOPIC_ARN: !Ref ComplianceNotificationTopic
+          CONFIG_BUCKET: !Ref ConfigBucket
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+
+          s3 = boto3.client('s3')
+          ec2 = boto3.client('ec2')
+          sns = boto3.client('sns')
+          cloudwatch = boto3.client('cloudwatch')
+
+          def lambda_handler(event, context):
+              """
+              Custom compliance validator for AWS resources.
+              Evaluates resource configurations and returns compliance status.
+              """
+              print(f"Received event: {json.dumps(event)}")
+
+              # Get environment variables
+              sns_topic = os.environ.get('SNS_TOPIC_ARN')
+              config_bucket = os.environ.get('CONFIG_BUCKET')
+
+              try:
+                  # Parse event based on source
+                  if 'resource_type' in event:
+                      # Direct invocation
+                      resource_type = event.get('resource_type')
+                      resource_id = event.get('resource_id')
+                  else:
+                      # Assume scheduled or other event
+                      resource_type = event.get('detail', {}).get('resourceType', 'Unknown')
+                      resource_id = event.get('detail', {}).get('resourceId', 'Unknown')
+
+                  print(f"Evaluating {resource_type}: {resource_id}")
+
+                  # Initialize compliance status
+                  compliance_type = 'COMPLIANT'
+                  annotation = 'Resource is compliant'
+                  non_compliant_count = 0
+
+                  # Evaluate based on resource type
+                  if resource_type == 'AWS::S3::Bucket' or 's3' in resource_type.lower():
+                      compliance_type, annotation = evaluate_s3_buckets()
+                      if compliance_type == 'NON_COMPLIANT':
+                          non_compliant_count += 1
+                  elif resource_type == 'AWS::EC2::SecurityGroup' or 'securitygroup' in resource_type.lower():
+                      compliance_type, annotation = evaluate_security_groups()
+                      if compliance_type == 'NON_COMPLIANT':
+                          non_compliant_count += 1
+                  elif resource_type == 'AWS::EC2::Instance' or 'instance' in resource_type.lower():
+                      compliance_type, annotation = evaluate_ec2_instances()
+                      if compliance_type == 'NON_COMPLIANT':
+                          non_compliant_count += 1
+                  else:
+                      # Run all checks
+                      results = []
+                      
+                      s3_compliance, s3_annotation = evaluate_s3_buckets()
+                      results.append(f"S3: {s3_annotation}")
+                      if s3_compliance == 'NON_COMPLIANT':
+                          non_compliant_count += 1
+                      
+                      sg_compliance, sg_annotation = evaluate_security_groups()
+                      results.append(f"Security Groups: {sg_annotation}")
+                      if sg_compliance == 'NON_COMPLIANT':
+                          non_compliant_count += 1
+                      
+                      ec2_compliance, ec2_annotation = evaluate_ec2_instances()
+                      results.append(f"EC2: {ec2_annotation}")
+                      if ec2_compliance == 'NON_COMPLIANT':
+                          non_compliant_count += 1
+                      
+                      if non_compliant_count > 0:
+                          compliance_type = 'NON_COMPLIANT'
+                          annotation = f"Found {non_compliant_count} compliance issues. " + " | ".join(results)
+                      else:
+                          compliance_type = 'COMPLIANT'
+                          annotation = "All checks passed. " + " | ".join(results)
+
+                  # Store result in S3
+                  result = {
+                      'timestamp': datetime.now().isoformat(),
+                      'resource_type': resource_type,
+                      'resource_id': resource_id,
+                      'compliance_type': compliance_type,
+                      'annotation': annotation,
+                      'non_compliant_count': non_compliant_count
+                  }
+
+                  try:
+                      s3.put_object(
+                          Bucket=config_bucket,
+                          Key=f"compliance-results/{datetime.now().strftime('%Y/%m/%d')}/{context.request_id}.json",
+                          Body=json.dumps(result),
+                          ServerSideEncryption='aws:kms'
+                      )
+                  except Exception as e:
+                      print(f"Warning: Could not store result in S3: {str(e)}")
+
+                  # Send CloudWatch metric
+                  try:
+                      cloudwatch.put_metric_data(
+                          Namespace='ComplianceValidation',
+                          MetricData=[
+                              {
+                                  'MetricName': 'NonCompliantResources',
+                                  'Value': non_compliant_count,
+                                  'Unit': 'Count',
+                                  'Timestamp': datetime.now()
+                              }
+                          ]
+                      )
+                  except Exception as e:
+                      print(f"Warning: Could not send CloudWatch metric: {str(e)}")
+
+                  # Send notification if non-compliant
+                  if compliance_type == 'NON_COMPLIANT' and sns_topic:
+                      try:
+                          sns.publish(
+                              TopicArn=sns_topic,
+                              Subject='Compliance Violation Detected',
+                              Message=f"Compliance check failed:\n\n{annotation}\n\nTimestamp: {datetime.now().isoformat()}"
+                          )
+                      except Exception as e:
+                          print(f"Warning: Could not send SNS notification: {str(e)}")
+
+                  print(f"Evaluation result: {compliance_type} - {annotation}")
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps(result)
+                  }
+
+              except Exception as e:
+                  error_msg = f"Error during evaluation: {str(e)}"
+                  print(error_msg)
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': error_msg})
+                  }
+
+          def evaluate_s3_buckets():
+              """Evaluate S3 bucket compliance"""
+              try:
+                  buckets_response = s3.list_buckets()
+                  buckets = buckets_response.get('Buckets', [])
+                  
+                  if not buckets:
+                      return 'COMPLIANT', 'No S3 buckets to evaluate'
+                  
+                  non_compliant_buckets = []
+                  
+                  for bucket in buckets:
+                      bucket_name = bucket['Name']
+                      issues = []
+                      
+                      # Check encryption
+                      try:
+                          s3.get_bucket_encryption(Bucket=bucket_name)
+                      except s3.exceptions.ServerSideEncryptionConfigurationNotFoundError:
+                          issues.append('no encryption')
+                      except Exception:
+                          pass
+                      
+                      # Check public access block
+                      try:
+                          public_access = s3.get_public_access_block(Bucket=bucket_name)
+                          block_config = public_access.get('PublicAccessBlockConfiguration', {})
+                          if not all([
+                              block_config.get('BlockPublicAcls'),
+                              block_config.get('BlockPublicPolicy'),
+                              block_config.get('IgnorePublicAcls'),
+                              block_config.get('RestrictPublicBuckets')
+                          ]):
+                              issues.append('public access not fully blocked')
+                      except Exception:
+                          issues.append('public access block not configured')
+                      
+                      # Check versioning
+                      try:
+                          versioning = s3.get_bucket_versioning(Bucket=bucket_name)
+                          if versioning.get('Status') != 'Enabled':
+                              issues.append('versioning not enabled')
+                      except Exception:
+                          pass
+                      
+                      if issues:
+                          non_compliant_buckets.append(f"{bucket_name} ({', '.join(issues)})")
+                  
+                  if non_compliant_buckets:
+                      return 'NON_COMPLIANT', f"Non-compliant S3 buckets: {'; '.join(non_compliant_buckets)}"
+                  
+                  return 'COMPLIANT', f'All {len(buckets)} S3 buckets are compliant'
+              except Exception as e:
+                  return 'NON_COMPLIANT', f'Error evaluating S3 buckets: {str(e)}'
+
+          def evaluate_security_groups():
+              """Evaluate Security Group compliance"""
+              try:
+                  response = ec2.describe_security_groups()
+                  security_groups = response.get('SecurityGroups', [])
+                  
+                  if not security_groups:
+                      return 'COMPLIANT', 'No security groups to evaluate'
+                  
+                  non_compliant_sgs = []
+                  
+                  for sg in security_groups:
+                      sg_id = sg.get('GroupId')
+                      ip_permissions = sg.get('IpPermissions', [])
+                      
+                      # Check for unrestricted inbound rules
+                      for rule in ip_permissions:
+                          for ip_range in rule.get('IpRanges', []):
+                              if ip_range.get('CidrIp') == '0.0.0.0/0':
+                                  from_port = rule.get('FromPort', 0)
+                                  to_port = rule.get('ToPort', 65535)
+                                  # Allow only specific ports to be open to internet
+                                  if from_port not in [80, 443] or to_port not in [80, 443]:
+                                      non_compliant_sgs.append(f"{sg_id} (unrestricted port {from_port}-{to_port})")
+                  
+                  if non_compliant_sgs:
+                      return 'NON_COMPLIANT', f"Security groups with unrestricted access: {'; '.join(non_compliant_sgs)}"
+                  
+                  return 'COMPLIANT', f'All {len(security_groups)} security groups are compliant'
+              except Exception as e:
+                  return 'NON_COMPLIANT', f'Error evaluating security groups: {str(e)}'
+
+          def evaluate_ec2_instances():
+              """Evaluate EC2 instance compliance"""
+              try:
+                  response = ec2.describe_instances()
+                  reservations = response.get('Reservations', [])
+                  
+                  if not reservations:
+                      return 'COMPLIANT', 'No EC2 instances to evaluate'
+                  
+                  non_compliant_instances = []
+                  total_instances = 0
+                  
+                  for reservation in reservations:
+                      for instance in reservation.get('Instances', []):
+                          total_instances += 1
+                          instance_id = instance.get('InstanceId')
+                          issues = []
+                          
+                          # Check if instance has required tags
+                          tags = instance.get('Tags', [])
+                          required_tags = ['Environment', 'Owner', 'CostCenter']
+                          existing_tag_keys = [tag.get('Key') for tag in tags]
+                          
+                          missing_tags = [tag for tag in required_tags if tag not in existing_tag_keys]
+                          if missing_tags:
+                              issues.append(f"missing tags: {', '.join(missing_tags)}")
+                          
+                          # Check if monitoring is enabled (basic check)
+                          monitoring = instance.get('Monitoring', {}).get('State')
+                          if monitoring not in ['enabled', 'pending']:
+                              issues.append('monitoring disabled')
+                          
+                          if issues:
+                              non_compliant_instances.append(f"{instance_id} ({'; '.join(issues)})")
+                  
+                  if non_compliant_instances:
+                      return 'NON_COMPLIANT', f"Non-compliant EC2 instances: {'; '.join(non_compliant_instances)}"
+                  
+                  if total_instances == 0:
+                      return 'COMPLIANT', 'No EC2 instances to evaluate'
+                  
+                  return 'COMPLIANT', f'All {total_instances} EC2 instances are compliant'
+              except Exception as e:
+                  return 'NON_COMPLIANT', f'Error evaluating EC2 instances: {str(e)}'
+      Tags:
+        - Key: Name
+          Value: !Sub compliance-validator-${EnvironmentSuffix}
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # EventBridge Rule to trigger Lambda on schedule (LocalStack Pro supported)
+  ComplianceScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub compliance-schedule-${EnvironmentSuffix}
+      Description: Scheduled compliance validation check
+      ScheduleExpression: rate(30 minutes)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CustomComplianceValidatorFunction.Arn
+          Id: ComplianceValidatorTarget
+          Input: |
+            {
+              "resource_type": "All",
+              "resource_id": "scheduled-check",
+              "source": "eventbridge"
+            }
+
+  # Permission for EventBridge to invoke Lambda
+  ComplianceLambdaEventPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CustomComplianceValidatorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ComplianceScheduleRule.Arn
+
+  # CloudWatch Alarm for non-compliant resources (LocalStack Pro supported)
+  NonCompliantResourcesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub compliance-violations-${EnvironmentSuffix}
+      AlarmDescription: Alert when non-compliant resources are detected
+      MetricName: NonCompliantResources
+      Namespace: ComplianceValidation
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref ComplianceNotificationTopic
+
+Outputs:
+  ConfigBucketName:
+    Description: S3 bucket for compliance data storage
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-ConfigBucket
+
+  ComplianceNotificationTopicArn:
+    Description: SNS topic ARN for compliance notifications
+    Value: !Ref ComplianceNotificationTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-NotificationTopic
+
+  CustomComplianceFunctionArn:
+    Description: Lambda function ARN for custom compliance validation
+    Value: !GetAtt CustomComplianceValidatorFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-ComplianceFunction
+
+  CustomComplianceFunctionName:
+    Description: Lambda function name for custom compliance validation
+    Value: !Ref CustomComplianceValidatorFunction
+    Export:
+      Name: !Sub ${AWS::StackName}-ComplianceFunctionName
+
+  KmsKeyId:
+    Description: KMS Key ID for encryption
+    Value: !Ref ComplianceKmsKey
+    Export:
+      Name: !Sub ${AWS::StackName}-KmsKey
+
+  KmsKeyArn:
+    Description: KMS Key ARN for encryption
+    Value: !GetAtt ComplianceKmsKey.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-KmsKeyArn
+
+  ComplianceScheduleRuleArn:
+    Description: EventBridge rule ARN for scheduled compliance checks
+    Value: !GetAtt ComplianceScheduleRule.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-ScheduleRule
