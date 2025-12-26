@@ -131,11 +131,13 @@ class TapStackDev extends Stack {
     private void createVpc() {
         // LocalStack Community Edition doesn't support NAT Gateways well
         // and only supports 1 AZ effectively. Use simplified configuration for LocalStack.
-        int maxAzs = isLocalStack ? 1 : 3;
         int natGateways = isLocalStack ? 0 : 3;
 
         this.vpc = Vpc.Builder.create(this, "HighAvailabilityVpc")
-                .maxAzs(maxAzs) // Use 1 AZ for LocalStack, 3 AZs for AWS
+                // Use explicit AZ list to avoid AWS API calls during synth
+                .availabilityZones(isLocalStack
+                    ? Arrays.asList("us-east-1a")
+                    : Arrays.asList("us-east-1a", "us-east-1b", "us-east-1c"))
                 .cidr("10.0.0.0/16")
                 .enableDnsHostnames(true)
                 .enableDnsSupport(true)
