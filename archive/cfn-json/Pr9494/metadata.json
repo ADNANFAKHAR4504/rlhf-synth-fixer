@@ -18,5 +18,12 @@
     "CloudWatch Logs",
     "IAM"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
