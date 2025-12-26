@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-trainr468cdkjava",
+  "team": "synth-2",
+  "startedAt": "2025-08-26T18:00:13+05:30",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "SecurityGroups",
+    "InternetGateway",
+    "Subnets",
+    "ApplicationLoadBalancer",
+    "TargetGroup",
+    "CloudWatch",
+    "SNS"
+  ],
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

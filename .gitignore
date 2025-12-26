@@ -166,3 +166,4 @@ ci_checks.json
 reports/
 cdk-outputs/
 target/
+cdk.context.json
