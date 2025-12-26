@@ -1186,7 +1186,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentSuffix}-database'
       Engine: mysql
-      EngineVersion: '5.7'
+      EngineVersion: '5.7.44'
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
       StorageType: gp2
