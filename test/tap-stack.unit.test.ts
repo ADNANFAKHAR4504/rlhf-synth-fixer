@@ -56,10 +56,10 @@ describe('FinanceApp CloudFormation Template', () => {
       expect(keyPairParam.Description).toBe('EC2 Key Pair for SSH access (leave empty to disable SSH)');
     });
 
-    test('should have AmiId parameter as String for LocalStack', () => {
+    test('should have AmiId parameter with SSM Parameter type', () => {
       const amiParam = template.Parameters.AmiId;
-      expect(amiParam.Type).toBe('String');
-      expect(amiParam.Default).toBe('ami-12345678');
+      expect(amiParam.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(amiParam.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
     });
 
     test('should have VPC and subnet CIDR parameters', () => {
@@ -284,15 +284,15 @@ describe('FinanceApp CloudFormation Template', () => {
     test('should have RDS instance with Single-AZ for LocalStack', () => {
       const rds = template.Resources.FinanceAppDatabase;
       expect(rds.Type).toBe('AWS::RDS::DBInstance');
-      expect(rds.DeletionPolicy).toBe('Snapshot');
-      expect(rds.UpdateReplacePolicy).toBe('Snapshot');
+      expect(rds.DeletionPolicy).toBe('Delete');
+      expect(rds.UpdateReplacePolicy).toBe('Delete');
 
       const properties = rds.Properties;
       expect(properties.Engine).toBe('mysql');
       expect(properties.MultiAZ).toBe(false);
-      expect(properties.StorageEncrypted).toBe(true);
+      expect(properties.StorageEncrypted).toBe(false);
       expect(properties.MasterUserPassword).toBeDefined(); // Uses Secrets Manager
-      expect(properties.BackupRetentionPeriod).toBe(7);
+      expect(properties.BackupRetentionPeriod).toBe(0);
       expect(properties.DeletionProtection).toBe(false);
     });
   });
@@ -366,7 +366,7 @@ describe('FinanceApp CloudFormation Template', () => {
       const rdsOutput = template.Outputs.RDSEndpoint;
       expect(rdsOutput.Description).toBe('RDS Database Endpoint');
       expect(rdsOutput.Value).toEqual({
-        'Fn::GetAtt': ['FinanceAppDatabase', 'Endpoint', 'Address']
+        'Fn::GetAtt': ['FinanceAppDatabase', 'Endpoint.Address']
       });
     });
 

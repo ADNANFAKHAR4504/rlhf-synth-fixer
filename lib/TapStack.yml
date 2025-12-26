@@ -39,8 +39,8 @@ Parameters:
     Description: 'EC2 Key Pair for SSH access (leave empty to disable SSH)'
 
   AmiId:
-    Type: AWS::EC2::Image::Id
-    Default: 'ami-12345678'
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     Description: 'AMI ID for EC2 instances (automatically gets latest Amazon Linux 2)'
 
   VpcCidr:
@@ -683,8 +683,8 @@ Resources:
   # RDS Instance
   FinanceAppDatabase:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub 'financeapp-db-${Environment}'
       DBName: financeappdb
@@ -693,17 +693,14 @@ Resources:
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp2
-      StorageEncrypted: true
-      KmsKeyId: !Ref FinanceAppKMSKey
+      StorageEncrypted: false
       MasterUsername: admin
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DBSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       MultiAZ: false
-      BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      BackupRetentionPeriod: 0
       DeletionProtection: false
       Tags:
         - Key: Name

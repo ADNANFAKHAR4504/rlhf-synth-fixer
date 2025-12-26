@@ -710,8 +710,8 @@ Resources:
   # RDS Instance
   FinanceAppDatabase:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub 'financeapp-db-${Environment}'
       DBName: financeappdb
@@ -720,17 +720,14 @@ Resources:
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp2
-      StorageEncrypted: true
-      KmsKeyId: !Ref FinanceAppKMSKey
+      StorageEncrypted: false
       MasterUsername: admin
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DBSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
-      MultiAZ: true
-      BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      MultiAZ: false
+      BackupRetentionPeriod: 0
       DeletionProtection: false
       Tags:
         - Key: Name
