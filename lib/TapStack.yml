@@ -34,6 +34,9 @@ Parameters:
 
 Mappings:
   RegionMap:
+    us-east-1:
+      AZ1: us-east-1a
+      AZ2: us-east-1b
     us-east-2:
       AZ1: us-east-2a
       AZ2: us-east-2b
