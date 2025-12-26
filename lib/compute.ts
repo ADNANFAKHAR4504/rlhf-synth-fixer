@@ -177,10 +177,8 @@ echo "Setup completed with SSM agent and security hardening" >> /var/log/user-da
   const instanceConfig: aws.ec2.InstanceArgs = {
     ami: amiId,
     instanceType: instanceType,
-    iamInstanceProfile: instanceProfile.name,
     subnetId: subnetId,
     vpcSecurityGroupIds: [securityGroupId],
-    userData: userData,
     monitoring: false,
     tags: {
       Name: `ec2-${environment}`,
@@ -190,6 +188,12 @@ echo "Setup completed with SSM agent and security hardening" >> /var/log/user-da
       Backup: 'Required',
     },
   };
+
+  // Add IAM instance profile only for AWS deployments (LocalStack has issues with it)
+  if (!isLocalStack) {
+    instanceConfig.iamInstanceProfile = instanceProfile.name;
+    instanceConfig.userData = userData;
+  }
 
   // Add AWS-specific advanced features only for real AWS deployments
   if (!isLocalStack) {
