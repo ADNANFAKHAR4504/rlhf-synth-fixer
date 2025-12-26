@@ -20,5 +20,11 @@
     "AWS CloudFormation"
   ],
   "wave": "P0",
-  "training_quality": 9
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
