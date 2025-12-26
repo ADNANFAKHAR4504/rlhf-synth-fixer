@@ -131,10 +131,32 @@ describe('TapStack CloudFormation Integration Tests', () => {
         }
       }
 
-      // If not found, try ENVIRONMENT_SUFFIX
+      // If not found, try ENVIRONMENT_SUFFIX with localstack-stack pattern (CI/CD standard)
+      if (!stackName && process.env.ENVIRONMENT_SUFFIX) {
+        const localstackStackName = `localstack-stack-${process.env.ENVIRONMENT_SUFFIX}`;
+        console.log(`🔍 Trying LocalStack CI/CD stack name: ${localstackStackName}`);
+        try {
+          const describeResponse = await cfnClient.send(
+            new DescribeStacksCommand({ StackName: localstackStackName })
+          );
+          if (describeResponse.Stacks && describeResponse.Stacks.length > 0) {
+            const status = describeResponse.Stacks[0].StackStatus;
+            console.log(`   Found stack ${localstackStackName} with status: ${status}`);
+            if (status === 'CREATE_COMPLETE' || status === 'UPDATE_COMPLETE') {
+              stackName = localstackStackName;
+              console.log(`✅ Using LocalStack CI/CD stack: ${stackName}`);
+            }
+          }
+        } catch (error: any) {
+          console.log(`   Stack ${localstackStackName} not found: ${error.message}`);
+          // Stack not found, continue to next pattern
+        }
+      }
+
+      // If not found, try TapStack pattern as fallback
       if (!stackName && process.env.ENVIRONMENT_SUFFIX) {
         const testStackName = `TapStack${process.env.ENVIRONMENT_SUFFIX}`;
-        console.log(`🔍 Trying stack name from ENVIRONMENT_SUFFIX: ${testStackName}`);
+        console.log(`🔍 Trying TapStack pattern: ${testStackName}`);
         try {
           const describeResponse = await cfnClient.send(
             new DescribeStacksCommand({ StackName: testStackName })
@@ -144,7 +166,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
             console.log(`   Found stack ${testStackName} with status: ${status}`);
             if (status === 'CREATE_COMPLETE' || status === 'UPDATE_COMPLETE') {
               stackName = testStackName;
-              console.log(`✅ Using stack from ENVIRONMENT_SUFFIX: ${stackName}`);
+              console.log(`✅ Using TapStack pattern: ${stackName}`);
             }
           }
         } catch (error: any) {
@@ -153,7 +175,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
         }
       }
 
-      // Fallback: List all stacks and find TapStack*
+      // Fallback: List all stacks and find localstack-stack-* or TapStack*
       if (!stackName) {
         console.log(`🔍 Listing all CloudFormation stacks...`);
         const listResponse = await cfnClient.send(
@@ -171,6 +193,17 @@ describe('TapStack CloudFormation Integration Tests', () => {
           console.log(`   Stack names: ${listResponse.StackSummaries.map(s => s.StackName).join(', ')}`);
         }
 
+        // First try localstack-stack-* pattern (CI/CD standard naming)
+        const localstackStacks =
+          listResponse.StackSummaries?.filter(
+            (stack) =>
+              stack.StackName?.startsWith('localstack-stack-') &&
+              stack.StackStatus !== 'DELETE_COMPLETE'
+          ) || [];
+
+        console.log(`   LocalStack stacks found: ${localstackStacks.length}`);
+
+        // Then try TapStack* pattern as fallback
         const tapStacks =
           listResponse.StackSummaries?.filter(
             (stack) =>
@@ -180,14 +213,17 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
         console.log(`   TapStacks found: ${tapStacks.length}`);
 
-        if (tapStacks.length === 0) {
+        // Combine both patterns, prioritizing localstack-stack-* (CI/CD standard)
+        const allMatchingStacks = [...localstackStacks, ...tapStacks];
+
+        if (allMatchingStacks.length === 0) {
           throw new Error(
-            'No TapStack found. Please deploy the stack first.'
+            'No stack found. Please deploy the stack first. Expected pattern: localstack-stack-* or TapStack*'
           );
         }
 
         // Sort by creation time (most recent first)
-        const sortedStacks = tapStacks.sort((a, b) => {
+        const sortedStacks = allMatchingStacks.sort((a, b) => {
           const aTime = a.CreationTime?.getTime() || 0;
           const bTime = b.CreationTime?.getTime() || 0;
           return bTime - aTime;
