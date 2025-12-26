@@ -646,7 +646,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_access" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "unauthorized_access" {
-  count               = local.is_localstack ? 0 : 1  # Skip for LocalStack - DescribeAlarms has serialization issues
+  count               = local.is_localstack ? 0 : 1 # Skip for LocalStack - DescribeAlarms has serialization issues
   alarm_name          = "${var.project_name}-unauthorized-access"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
@@ -678,7 +678,7 @@ resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "iam_policy_violations" {
-  count               = local.is_localstack ? 0 : 1  # Skip for LocalStack - DescribeAlarms has serialization issues
+  count               = local.is_localstack ? 0 : 1 # Skip for LocalStack - DescribeAlarms has serialization issues
   alarm_name          = "${var.project_name}-iam-policy-violations"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
