@@ -8,7 +8,7 @@
   "wave": "P1",
   "provider": "localstack",
   "startedAt": "2025-08-20T14:35:40.236Z",
-  "subtask": "CI/CD Pipeline",
+  "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
     "CI/CD Pipeline",
     "Security Configuration as Code",
