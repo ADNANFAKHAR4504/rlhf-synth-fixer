@@ -3,18 +3,15 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291592",
+  "po_id": "LS-291592",
   "team": "synth-2",
   "wave": "P1",
   "startedAt": "2025-08-18T20:34:02.371Z",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
   "subject_labels": [
     "Web Application Deployment",
-    "Security Configuration",
-    "Database Management",
-    "Network Configuration",
-    "Resource Scaling",
-    "Access Control"
+    "Security Configuration as Code"
   ],
   "training_quality": 8,
   "aws_services": [
@@ -29,11 +26,5 @@
     "Internet Gateway",
     "KMS",
     "Secrets Manager"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "raaj1021",
-  "dockerS3Location": ""
+  ]
 }
