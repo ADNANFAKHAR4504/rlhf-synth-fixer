@@ -736,9 +736,10 @@ terraform {
 provider "aws" {
   region = var.aws_region
 
-  # LocalStack configuration
-  access_key                  = "test"
-  secret_key                  = "test"
+  # LocalStack configuration - uses variables to avoid hardcoded credentials
+  # Set to "test" for LocalStack local development
+  access_key                  = var.aws_access_key
+  secret_key                  = var.aws_secret_key
   skip_credentials_validation = true
   skip_metadata_api_check     = true
   skip_requesting_account_id  = true
@@ -788,6 +789,20 @@ variable "aws_region" {
   description = "AWS region"
   type        = string
   default     = "us-east-1"
+}
+
+variable "aws_access_key" {
+  description = "AWS access key (use 'test' for LocalStack)"
+  type        = string
+  default     = "test"
+  sensitive   = true
+}
+
+variable "aws_secret_key" {
+  description = "AWS secret key (use 'test' for LocalStack)"
+  type        = string
+  default     = "test"
+  sensitive   = true
 }
 
 variable "environment" {
@@ -908,9 +923,10 @@ terraform {
 provider "aws" {
   region = var.aws_region
 
-  # LocalStack configuration
-  access_key                  = "test"
-  secret_key                  = "test"
+  # LocalStack configuration - uses variables to avoid hardcoded credentials
+  # Set to "test" for LocalStack local development
+  access_key                  = var.aws_access_key
+  secret_key                  = var.aws_secret_key
   skip_credentials_validation = true
   skip_metadata_api_check     = true
   skip_requesting_account_id  = true
@@ -960,6 +976,20 @@ variable "aws_region" {
   description = "AWS region"
   type        = string
   default     = "us-east-1"
+}
+
+variable "aws_access_key" {
+  description = "AWS access key (use 'test' for LocalStack)"
+  type        = string
+  default     = "test"
+  sensitive   = true
+}
+
+variable "aws_secret_key" {
+  description = "AWS secret key (use 'test' for LocalStack)"
+  type        = string
+  default     = "test"
+  sensitive   = true
 }
 
 variable "environment" {

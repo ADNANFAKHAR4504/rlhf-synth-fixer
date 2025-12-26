@@ -705,7 +705,9 @@ echo "</ul>" >> /var/www/html/index.html
 
 ```hcl
 # terraform.tfvars.example
-db_password = "YourSecurePassword123!"
+# NOTE: Database passwords are auto-generated and stored in AWS Secrets Manager
+# No manual password configuration needed - managed by random_password resource
+# Access via: aws secretsmanager get-secret-value --secret-id <secret-name>
 ```
 
 ## Key Security Features Implemented
@@ -763,10 +765,13 @@ db_password = "YourSecurePassword123!"
    terraform init
    ```
 
-2. **Create terraform.tfvars:**
+2. **No manual terraform.tfvars needed:**
 
-   ```hcl
-   db_password = "YourSecurePassword123!"
+   ```bash
+   # Database credentials are automatically managed
+   # - Password auto-generated via random_password resource
+   # - Stored securely in AWS Secrets Manager
+   # - Retrieved by RDS automatically
    ```
 
 3. **Plan the deployment:**
