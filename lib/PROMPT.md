@@ -13,7 +13,7 @@ We need to set up secure AWS infrastructure using Terraform CDK with TypeScript 
 ### Security Configuration
 Security groups should:
 - Allow HTTP (port 80) and HTTPS (port 443) inbound
-- Allow all outbound traffic
+- Allow outbound traffic for web server responses and external API calls
 
 Network ACLs need to:
 - Follow AWS best practices for public subnet traffic restrictions
