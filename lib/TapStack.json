@@ -357,5 +357,126 @@
                 }
             }
         }
+    },
+    "Outputs": {
+        "VpcId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VpcId"
+                }
+            }
+        },
+        "PublicSubnetId": {
+            "Description": "Public Subnet ID",
+            "Value": {
+                "Ref": "PublicSubnet"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnetId"
+                }
+            }
+        },
+        "PrivateSubnetId": {
+            "Description": "Private Subnet ID",
+            "Value": {
+                "Ref": "PrivateSubnet"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnetId"
+                }
+            }
+        },
+        "InternetGatewayId": {
+            "Description": "Internet Gateway ID",
+            "Value": {
+                "Ref": "InternetGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-InternetGatewayId"
+                }
+            }
+        },
+        "EC2InstanceId": {
+            "Description": "EC2 Instance ID",
+            "Value": {
+                "Ref": "EC2Instance"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2InstanceId"
+                }
+            }
+        },
+        "S3ReadOnlyRoleArn": {
+            "Description": "S3 Read Only Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "S3ReadOnlyRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3ReadOnlyRoleArn"
+                }
+            }
+        },
+        "EC2InstanceProfileArn": {
+            "Description": "EC2 Instance Profile ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2InstanceProfile",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2InstanceProfileArn"
+                }
+            }
+        },
+        "CloudWatchLogsBucketName": {
+            "Description": "CloudWatch Logs S3 Bucket Name",
+            "Value": {
+                "Ref": "CloudWatchLogsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudWatchLogsBucketName"
+                }
+            }
+        },
+        "CloudWatchLogsBucketArn": {
+            "Description": "CloudWatch Logs S3 Bucket ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudWatchLogsBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudWatchLogsBucketArn"
+                }
+            }
+        },
+        "EnvironmentName": {
+            "Description": "Environment name used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentName"
+                }
+            }
+        }
     }
 }
