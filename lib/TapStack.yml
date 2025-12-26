@@ -1037,18 +1037,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Project-Name'
 
-  Environment:
-    Description: 'Environment Name'
-    Value: !Ref Environment
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Environment'
-
-  EnvironmentSuffix:
-    Description: 'Environment Suffix'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Environment-Suffix'
-
   # IAM Resources
   EC2RoleArn:
     Description: 'EC2 IAM Role ARN'

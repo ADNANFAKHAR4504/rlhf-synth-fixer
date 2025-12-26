@@ -223,20 +223,7 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "CidrBlock": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VpcCidrBlock"
-                                },
-                                6,
-                                8
-                            ]
-                        }
-                    ]
-                },
+                "CidrBlock": "10.0.0.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
                         0,
@@ -262,20 +249,7 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "CidrBlock": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VpcCidrBlock"
-                                },
-                                6,
-                                8
-                            ]
-                        }
-                    ]
-                },
+                "CidrBlock": "10.0.1.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
                         1,
@@ -301,20 +275,7 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "CidrBlock": {
-                    "Fn::Select": [
-                        2,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VpcCidrBlock"
-                                },
-                                6,
-                                8
-                            ]
-                        }
-                    ]
-                },
+                "CidrBlock": "10.0.2.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
                         0,
@@ -339,20 +300,7 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "CidrBlock": {
-                    "Fn::Select": [
-                        3,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VpcCidrBlock"
-                                },
-                                6,
-                                8
-                            ]
-                        }
-                    ]
-                },
+                "CidrBlock": "10.0.3.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
                         1,
@@ -1112,7 +1060,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb"
+                    "Fn::Sub": "alb-${EnvironmentSuffix}"
                 },
                 "Type": "application",
                 "Scheme": "internet-facing",
@@ -1143,7 +1091,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-tg"
+                    "Fn::Sub": "tg-${EnvironmentSuffix}"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -1265,12 +1213,7 @@
                     "LaunchTemplateId": {
                         "Ref": "LaunchTemplate"
                     },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "LaunchTemplate",
-                            "LatestVersionNumber"
-                        ]
-                    }
+                    "Version": "$Latest"
                 },
                 "MinSize": 2,
                 "MaxSize": 6,
@@ -1393,6 +1336,28 @@
         }
     },
     "Outputs": {
+        "Environment": {
+            "Description": "Deployment Environment",
+            "Value": {
+                "Ref": "Environment"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Environment"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment Suffix for parallel deployments",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Environment-Suffix"
+                }
+            }
+        },
         "LoadBalancerURL": {
             "Description": "URL of the Application Load Balancer",
             "Value": {
@@ -1400,7 +1365,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ALB-URL"
+                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-ALB-URL"
                 }
             }
         },
@@ -1411,7 +1376,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-S3-Bucket"
+                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-S3-Bucket"
                 }
             }
         },
@@ -1425,7 +1390,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-RDS-Endpoint"
+                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Endpoint"
                 }
             }
         },
@@ -1440,17 +1405,6 @@
                 }
             }
         },
-        "DBMasterSecretName": {
-            "Description": "Database Master Secret Name",
-            "Value": {
-                "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-master-secret"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-DB-Master-Secret-Name"
-                }
-            }
-        },
         "VPCId": {
             "Description": "VPC ID",
             "Value": {
@@ -1458,7 +1412,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-VPC-ID"
                 }
             }
         },
@@ -1553,34 +1507,6 @@
                 }
             }
         },
-        "EIPForNATGateway1AllocationId": {
-            "Description": "EIP for NAT Gateway 1 Allocation ID",
-            "Value": {
-                "Fn::GetAtt": [
-                    "NATGateway1EIP",
-                    "AllocationId"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EIP-1-Allocation-ID"
-                }
-            }
-        },
-        "EIPForNATGateway2AllocationId": {
-            "Description": "EIP for NAT Gateway 2 Allocation ID",
-            "Value": {
-                "Fn::GetAtt": [
-                    "NATGateway2EIP",
-                    "AllocationId"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EIP-2-Allocation-ID"
-                }
-            }
-        },
         "PublicRouteTableId": {
             "Description": "Public Route Table ID",
             "Value": {
@@ -1658,20 +1584,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-S3-Bucket-ARN"
-                }
-            }
-        },
-        "S3BucketRegionalDomainName": {
-            "Description": "S3 Bucket Regional Domain Name",
-            "Value": {
-                "Fn::GetAtt": [
-                    "S3Bucket",
-                    "RegionalDomainName"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-S3-Bucket-Regional-Domain-Name"
                 }
             }
         },
@@ -1762,20 +1674,6 @@
                 }
             }
         },
-        "ApplicationLoadBalancerHostedZoneID": {
-            "Description": "Application Load Balancer Hosted Zone ID",
-            "Value": {
-                "Fn::GetAtt": [
-                    "ApplicationLoadBalancer",
-                    "CanonicalHostedZoneID"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-ALB-Hosted-Zone-ID"
-                }
-            }
-        },
         "TargetGroupArn": {
             "Description": "Target Group ARN",
             "Value": {
@@ -1787,20 +1685,6 @@
                 }
             }
         },
-        "TargetGroupName": {
-            "Description": "Target Group Name",
-            "Value": {
-                "Fn::GetAtt": [
-                    "TargetGroup",
-                    "TargetGroupName"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Target-Group-Name"
-                }
-            }
-        },
         "EC2LaunchTemplateId": {
             "Description": "EC2 Launch Template ID",
             "Value": {
@@ -1809,17 +1693,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Launch-Template-ID"
-                }
-            }
-        },
-        "EC2LaunchTemplateName": {
-            "Description": "EC2 Launch Template Name",
-            "Value": {
-                "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lt"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Launch-Template-Name"
                 }
             }
         },
@@ -1848,17 +1721,6 @@
                 }
             }
         },
-        "AutoScalingGroupArn": {
-            "Description": "Auto Scaling Group ARN",
-            "Value": {
-                "Fn::Sub": "arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${AutoScalingGroup}"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-ASG-ARN"
-                }
-            }
-        },
         "ProjectName": {
             "Description": "Project Name",
             "Value": {
@@ -1867,28 +1729,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Project-Name"
-                }
-            }
-        },
-        "Environment": {
-            "Description": "Environment Name",
-            "Value": {
-                "Ref": "Environment"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Environment"
-                }
-            }
-        },
-        "EnvironmentSuffix": {
-            "Description": "Environment Suffix",
-            "Value": {
-                "Ref": "EnvironmentSuffix"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Environment-Suffix"
                 }
             }
         },
@@ -1953,20 +1793,6 @@
                 }
             }
         },
-        "ApplicationLogGroupArn": {
-            "Description": "Application Log Group ARN",
-            "Value": {
-                "Fn::GetAtt": [
-                    "ApplicationLogGroup",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Application-Log-Group-ARN"
-                }
-            }
-        },
         "RDSLogGroupName": {
             "Description": "RDS Log Group Name",
             "Value": {
@@ -1975,20 +1801,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Log-Group-Name"
-                }
-            }
-        },
-        "RDSLogGroupArn": {
-            "Description": "RDS Log Group ARN",
-            "Value": {
-                "Fn::GetAtt": [
-                    "RDSLogGroup",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Log-Group-ARN"
                 }
             }
         },
