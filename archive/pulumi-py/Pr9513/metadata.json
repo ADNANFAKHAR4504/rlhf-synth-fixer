@@ -11,6 +11,18 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": [],
-  "wave": "P0"
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "VPC",
+    "CloudWatch"
+  ],
+  "wave": "P0",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
 }
