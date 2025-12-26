@@ -30,5 +30,12 @@
     "CloudWatch",
     "RDS",
     "Secrets Manager"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "michael-adeteye",
+  "dockerS3Location": ""
 }
