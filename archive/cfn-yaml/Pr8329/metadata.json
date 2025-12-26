@@ -23,5 +23,12 @@
     "CloudWatch",
     "IAM",
     "Cognito"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
