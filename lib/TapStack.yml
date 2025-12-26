@@ -1186,17 +1186,8 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentSuffix}-database'
       Engine: mysql
-      EngineVersion: '8.0.43'
-      DBInstanceClass: !If
-        - IsDev
-        - !FindInMap [EnvironmentConfig, 'dev', DBInstanceClass]
-        - !If
-          - IsStaging
-          - !FindInMap [EnvironmentConfig, 'staging', DBInstanceClass]
-          - !If
-            - IsProduction
-            - !FindInMap [EnvironmentConfig, 'production', DBInstanceClass]
-            - !FindInMap [EnvironmentConfig, 'default', DBInstanceClass]
+      EngineVersion: '5.7'
+      DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: false
@@ -1206,7 +1197,6 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
-      DBParameterGroupName: !Ref DbParameterGroup
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DbSecret, ':SecretString:username}}' ]]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DbSecret, ':SecretString:password}}' ]]
       MonitoringInterval: 0
