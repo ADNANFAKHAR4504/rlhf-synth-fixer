@@ -12,7 +12,6 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "training_quality": 8,
   "aws_services": [
     "VPC",
     "EC2",
@@ -25,5 +24,9 @@
     "Internet Gateway",
     "KMS",
     "Secrets Manager"
-  ]
+  ],
+  "migrated_from": {
+    "po_id": "291592",
+    "pr": "Pr1611"
+  }
 }
