@@ -1,0 +1,28 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-291765",
+  "team": "synth-2",
+  "startedAt": "2025-08-14T10:53:23.504Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "IAM"
+  ],
+  "wave": "P0",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}
