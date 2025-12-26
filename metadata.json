@@ -1,0 +1,16 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "LS-284220",
+  "team": "synth-2",
+  "startedAt": "2025-07-31T01:08:20.337Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [],
+  "wave": "P0"
+}
