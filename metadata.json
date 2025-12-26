@@ -6,7 +6,7 @@
   "po_id": "LS-229216",
   "team": "synth-2",
   "startedAt": "2025-07-29T10:12:06.958Z",
-  "subtask": "deploy",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
     "General Infrastructure Tooling QA"
