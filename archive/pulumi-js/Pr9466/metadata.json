@@ -30,5 +30,11 @@
     "Secrets Manager",
     "IAM",
     "Auto Scaling"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
 }
