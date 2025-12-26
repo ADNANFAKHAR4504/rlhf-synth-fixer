@@ -213,8 +213,8 @@ describe('Crowdfunding Platform Integration Tests', () => {
       console.log(`  ✓ API Gateway URL: ${url}`);
       // LocalStack adds :4566 port to URLs, so we need to handle both formats
       // AWS: https://id.execute-api.region.amazonaws.com/stage
-      // LocalStack: https://id.execute-api.amazonaws.com:4566/stage
-      expect(url).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com(:\d+)?\/.+/);
+      // LocalStack: https://id.execute-api.amazonaws.com:4566/stage (no region in URL)
+      expect(url).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.([a-z0-9-]+\.)?amazonaws\.com(:\d+)?\/.+/);
       expect(url).toContain('execute-api');
       expect(url).toContain(environmentSuffix);
     });
