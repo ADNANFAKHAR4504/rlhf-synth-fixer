@@ -6,7 +6,7 @@
   "po_id": "LS-IAC-CLO_YML_MED_LAMBDA_API_6k2l8m_9z1a4b7hUV",
   "team": "synth-2",
   "startedAt": "2025-10-01T05:37:06.778Z",
-  "subtask": "Cloud Environment Setup",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup",
