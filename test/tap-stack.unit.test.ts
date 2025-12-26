@@ -80,16 +80,15 @@ describe('TapStack CloudFormation Template - EC2 Backup Solution', () => {
       expect(publicSubnet.Properties.MapPublicIpOnLaunch).toBe(true);
     });
 
-    test('should have internet gateway and NAT gateway', () => {
+    test('should have internet gateway and gateway attachment', () => {
       expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.NATGateway).toBeDefined();
-      expect(template.Resources.NATGatewayEIP).toBeDefined();
-      
+      expect(template.Resources.AttachGateway).toBeDefined();
+
       const igw = template.Resources.InternetGateway;
-      const natGw = template.Resources.NATGateway;
-      
+      const attachment = template.Resources.AttachGateway;
+
       expect(igw.Type).toBe('AWS::EC2::InternetGateway');
-      expect(natGw.Type).toBe('AWS::EC2::NatGateway');
+      expect(attachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
     });
 
     test('should have route tables configured correctly', () => {
@@ -421,8 +420,6 @@ describe('TapStack CloudFormation Template - EC2 Backup Solution', () => {
         'AWS::EC2::VPC',
         'AWS::EC2::Subnet',
         'AWS::EC2::InternetGateway',
-        'AWS::EC2::NatGateway',
-        'AWS::EC2::EIP',
         'AWS::EC2::RouteTable',
         'AWS::EC2::Route',
         'AWS::EC2::SubnetRouteTableAssociation',
@@ -461,9 +458,10 @@ describe('TapStack CloudFormation Template - EC2 Backup Solution', () => {
       expect(rule.Properties.Targets[0].Arn).toEqual({ 'Fn::GetAtt': ['BackupLambdaFunction', 'Arn'] });
     });
 
-    test('NAT Gateway should depend on EIP', () => {
-      const natGw = template.Resources.NATGateway;
-      expect(natGw.Properties.AllocationId).toEqual({ 'Fn::GetAtt': ['NATGatewayEIP', 'AllocationId'] });
+    test('Internet Gateway should be attached to VPC', () => {
+      const attachment = template.Resources.AttachGateway;
+      expect(attachment.Properties.VpcId).toEqual({ Ref: 'BackupVPC' });
+      expect(attachment.Properties.InternetGatewayId).toEqual({ Ref: 'InternetGateway' });
     });
   });
 
