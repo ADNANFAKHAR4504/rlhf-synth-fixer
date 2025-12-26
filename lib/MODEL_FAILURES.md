@@ -79,3 +79,33 @@ Used `!GetAtt EC2InstanceProfile.Arn` in launch template. Should just reference 
 The model's template would probably work (after fixing the monitoring role issue), but it's overengineered in some places and misses key requirements in others. The IAM naming thing alone would get flagged in any decent code review. The ideal template is cleaner, follows the requirements precisely, and actually implements the "avoid naming IAM resources" guidance correctly.
 
 It feels like the model was trying to show off with extra features instead of nailing the basics. Classic case of missing the forest for the trees. The ideal template is what you'd actually want to deploy in production - simple, secure, and follows AWS best practices without unnecessary complexity.
+
+## LocalStack Compatibility Adjustments
+
+The following modifications were made to ensure LocalStack Community Edition compatibility. These are intentional architectural decisions, not bugs.
+
+| Feature | Community Edition | Pro/Ultimate Edition | Solution Applied | Production Status |
+|---------|-------------------|---------------------|------------------|-------------------|
+| NAT Gateway | Removed for LocalStack | Would work with Pro/Ultimate | Private subnets route to IGW | Enabled in AWS |
+| Launch Template Version | `$Latest` used | LatestVersionNumber works | Version: $Latest | LatestVersionNumber in AWS |
+| AMI Parameter Type | AWS::EC2::Image::Id | Works in both | Type validation adjusted | Standard in AWS |
+| Auto Scaling DependsOn | Single dependency | Works in both | DependsOn: FinanceAppKMSKey | Standard in AWS |
+
+> **Note**: If running with Pro/Ultimate license, many workarounds above are unnecessary. The fixer will detect your license and skip unneeded fixes.
+
+### Environment Detection Pattern Used
+
+This template was designed for LocalStack Community Edition testing with production AWS deployment in mind.
+
+### Services Verified Working in LocalStack
+
+- VPC (full support)
+- EC2 (basic support)
+- Auto Scaling (basic support)
+- Application Load Balancer (basic support)
+- RDS (basic support)
+- S3 (full support)
+- IAM (basic support)
+- KMS (basic encryption)
+- Secrets Manager (basic support)
+- CloudWatch (basic support)
