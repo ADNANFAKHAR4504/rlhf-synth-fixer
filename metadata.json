@@ -3,19 +3,18 @@
   "language": "java",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "trainr490cdkjava",
+  "po_id": "LS-trainr490cdkjava",
   "team": "synth-2",
   "startedAt": "2025-08-26T22:23:28+05:30",
   "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
   "subject_labels": [
+    "Cloud Environment Setup",
     "General Infrastructure Tooling QA",
-    "Network Configuration",
-    "Resource Scaling",
-    "Monitoring Setup",
-    "Security Configuration",
-    "Performance Optimization"
+    "IaC Optimization",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
   ],
-  "training_quality": 8,
   "aws_services": [
     "VPC",
     "EC2",
@@ -30,11 +29,5 @@
     "Launch Template",
     "Target Groups"
   ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "mayanksethi-turing",
-  "dockerS3Location": "",
-  "wave": "P1"
+  "wave": "P0"
 }

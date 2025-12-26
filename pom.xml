@@ -72,8 +72,8 @@
     </dependencies>
 
     <build>
-        <sourceDirectory>src/main/java</sourceDirectory>
-        <testSourceDirectory>src/test/java</testSourceDirectory>
+        <sourceDirectory>lib/src/main/java</sourceDirectory>
+        <testSourceDirectory>tests/unit/java</testSourceDirectory>
 
         <plugins>
             <!-- Maven Compiler Plugin -->
