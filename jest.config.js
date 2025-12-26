@@ -51,6 +51,7 @@ module.exports = {
   testTimeout: 60000,
   silent: false,
   verbose: true,
+  passWithNoTests: true, // CloudFormation YAML projects don't have unit tests
   globals: {
     'ts-jest': {
       isolatedModules: true,
