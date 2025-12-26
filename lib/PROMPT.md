@@ -15,12 +15,17 @@ Design and implement a CloudFormation infrastructure for a media asset processin
 Deploy to ap-northeast-1 region with multi-AZ setup. All data must use encryption at rest with AWS managed keys.
 
 ## Infrastructure Components
-- CodePipeline for CI/CD workflow
-- RDS PostgreSQL for metadata storage  
-- EFS for temporary media file storage
-- ElastiCache Redis cluster for caching processed content metadata
-- API Gateway for content management endpoints
-- Security groups and network configuration
+The infrastructure creates a connected media processing pipeline with the following service integrations:
+
+- CodePipeline connects to S3 artifact storage for build artifacts
+- API Gateway integrates with backend services for content management operations
+- RDS PostgreSQL database stores metadata and connects through VPC private subnets
+- ElastiCache Redis cluster caches frequently accessed metadata and connects to application layer through VPC security groups
+- EFS file system mounts to processing instances for shared temporary media storage
+- CloudWatch receives logs from all services for centralized monitoring
+- KMS keys encrypt data at rest for RDS, ElastiCache, and EFS
+- IAM roles grant least privilege access permissions across services
+- Security groups control network traffic between VPC resources
 
 ## Implementation Details
 Use CloudFormation with yaml format. Follow best practices for resource organization and use EnvironmentSuffix parameter for naming.
