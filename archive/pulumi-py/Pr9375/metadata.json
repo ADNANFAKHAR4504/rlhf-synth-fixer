@@ -13,8 +13,8 @@
   ],
   "aws_services": [
     "Lambda",
+    "S3",
     "API Gateway",
-    "DynamoDB",
     "CloudWatch",
     "IAM"
   ],
@@ -22,5 +22,12 @@
   "migrated_from": {
     "po_id": "291375",
     "pr": "Pr1010"
-  }
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
