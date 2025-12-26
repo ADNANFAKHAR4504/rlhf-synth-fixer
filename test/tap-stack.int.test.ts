@@ -7,16 +7,32 @@ const outputs = JSON.parse(
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-const lambda = new AWS.Lambda({ region: process.env.AWS_REGION || 'us-west-2' });
-const apigatewayv2 = new AWS.ApiGatewayV2({ region: process.env.AWS_REGION || 'us-west-2' });
-const dynamodb = new AWS.DynamoDB({ region: process.env.AWS_REGION || 'us-west-2' });
-const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-west-2' });
-const sns = new AWS.SNS({ region: process.env.AWS_REGION || 'us-west-2' });
-const sqs = new AWS.SQS({ region: process.env.AWS_REGION || 'us-west-2' });
-const ec2 = new AWS.EC2({ region: process.env.AWS_REGION || 'us-west-2' });
-const cloudwatchlogs = new AWS.CloudWatchLogs({ region: process.env.AWS_REGION || 'us-west-2' });
-const eventbridge = new AWS.EventBridge({ region: process.env.AWS_REGION || 'us-west-2' });
-const kms = new AWS.KMS({ region: process.env.AWS_REGION || 'us-west-2' });
+// LocalStack endpoint configuration
+const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
+const isLocalStack = endpoint.includes('localhost') || endpoint.includes('4566');
+
+const awsConfig: AWS.ConfigurationOptions = {
+  region: process.env.AWS_REGION || 'us-west-2',
+  ...(isLocalStack && {
+    endpoint,
+    s3ForcePathStyle: true,
+    credentials: {
+      accessKeyId: 'test',
+      secretAccessKey: 'test'
+    }
+  })
+};
+
+const lambda = new AWS.Lambda(awsConfig);
+const apigatewayv2 = new AWS.ApiGatewayV2(awsConfig);
+const dynamodb = new AWS.DynamoDB(awsConfig);
+const s3 = new AWS.S3(awsConfig);
+const sns = new AWS.SNS(awsConfig);
+const sqs = new AWS.SQS(awsConfig);
+const ec2 = new AWS.EC2(awsConfig);
+const cloudwatchlogs = new AWS.CloudWatchLogs(awsConfig);
+const eventbridge = new AWS.EventBridge(awsConfig);
+const kms = new AWS.KMS(awsConfig);
 
 describe('Serverless Infrastructure Integration Tests', () => {
   describe('Lambda → VPC → VPC Endpoints Integration', () => {
