@@ -28,7 +28,7 @@ I also need Systems Manager integration so our team can manage the instance remo
 
 The VPC needs to provide proper network isolation with security groups controlling access. The Internet Gateway should allow the EC2 instance in the public subnet to reach the internet for software updates and external API calls.
 
-All the IAM policies and roles need to follow least privilege principles, granting only the specific permissions each service needs to interact with others.
+The IAM policies and roles need to follow least privilege principles, granting only the specific permissions each service needs to interact with others.
 
 ## My Constraints and Challenges
 
