@@ -9,7 +9,7 @@
   "subtask": "Failure Recovery and High Availability",
   "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Failure Recovery Automation"
   ],
   "aws_services": [
     "VPC",
