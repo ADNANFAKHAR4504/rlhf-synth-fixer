@@ -23,7 +23,7 @@
     "SecretsManager",
     "SNS"
   ],
-  "wave": "P1",
+  "wave": "P0",
   "migrated_from": {
     "po_id": "291513",
     "pr": "Pr1486"
