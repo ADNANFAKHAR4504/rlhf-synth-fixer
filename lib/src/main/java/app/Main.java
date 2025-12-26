@@ -8,24 +8,47 @@ import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Tags;
 import software.constructs.Construct;
 
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.iam.*;
-import software.amazon.awscdk.services.s3.*;
+import software.amazon.awscdk.services.ec2.IMachineImage;
+import software.amazon.awscdk.services.ec2.ISubnet;
+import software.amazon.awscdk.services.ec2.Instance;
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ec2.IpAddresses;
+import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.UserData;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.s3.BlockPublicAccess;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.BucketEncryption;
+import software.amazon.awscdk.services.s3.LifecycleRule;
+import software.amazon.awscdk.services.s3.StorageClass;
+import software.amazon.awscdk.services.s3.Transition;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Optional;
 
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
  */
-class TapStackProps {
+final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(String environmentSuffix, StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String newEnvironmentSuffix, final StackProps newStackProps) {
+        this.environmentSuffix = newEnvironmentSuffix;
+        this.stackProps = newStackProps != null ? newStackProps : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -44,13 +67,13 @@ class TapStackProps {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String newEnvironmentSuffix) {
+            this.environmentSuffix = newEnvironmentSuffix;
             return this;
         }
 
-        public Builder stackProps(StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps newStackProps) {
+            this.stackProps = newStackProps;
             return this;
         }
 
@@ -78,7 +101,7 @@ class TapStack extends Stack {
     private SecurityGroup sshSecurityGroup;
     private Bucket s3Bucket;
 
-    public TapStack(final Construct scope, final String id, final TapStackProps props) {
+    TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
         // Get environment suffix from props, context, or use 'dev' as default
@@ -196,8 +219,8 @@ class TapStack extends Stack {
     private void createS3BucketWithMetadata() {
         // Create S3 bucket with latest metadata features (2025)
         this.s3Bucket = Bucket.Builder.create(this, "cdk-s3-bucket-" + environmentSuffix)
-                .bucketName("cdk-basic-env-" + environmentSuffix + "-" + 
-                           this.getAccount() + "-" + this.getRegion())
+                .bucketName("cdk-basic-env-" + environmentSuffix + "-"
+                           + this.getAccount() + "-" + this.getRegion())
                 .versioned(true)
                 .encryption(BucketEncryption.S3_MANAGED)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
