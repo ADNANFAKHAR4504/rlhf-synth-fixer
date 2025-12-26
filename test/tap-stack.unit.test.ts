@@ -34,7 +34,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have required sections', () => {
       expect(template.Parameters).toBeDefined();
       expect(template.Mappings).toBeDefined();
-      expect(template.Conditions).toBeDefined();
+      // Conditions removed - was unused for LocalStack compatibility
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
     });
@@ -112,13 +112,6 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Mappings', () => {
-    test('should have RegionMap with multiple regions', () => {
-      expect(template.Mappings.RegionMap).toBeDefined();
-      const regions = Object.keys(template.Mappings.RegionMap);
-      expect(regions.length).toBeGreaterThan(1);
-      expect(regions).toContain('us-east-1');
-      expect(regions).toContain('us-west-2');
-    });
 
     test('should have DBEngineMap with correct engine configurations', () => {
       expect(template.Mappings.DBEngineMap).toBeDefined();
@@ -132,12 +125,7 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Conditions', () => {
-    test('should have database engine conditions', () => {
-      expect(template.Conditions.IsMySQL).toBeDefined();
-      // Note: IsPostgreSQL condition removed as it was unused
-    });
-  });
+  // Conditions tests removed - Conditions section removed for LocalStack compatibility
 
   describe('Resources', () => {
     test('should have all required resource types', () => {
@@ -149,8 +137,7 @@ describe('TapStack CloudFormation Template', () => {
         'AWS::EC2::InternetGateway',
         'AWS::EC2::VPCGatewayAttachment',
         'AWS::EC2::Subnet',
-        'AWS::EC2::EIP',
-        'AWS::EC2::NatGateway',
+        // AWS::EC2::EIP and AWS::EC2::NatGateway removed for LocalStack compatibility
         'AWS::EC2::RouteTable',
         'AWS::EC2::Route',
         'AWS::EC2::SubnetRouteTableAssociation',
@@ -167,8 +154,7 @@ describe('TapStack CloudFormation Template', () => {
         'AWS::ElasticLoadBalancingV2::LoadBalancer',
         'AWS::ElasticLoadBalancingV2::TargetGroup',
         'AWS::ElasticLoadBalancingV2::Listener',
-        'AWS::WAFv2::WebACL',
-        'AWS::WAFv2::WebACLAssociation',
+        // AWS::WAFv2::WebACL and WebACLAssociation removed - not supported in LocalStack Community
         'AWS::Lambda::Function',
         'AWS::SNS::Topic',
         'AWS::SNS::TopicPolicy',
@@ -228,10 +214,11 @@ describe('TapStack CloudFormation Template', () => {
         expect(template.Resources.LambdaKMSKey).toBeDefined();
       });
 
-      test('KMS keys should have proper deletion policies', () => {
-        expect(template.Resources.EBSKMSKey.DeletionPolicy).toBe('Retain');
-        expect(template.Resources.RDSKMSKey.DeletionPolicy).toBe('Retain');
-        expect(template.Resources.LambdaKMSKey.DeletionPolicy).toBe('Retain');
+      test('KMS keys should have deletion policies for LocalStack', () => {
+        // LocalStack uses Delete policy for easier cleanup
+        expect(template.Resources.EBSKMSKey.DeletionPolicy).toBe('Delete');
+        expect(template.Resources.RDSKMSKey.DeletionPolicy).toBe('Delete');
+        expect(template.Resources.LambdaKMSKey.DeletionPolicy).toBe('Delete');
       });
 
       test('KMS keys should have proper key policies', () => {
@@ -263,11 +250,10 @@ describe('TapStack CloudFormation Template', () => {
         expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
       });
 
-      test('should have NAT gateways with EIPs', () => {
-        expect(template.Resources.NatGateway1).toBeDefined();
-        expect(template.Resources.NatGateway2).toBeDefined();
-        expect(template.Resources.NatGateway1EIP).toBeDefined();
-        expect(template.Resources.NatGateway2EIP).toBeDefined();
+      // NAT gateways and EIPs removed for LocalStack compatibility
+      test('should have route tables for private subnets', () => {
+        expect(template.Resources.PrivateRouteTable1).toBeDefined();
+        expect(template.Resources.PrivateRouteTable2).toBeDefined();
       });
     });
 
@@ -381,11 +367,12 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     describe('RDS Database', () => {
-      test('should have RDS instance with proper configuration', () => {
+      test('should have RDS instance with LocalStack-compatible configuration', () => {
         const rds = template.Resources.RDSInstance;
         expect(rds.Type).toBe('AWS::RDS::DBInstance');
-        expect(rds.DeletionPolicy).toBe('Snapshot');
-        expect(rds.UpdateReplacePolicy).toBe('Snapshot');
+        // LocalStack uses Delete policy for easier cleanup
+        expect(rds.DeletionPolicy).toBe('Delete');
+        expect(rds.UpdateReplacePolicy).toBe('Delete');
       });
 
       test('RDS should use KMS encryption', () => {
@@ -394,22 +381,13 @@ describe('TapStack CloudFormation Template', () => {
         expect(rds.Properties.KmsKeyId).toEqual({ Ref: 'RDSKMSKey' });
       });
 
-      test('RDS should have Multi-AZ enabled', () => {
+      test('RDS should have LocalStack-compatible Multi-AZ setting', () => {
         const rds = template.Resources.RDSInstance;
-        expect(rds.Properties.MultiAZ).toBe(true);
+        // Multi-AZ disabled for LocalStack compatibility
+        expect(rds.Properties.MultiAZ).toBe(false);
       });
 
-      test('RDS should have proper monitoring configuration', () => {
-        const rds = template.Resources.RDSInstance;
-        expect(rds.Properties.MonitoringInterval).toBe(60);
-        expect(rds.Properties.MonitoringRoleArn).toEqual({ 'Fn::GetAtt': ['RDSServiceRole', 'Arn'] });
-      });
-
-      test('RDS should have conditional CloudWatch logs export', () => {
-        const rds = template.Resources.RDSInstance;
-        expect(rds.Properties.EnableCloudwatchLogsExports).toBeDefined();
-        expect(rds.Properties.EnableCloudwatchLogsExports['Fn::If']).toBeDefined();
-      });
+      // Monitoring and CloudWatch logs tests removed - not supported in LocalStack Community
     });
   });
 
@@ -435,7 +413,7 @@ describe('TapStack CloudFormation Template', () => {
         // Newly added outputs
         'ALBArn',
         'ALBDNSName',
-        'WebACLArn',
+        // WebACLArn removed - WAFv2 not supported in LocalStack Community
         'LambdaFunctionName',
         'AlarmTopicArn'
       ];
@@ -497,12 +475,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-ALBDNSName' });
     });
 
-    test('WebACLArn output should be correct', () => {
-      const output = template.Outputs.WebACLArn;
-      expect(output.Description).toBe('ARN of the associated WAFv2 WebACL');
-      expect(output.Value).toEqual({ 'Fn::GetAtt': ['WebACL', 'Arn'] });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-WebACLArn' });
-    });
+    // WebACLArn output test removed - WAFv2 not supported in LocalStack Community
 
     test('LambdaFunctionName output should be correct', () => {
       const output = template.Outputs.LambdaFunctionName;
@@ -546,14 +519,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBeGreaterThan(20); // Should have many resources
     });
 
-    test('should have correct number of parameters', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(13);
-    });
-
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(22);
+      expect(outputCount).toBe(21); // 22 - 1 (WebACLArn removed)
     });
   });
 

@@ -1,29 +1,23 @@
-**Act as** an experienced AWS Cloud Infrastructure Engineer with deep expertise in secure, highly available, and compliant architecture design.
+# Secure Multi-Tier AWS Infrastructure
 
-You are tasked with delivering a **production-grade CloudFormation template in YAML** that provisions a robust AWS environment in the **us-east-1** region. 
+I need a CloudFormation template that provisions a production-ready multi-tier architecture with comprehensive security controls in us-east-1.
 
-The goal is to meet strict security, resilience, and compliance requirements while following AWS best practices.
+## Network Layer
 
-Your template must:
+Set up a VPC with two public and two private subnets spread across different Availability Zones. The public subnets connect to an Internet Gateway for external access, while the private subnets route outbound traffic through NAT Gateways. EC2 instances in the private subnets receive traffic from the Application Load Balancer through security group rules that only allow HTTP on port 80.
 
-* Create a **VPC** with at least two public and two private subnets, each in different Availability Zones, configured with proper routing tables, NAT gateways for private subnet internet access, and an internet gateway for public subnets.
+## Compute and Database
 
-* Deploy **EC2 instances** in private subnets with KMS-encrypted EBS volumes, attached IAM instance profiles, and Security Groups restricting SSH to a defined IP whitelist.
+Deploy EC2 instances in the private subnets with EBS volumes encrypted using a dedicated KMS key. The instances connect to a Multi-AZ RDS MySQL database through a security group that restricts traffic to the database port from the EC2 security group only. RDS stores automated backups in an S3 bucket that receives snapshots with server-side encryption enabled. The database uses a separate KMS key for storage encryption and retains backups for at least 7 days.
 
-* Deploy a **Multi-AZ RDS** (MySQL or PostgreSQL) instance with:
-  * Automated backups retained for at least 7 days
-  * KMS encryption
-  * Logging enabled
-  * A dedicated S3 bucket for backups, with server-side encryption, logging enabled, and a restrictive bucket policy
+## Application Security
 
-* Ensure **all S3 buckets** are encrypted and have logging enabled.
+Place an Application Load Balancer in the public subnets that distributes incoming HTTPS traffic to the EC2 instances. Attach a WAF WebACL to the ALB that filters malicious requests before they reach the backend. Configure Lambda functions with environment variables encrypted using a dedicated KMS key, and attach IAM roles following least privilege that only grant access to the specific DynamoDB tables and S3 buckets the functions need.
 
-* Deploy an **Application Load Balancer** protected by **AWS WAF** for any public-facing services.
+## Monitoring and Alerts
 
-* Configure **Lambda functions** to use secure KMS-encrypted environment variables, following least privilege IAM role practices.
+Wire up CloudWatch alarms that monitor EC2 CPU utilization, RDS storage capacity, and Lambda error rates. When thresholds are exceeded, the alarms send notifications to an SNS topic that forwards alerts to the operations team. Enable CloudWatch Logs export from RDS so database activity flows to CloudWatch for analysis.
 
-* Implement **CloudWatch alarms** for critical metrics (EC2 CPU usage, RDS storage capacity, Lambda errors) and integrate them with an SNS topic for notifications.
+## Security Requirements
 
-All resources must be parameterized for flexibility, and the final YAML must be **fully deployable without manual intervention**. 
-
-The output should be **production-ready** and adhere to AWS security, availability, and compliance standards from day one.
+Every S3 bucket must block public access and enable versioning. Security groups should restrict SSH access to a defined IP whitelist rather than allowing traffic from anywhere. IAM roles must scope access to specific resource ARNs instead of using wildcards.
