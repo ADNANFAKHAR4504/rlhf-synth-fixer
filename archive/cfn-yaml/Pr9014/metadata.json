@@ -11,14 +11,21 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "SSM Parameter Store",
+    "EC2",
     "VPC",
-    "Internet Gateway",
-    "Subnet",
-    "Route Table",
-    "Security Group",
-    "EC2"
+    "IGW",
+    "SSM",
+    "SecurityGroups",
+    "RouteTable",
+    "Subnet"
   ],
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
