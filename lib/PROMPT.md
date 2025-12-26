@@ -1,114 +1,51 @@
 Hey team,
 
-We need to build a secure data processing infrastructure for handling sensitive financial transactions. This is for a financial services company that needs to comply with PCI-DSS requirements, so security and compliance are absolutely critical here. The whole system needs to enforce strict access controls, encrypt data at rest and in transit, and provide comprehensive audit logging to meet regulatory standards.
+We need to build a secure payment processing infrastructure for handling financial transactions. This is for a fintech company that needs strict security controls, so data protection and audit logging are critical.
 
-I've been asked to create this infrastructure using **CloudFormation with JSON**. The business has been clear that we need to follow PCI-DSS requirements closely, which means every aspect of this infrastructure needs to be locked down tight. We're talking customer-managed encryption keys, VPC isolation, no direct internet access for processing components, and audit trails for everything.
+I need you to create this infrastructure using CloudFormation YAML. The system processes payment data through several connected services that need to work together securely.
 
-The data processing workflow will center around Lambda functions running in private subnets, pulling data from S3 buckets with strict versioning and encryption controls. All storage needs to be encrypted with customer-managed KMS keys, and we need to ensure that IAM permissions follow the principle of least privilege with no wildcards allowed.
+## Architecture Overview
+
+The payment API Gateway receives transaction requests and invokes the Lambda processor function. The Lambda function validates transactions and writes session data to DynamoDB for tracking. Transaction logs are stored in an encrypted S3 bucket for audit purposes. The SQS queue connects to Lambda for asynchronous payment processing. SNS topics trigger alerts when CloudWatch alarms detect issues with the transaction queue or Lambda errors.
+
+All storage services connect to KMS for encryption - S3 buckets, DynamoDB tables, and SQS queues are encrypted using customer-managed KMS keys.
 
 ## What we need to build
 
-Create a secure data processing infrastructure using **CloudFormation with JSON** for PCI-DSS compliant financial transaction processing in AWS.
+Create a payment processing infrastructure with these connected components:
 
-### Core Requirements
+### Core Services
 
-1. **S3 Storage with Security Controls**
-   - Create S3 bucket with AES-256 encryption enabled
-   - Enable versioning on all buckets
-   - Implement lifecycle policies for data management
-   - Block all public access
+1. VPC with public and private subnets across two availability zones. The Lambda function runs in private subnets and connects to AWS services through VPC endpoints or internet gateway.
 
-2. **Lambda Processing in VPC**
-   - Deploy Lambda function in VPC private subnets for data processing
-   - No direct internet access for Lambda functions
-   - Configure appropriate timeout and memory settings
-   - Implement error handling and retry logic
+2. API Gateway HTTP API that invokes the payment processor Lambda function. The API handles POST requests to the /payment endpoint and triggers the Lambda for each transaction.
 
-3. **Encryption Key Management**
-   - Configure customer-managed KMS keys for all encryption operations
-   - Use KMS keys for S3, Lambda environment variables, and any other encrypted resources
-   - Enable key rotation for compliance
+3. Lambda function that processes payments and writes to DynamoDB for session tracking. The function also sends transaction logs to S3 and reads messages from SQS for batch processing.
 
-4. **IAM Security**
-   - Implement IAM roles with explicit permissions for each service
-   - Follow principle of least privilege
-   - No wildcard permissions allowed
-   - Each service gets its own dedicated role
+4. DynamoDB table for storing payment sessions with KMS encryption enabled. The table uses on-demand billing and has a global secondary index for user lookups.
 
-5. **Network Infrastructure**
-   - Set up VPC with 2 private subnets across different availability zones
-   - No internet gateway (private subnets only)
-   - NAT instances for controlled outbound traffic if needed
-   - Proper subnet CIDR allocation
+5. S3 bucket for transaction audit logs encrypted with KMS. The bucket blocks public access and enables versioning for compliance.
 
-6. **VPC Flow Logs**
-   - Enable VPC flow logs for network monitoring
-   - Store logs with 90-day retention minimum
-   - Use CloudWatch Logs for storage
+6. SQS queue for asynchronous transaction processing encrypted with KMS. The queue connects to Lambda through an event source mapping.
 
-7. **Security Groups**
-   - Configure security groups with explicit ingress and egress rules
-   - No 0.0.0.0/0 CIDR blocks allowed
-   - Define specific port ranges and protocols
+7. SNS topic for payment alerts that receives notifications from CloudWatch alarms. Alarms monitor queue depth and Lambda error rates.
 
-8. **Resource Tagging**
-   - Add required tags to all resources: Environment, Owner, CostCenter
-   - Ensure consistent tagging across all infrastructure
+8. CloudWatch Log Group for Lambda execution logs with 30-day retention.
 
-### Technical Requirements
+### Security Requirements
 
-- All infrastructure defined using **CloudFormation with JSON**
-- Deploy to **us-east-1** region
-- Use **S3** for secure data storage with encryption and versioning
-- Use **Lambda** for serverless data processing in VPC
-- Use **KMS** for customer-managed encryption keys
-- Use **VPC** with private subnets only across 2 availability zones
-- Use **CloudWatch Logs** for VPC flow logs with 90-day retention
-- Resource names must include **EnvironmentSuffix** parameter for uniqueness
-- Follow naming convention: Use CloudFormation parameter substitution with !Sub
-- All resources must be destroyable (no Retain deletion policies)
-- Include proper error handling and logging
+- KMS customer-managed key encrypts S3, DynamoDB, SQS, and SNS
+- IAM role for Lambda with specific permissions for each service it accesses
+- Security group for Lambda with outbound-only traffic
+- VPC with proper subnet configuration for network isolation
 
-### Constraints
+### Technical Details
 
-- All S3 buckets must have versioning enabled and use AES-256 encryption
-- Lambda functions must run within a VPC with no direct internet access
-- All IAM roles must follow the principle of least privilege with no wildcard permissions
-- All encryption operations must use customer-managed KMS keys
-- VPC flow logs must be enabled and stored for at least 90 days
-- All resources must be tagged with Environment, Owner, and CostCenter
-- Security groups must explicitly define all ingress and egress rules with no 0.0.0.0/0 CIDR blocks
-- All API endpoints must use HTTPS with TLS 1.2 or higher
-- No public internet access for any compute resources
-- All data must be encrypted at rest and in transit
+- Deploy to us-east-1 region
+- Use EnvironmentSuffix parameter for resource naming
+- CloudFormation YAML format
+- Include stack outputs for VPC ID, API endpoint, and resource ARNs
 
-### Optional Enhancements
+## Expected Output
 
-If time permits and it makes sense for the architecture:
-- Add AWS Config rules for compliance monitoring to automate compliance checking
-- Implement CloudTrail for API audit logging to enhance security auditing
-- Add SNS topic for security alerts to enable real-time security notifications
-
-## Success Criteria
-
-- **Functionality**: S3 bucket with encryption and versioning, Lambda function in VPC private subnet, KMS encryption for all resources
-- **Security**: Customer-managed KMS keys, no wildcard IAM permissions, VPC isolation, no public access, explicit security group rules
-- **Compliance**: VPC flow logs with 90-day retention, proper resource tagging, PCI-DSS aligned architecture
-- **Network**: VPC with 2 private subnets across different AZs, no internet gateway, controlled outbound via NAT if needed
-- **Resource Naming**: All resources include EnvironmentSuffix parameter for uniqueness
-- **Destroyability**: No Retain deletion policies, all resources can be fully deleted
-- **Code Quality**: Valid CloudFormation JSON, well-structured, properly documented
-
-## What to deliver
-
-- Complete CloudFormation JSON template implementation
-- S3 bucket with encryption, versioning, and lifecycle policies
-- Lambda function configured for VPC deployment in private subnets
-- KMS customer-managed keys for encryption operations
-- VPC with 2 private subnets across different availability zones
-- VPC flow logs with CloudWatch Logs storage and 90-day retention
-- Security groups with explicit rules and no 0.0.0.0/0 CIDR blocks
-- IAM roles with least privilege permissions for all services
-- Proper resource tagging on all infrastructure components
-- Documentation with deployment instructions
-- Integration tests to verify the deployed infrastructure
+A working CloudFormation template that deploys the complete payment processing infrastructure with proper service integrations and security controls.

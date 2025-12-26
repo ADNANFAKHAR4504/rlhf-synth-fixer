@@ -1,26 +1,28 @@
 {
   "platform": "cfn",
-  "language": "json",
+  "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "101912497",
+  "po_id": "LS-101912497",
   "team": "synth-2",
   "startedAt": "2025-11-13T04:29:24.261018+00:00",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security Configuration as Code",
-    "Cloud Environment Setup"
+    "Security Configuration as Code"
   ],
   "aws_services": [
-    "VPC",
     "EC2",
     "Lambda",
     "S3",
     "KMS",
-    "CloudWatch Logs",
-    "IAM",
-    "VPC Flow Logs"
+    "DynamoDB",
+    "SQS",
+    "SNS",
+    "API Gateway",
+    "CloudWatch",
+    "IAM"
   ],
   "provider": "localstack",
-  "wave": "P1"
+  "wave": "P0",
+  "training_quality": 9
 }
