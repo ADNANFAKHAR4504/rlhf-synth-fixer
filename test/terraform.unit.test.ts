@@ -1,18 +1,18 @@
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { beforeAll, describe, expect, it } from '@jest/globals';
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
 
 describe('Terraform IAM Infrastructure Unit Tests', () => {
   const libPath = path.resolve(__dirname, '../lib');
   const providerPath = path.join(libPath, 'provider.tf');
   const tapStackPath = path.join(libPath, 'tap_stack.tf');
   const tfvarsPath = path.join(libPath, 'terraform.tfvars');
-  
+
   let providerContent: string;
   let tapStackContent: string;
   let tfvarsContent: string;
-  
+
   beforeAll(() => {
     // Read file contents once
     providerContent = fs.readFileSync(providerPath, 'utf8');
@@ -26,7 +26,7 @@ describe('Terraform IAM Infrastructure Unit Tests', () => {
     it('should have exactly two main terraform files as per requirements', () => {
       expect(fs.existsSync(providerPath)).toBe(true);
       expect(fs.existsSync(tapStackPath)).toBe(true);
-      
+
       // Verify no other .tf files exist (only provider.tf and tap_stack.tf)
       const tfFiles = fs.readdirSync(libPath).filter(f => f.endsWith('.tf'));
       expect(tfFiles).toHaveLength(2);
@@ -314,7 +314,7 @@ describe('Terraform IAM Infrastructure Unit Tests', () => {
       if (matches) {
         // All matches should be placeholder values
         matches.forEach(match => {
-          expect(['111122223333', '444455556666', '123456789012']).toContain(match);
+          expect(['111122223333', '000000000000', '123456789012']).toContain(match);
         });
       }
     });
@@ -420,7 +420,7 @@ describe('Terraform IAM Infrastructure Unit Tests', () => {
     it('should generate a plan without errors', () => {
       try {
         execSync('cd lib && terraform init -backend=false', { encoding: 'utf8', stdio: 'pipe' });
-        const result = execSync('cd lib && terraform plan -input=false', { 
+        const result = execSync('cd lib && terraform plan -input=false', {
           encoding: 'utf8',
           stdio: 'pipe'
         });
