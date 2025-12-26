@@ -1,0 +1,27 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-31748052",
+  "team": "synth-2",
+  "startedAt": "2025-10-03T19:00:00-00:00",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "SQS",
+    "SecretsManager",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "SES"
+  ],
+  "wave": "P1"
+}
