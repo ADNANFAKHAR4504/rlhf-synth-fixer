@@ -514,10 +514,25 @@ deploy_cdktf() {
         local temp_outputs=$(mktemp)
         echo "{}" > "$temp_outputs"
 
-        # Find all terraform.tfstate files in stack directories
-        for state_file in cdktf.out/stacks/*/terraform.tfstate; do
+        # CDKTF stores state in .terraform/terraform.tfstate within each stack directory
+        # First try the .terraform subdirectory (correct location)
+        for state_file in cdktf.out/stacks/*/.terraform/terraform.tfstate; do
             if [ -f "$state_file" ]; then
                 print_status $CYAN "Processing state file: $state_file"
+
+                # Extract outputs from the state file
+                local stack_outputs=$(jq -r '.outputs // {} | to_entries | map({key: .key, value: .value.value}) | from_entries' "$state_file" 2>/dev/null || echo "{}")
+
+                # Merge with existing outputs
+                jq -s '.[0] * .[1]' "$temp_outputs" <(echo "$stack_outputs") > "${temp_outputs}.new"
+                mv "${temp_outputs}.new" "$temp_outputs"
+            fi
+        done
+
+        # Fallback: also check root of stack directory (older CDKTF versions)
+        for state_file in cdktf.out/stacks/*/terraform.tfstate; do
+            if [ -f "$state_file" ]; then
+                print_status $CYAN "Processing state file (fallback): $state_file"
 
                 # Extract outputs from the state file
                 local stack_outputs=$(jq -r '.outputs // {} | to_entries | map({key: .key, value: .value.value}) | from_entries' "$state_file" 2>/dev/null || echo "{}")
