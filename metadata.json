@@ -22,5 +22,6 @@
     "X-Ray",
     "Application Auto Scaling"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 10
 }
