@@ -568,8 +568,14 @@ try:
                 in_outputs_section = True
                 continue
 
-            # Stop if we hit another section (non-indented line that's not empty and doesn't have =)
-            if in_outputs_section and line and not line.startswith(' ') and '=' not in line and not line.startswith('[') and not line.startswith(']') and not line.startswith('\"'):
+            # Stop if we hit another section or empty line after getting outputs
+            # Allow hierarchical format lines (like 'tap', 'migration') to pass through
+            if in_outputs_section and len(outputs) > 0 and not line:
+                # Empty line after outputs means end of section
+                finalize_output()
+                break
+            if in_outputs_section and line and not line.startswith(' ') and '=' not in line and not line.startswith('[') and not line.startswith(']') and not line.startswith('\"') and not line.isalpha():
+                # Non-output line detected (but allow single-word lines like 'tap' for hierarchical format)
                 finalize_output()
                 break
 
