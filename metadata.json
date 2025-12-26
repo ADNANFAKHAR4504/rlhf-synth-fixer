@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-8k3zn9",
+  "team": "synth-2",
+  "startedAt": "2025-11-17T14:00:00.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "VPC",
+    "Lambda",
+    "IAM",
+    "API Gateway",
+    "WAF",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "EventBridge",
+    "SNS",
+    "EC2"
+  ],
+  "wave": "P1"
+}
