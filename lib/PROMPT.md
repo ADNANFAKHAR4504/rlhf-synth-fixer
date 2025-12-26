@@ -3,7 +3,7 @@ We’re setting up a production-ready AWS environment for our web app in us-east
 Here’s what we’re looking for:  
 Start with a VPC that connects to both public and private subnets spread across at least two availability zones. We’ll need proper routing-an internet gateway for public traffic and a NAT gateway for private resources.
 
-For compute, we want EC2 instances launched with a parameterized AMI ID. Use user data to bootstrap the app servers, and make sure security groups only allow the traffic we actually need. IAM roles should be attached to EC2, and permissions should be as tight as possible.
+For compute, we want EC2 instances launched with a parameterized AMI ID. Use user data to bootstrap the app servers, and make sure security groups restrict traffic to only what's required. IAM roles should be attached to EC2, following least privilege principles.
 
 The database should be an RDS instance (MySQL, db.t3.micro), set up for Multi-AZ and encrypted storage. Only allow access from the private subnets and the right security groups.
 
