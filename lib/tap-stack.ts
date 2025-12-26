@@ -158,6 +158,21 @@ export class TapStack extends cdk.Stack {
       serverAccessLogsPrefix: 'raw-data-logs/',
     });
 
+    // Add explicit KMS encryption configuration for LocalStack compatibility
+    const rawDataCfnBucket = rawDataBucket.node.defaultChild as s3.CfnBucket;
+    rawDataCfnBucket.addPropertyOverride(
+      'BucketEncryption.ServerSideEncryptionConfiguration',
+      [
+        {
+          ServerSideEncryptionByDefault: {
+            SSEAlgorithm: 'aws:kms',
+            KMSMasterKeyID: encryptionKey.keyArn,
+          },
+          BucketKeyEnabled: true,
+        },
+      ]
+    );
+
     const processedDataBucket = new s3.Bucket(this, 'ProcessedDataBucket', {
       bucketName: `processed-data-${environmentSuffix}`,
       encryption: s3.BucketEncryption.KMS,
@@ -169,6 +184,22 @@ export class TapStack extends cdk.Stack {
       serverAccessLogsBucket: auditLogsBucket,
       serverAccessLogsPrefix: 'processed-data-logs/',
     });
+
+    // Add explicit KMS encryption configuration for LocalStack compatibility
+    const processedDataCfnBucket = processedDataBucket.node
+      .defaultChild as s3.CfnBucket;
+    processedDataCfnBucket.addPropertyOverride(
+      'BucketEncryption.ServerSideEncryptionConfiguration',
+      [
+        {
+          ServerSideEncryptionByDefault: {
+            SSEAlgorithm: 'aws:kms',
+            KMSMasterKeyID: encryptionKey.keyArn,
+          },
+          BucketKeyEnabled: true,
+        },
+      ]
+    );
 
     // Add bucket policies denying unencrypted uploads
     const denyUnencryptedPolicy = new iam.PolicyStatement({
@@ -268,12 +299,22 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Explicitly set retention for LocalStack compatibility
+    const dataProcessorCfnLogGroup = dataProcessorLogGroup.node
+      .defaultChild as logs.CfnLogGroup;
+    dataProcessorCfnLogGroup.addPropertyOverride('RetentionInDays', 90);
+
     const apiGatewayLogGroup = new logs.LogGroup(this, 'ApiGatewayLogGroup', {
       logGroupName: `/aws/apigateway/analytics-api-${environmentSuffix}`,
       encryptionKey,
       retention: logs.RetentionDays.THREE_MONTHS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
+    // Explicitly set retention for LocalStack compatibility
+    const apiGatewayCfnLogGroup = apiGatewayLogGroup.node
+      .defaultChild as logs.CfnLogGroup;
+    apiGatewayCfnLogGroup.addPropertyOverride('RetentionInDays', 90);
 
     // 8. Lambda IAM Role with Session Policies
     const dataProcessorRole = new iam.Role(this, 'DataProcessorRole', {
