@@ -27,7 +27,7 @@ Parameters:
 
   DBInstanceClass:
     Type: String
-    Default: db.r5.large
+    Default: db.t3.small
     Description: Aurora instance class
 
   DesiredTaskCount:
@@ -884,8 +884,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Engine: aurora-mysql
-      EngineMode: provisioned
-      EngineVersion: 5.7.mysql_aurora.2.11.3
+      EngineVersion: '5.7'
       DBClusterIdentifier: !Sub ${ProjectName}-${EnvironmentSuffix}-aurora
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
@@ -902,7 +901,6 @@ Resources:
         - general
         - slowquery
       StorageEncrypted: true
-      KmsKeyId: !Ref ApplicationKMSKey
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${EnvironmentSuffix}-aurora-cluster
