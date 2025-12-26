@@ -363,6 +363,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         console.log(`✅ Public route table verified with internet gateway: ${internetRoute!.GatewayId}`);
       } else {
         console.log(`⚠️  Internet gateway ID not set (LocalStack limitation)`);
+      }
     });
   });
 
