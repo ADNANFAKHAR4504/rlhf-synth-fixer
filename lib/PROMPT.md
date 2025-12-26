@@ -104,7 +104,7 @@ Create a multi-region disaster recovery payment processing system using CloudFor
 - **Performance**: API response times under 500ms, failover achievable within RTO
 - **Reliability**: Multi-AZ deployment, automated health checks, 99.9% uptime target
 - **Security**: Encryption enabled, network isolation, audit logging, PCI-DSS alignment
-- **Resource Naming**: All resources include environmentSuffix parameter
+- **Naming Convention**: All resources include environmentSuffix parameter
 - **Code Quality**: Valid YAML CloudFormation templates, well-documented, tested
 - **Testing**: Unit tests for validation, integration tests for cross-region failover
 
