@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "LS-101000202",
+  "team": "synth-2",
+  "startedAt": "2025-11-04T08:42:46.508Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "Step Functions",
+    "DynamoDB",
+    "EventBridge",
+    "IAM",
+    "KMS",
+    "SQS",
+    "CloudWatch Logs"
+  ],
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
