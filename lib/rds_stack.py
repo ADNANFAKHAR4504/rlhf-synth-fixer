@@ -126,7 +126,7 @@ class RdsStack(pulumi.ComponentResource):
         )
 
         # Export values
-        self.instance_id = self.db_instance.id
+        self.instance_id = self.db_instance.identifier
         self.endpoint = self.db_instance.endpoint
         self.address = self.db_instance.address
         self.port = self.db_instance.port
