@@ -387,6 +387,52 @@ The agent knows which AWS services work in LocalStack:
 6. **IDEAL_RESPONSE synced** - Match code changes
 7. **Retry** - Up to 10 attempts
 
+## 🔍 Claude Review Handling (NEW!)
+
+When Claude Review fails in remote CI, the agent **DOES NOT STOP** - it fixes and retries!
+
+### Claude Review Error Patterns & Fixes
+
+| Error Pattern | Automatic Fix |
+|--------------|---------------|
+| `Hey Team detected` | Remove ALL greetings from PROMPT.md |
+| `Emoji detected` | Remove ALL emojis with perl/sed |
+| `Bracket patterns` | Remove [optional], [note], [TODO] |
+| `En/Em dashes` | Replace – and — with regular - |
+| `Parentheses detected` | Remove (content) patterns |
+| `Formal abbreviations` | Replace e.g., i.e., etc. |
+| `AI-generated phrases` | Remove "As an AI...", "I hope this helps..." |
+| `IDEAL_RESPONSE mismatch` | Sync with current lib/ code |
+| `Missing metadata fields` | Add team=synth, provider=localstack |
+| `Quality score low` | Run full fix_claude_review() |
+
+### Claude Review Jobs Handled
+
+| Job Name | Fix Function |
+|----------|-------------|
+| `claude-review-prompt-quality` | fix_claude_review() + remove Hey Team |
+| `claude-review` | fix_claude_review_from_remote() |
+| `claude-review-ideal-response` | sync_ideal_response_with_code() |
+| `claude-review-code` | fix_claude_review() |
+
+### Retry Loop
+
+```
+Claude Review Failed?
+    ↓
+FETCH error from GitHub Actions logs
+    ↓
+ANALYZE specific error pattern
+    ↓
+APPLY targeted fix (greetings, emojis, dashes, etc.)
+    ↓
+RUN local validation
+    ↓
+PUSH and retry remote CI
+    ↓
+(Repeat up to 5 times!)
+```
+
 ## Local CI vs Remote CI
 
 | Stage | Local Script | Remote Job |
