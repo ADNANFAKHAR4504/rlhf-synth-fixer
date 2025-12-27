@@ -333,13 +333,59 @@ AWS_ENDPOINT_URL="http://localhost:4566"
 
 | Feature | Description |
 |---------|-------------|
+| **🧠 Intelligent Deploy Fix** | Analyzes errors, removes unsupported resources, retries |
 | **Live Deploy Monitoring** | Shows resources being created in real-time |
 | **20 min Deploy Timeout** | Stops if deploy takes too long |
-| **Auto-Cleanup on Fail** | Deletes created resources before retry |
+| **Auto-Cleanup on Fail** | Deletes container & resources before retry |
+| **LocalStack Support Check** | Removes AWS services not supported by LocalStack |
+| **Retry Loops** | Deploy, Unit Tests, Integration Tests all retry until pass |
 | **IDEAL_RESPONSE Sync** | Auto-updates when code changes |
 | **GitHub CI Monitor** | Watches each stage after push |
 | **Auto-Fix & Re-Push** | Fixes failures and pushes again |
 | **Archive Stop** | Stops when PR is ready for archive |
+
+## 🧠 Intelligent Deploy (NEW!)
+
+The agent now intelligently handles deploy failures:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    INTELLIGENT DEPLOY LOOP                       │
+├─────────────────────────────────────────────────────────────────┤
+│   1. START FRESH CONTAINER (localstack-pr-{PR})                 │
+│   2. RUN DEPLOY                                                  │
+│   3. FAILED?                                                     │
+│      YES → Delete container                                      │
+│          → Analyze error (unsupported? syntax? dependency?)      │
+│          → Fix (remove resource / fix code)                      │
+│          → Update tests & docs                                   │
+│          → GO BACK TO STEP 1                                     │
+│      NO  → DEPLOY PASSED! ✅ Continue to integration tests       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### LocalStack Supported Resources
+
+The agent knows which AWS services work in LocalStack:
+
+| ✅ Supported | ❌ Not Supported (will be removed) |
+|-------------|-----------------------------------|
+| Lambda, S3, DynamoDB | SageMaker, Glue, Athena |
+| SQS, SNS, Events | EMR, Redshift, Neptune |
+| API Gateway, IAM | EKS, ML, Personalize |
+| CloudFormation, SSM | Rekognition, Lex, Polly |
+| Secrets Manager, KMS | Transcribe, Translate |
+| Step Functions, Logs | Forecast, Comprehend |
+
+### What Happens on Deploy Fail
+
+1. **Container deleted** - Fresh start
+2. **Error analyzed** - Check LocalStack docs
+3. **Unsupported resource?** - Remove from template AND related tests
+4. **Code fixed** - Update TypeScript/CDK
+5. **Tests updated** - Remove tests for missing resources
+6. **IDEAL_RESPONSE synced** - Match code changes
+7. **Retry** - Up to 10 attempts
 
 ## Local CI vs Remote CI
 
