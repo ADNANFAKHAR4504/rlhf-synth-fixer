@@ -527,36 +527,88 @@ import sys, json, re
 
 outputs = {}
 in_outputs_section = False
+current_key = None
+current_value_lines = []
 deploy_log_path = '$deploy_log'
+
+# ANSI escape code regex
+ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+def strip_ansi(text):
+    return ansi_escape.sub('', text)
+
+def finalize_output():
+    global current_key, current_value_lines, outputs
+    if current_key:
+        # For arrays, reconstruct proper JSON
+        if current_value_lines and current_value_lines[0] == '[':
+            # Build proper JSON array by concatenating lines
+            value_str = ''.join(current_value_lines)
+            # Remove trailing comma before ] (CDKTF adds trailing comma)
+            value_str = re.sub(r',\s*]', ']', value_str)
+        else:
+            value_str = ' '.join(current_value_lines).strip()
+
+        # Try to parse as JSON (for arrays/objects)
+        try:
+            outputs[current_key] = json.loads(value_str)
+        except Exception as e:
+            # If not JSON, just use the string value (strip quotes)
+            outputs[current_key] = value_str.strip('\"')
+        current_key = None
+        current_value_lines = []
 
 try:
     with open(deploy_log_path, 'r') as f:
         for line in f:
-            line = line.strip()
+            line = strip_ansi(line).strip()
 
             # Detect start of Outputs section
             if line == 'Outputs:':
                 in_outputs_section = True
                 continue
 
-            # Stop if we hit another section or empty lines after outputs
-            if in_outputs_section and line and not line.startswith(' ') and '=' not in line:
+            # Stop if we hit another section or empty line after getting outputs
+            # Allow hierarchical format lines (like 'tap', 'migration') to pass through
+            if in_outputs_section and len(outputs) > 0 and not line:
+                # Empty line after outputs means end of section
+                finalize_output()
+                break
+            if in_outputs_section and line and not line.startswith(' ') and '=' not in line and not line.startswith('[') and not line.startswith(']') and not line.startswith('\"') and not line.isalpha():
+                # Non-output line detected (but allow single-word lines like 'tap' for hierarchical format)
+                finalize_output()
                 break
 
-            # Parse output lines: key = \"value\" or key = value
             if in_outputs_section and '=' in line:
-                # Match pattern: key = \"value\" or key = value
-                match = re.match(r'^(\S+)\s*=\s*\"?([^\"]+)\"?\s*$', line)
-                if match:
-                    key = match.group(1).strip()
-                    value = match.group(2).strip()
-                    # Remove quotes if present
-                    value = value.strip('\"')
-                    outputs[key] = value
+                # Finalize previous output if any
+                finalize_output()
+
+                # Parse new output line: key = value or key = [
+                parts = line.split('=', 1)
+                if len(parts) == 2:
+                    current_key = parts[0].strip()
+                    value_part = parts[1].strip()
+
+                    if value_part == '[':
+                        # Start of array
+                        current_value_lines = ['[']
+                    elif value_part:
+                        # Complete value on same line
+                        current_value_lines = [value_part]
+                        finalize_output()
+            elif in_outputs_section and current_key and line:
+                # Continuation line (part of array or multi-line value)
+                current_value_lines.append(line)
+                # Check if array is complete
+                if line.endswith(']'):
+                    finalize_output()
+
+    # Finalize last output
+    finalize_output()
 
     print(json.dumps(outputs, indent=2))
 except Exception as e:
-    print('{}', file=sys.stderr)
+    print('{}')
     print(f'Error parsing outputs: {e}', file=sys.stderr)
 " 2>&1)
 

@@ -47,3 +47,8 @@ echo -e "${YELLOW}🚀 Deploying to LocalStack...${NC}"
 cdktf deploy --auto-approve
 
 echo -e "${GREEN}✅ CDKTF deployment to LocalStack completed!${NC}"
+
+# Extract outputs for integration tests
+cd ..
+echo -e "${YELLOW}📤 Extracting outputs for integration tests...${NC}"
+bash scripts/extract-outputs.sh || echo -e "${YELLOW}⚠️ Could not extract outputs (continuing anyway)${NC}"
