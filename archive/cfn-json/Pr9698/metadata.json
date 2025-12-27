@@ -1,0 +1,48 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "LS-5476383561",
+  "team": "synth-2",
+  "startedAt": "2025-10-18T01:20:01+05:30",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2 Subnet",
+    "EC2 Internet Gateway",
+    "EC2 Route Table",
+    "EC2 Security Group",
+    "EC2 VPC Endpoint",
+    "ECS Cluster",
+    "ECS Task Definition",
+    "ECS Service",
+    "Application Load Balancer",
+    "ALB Target Group",
+    "ALB Listener",
+    "S3 Bucket",
+    "S3 Bucket Policy",
+    "CloudFront Distribution",
+    "CloudFront Origin Access Identity",
+    "DynamoDB Table",
+    "KMS Key",
+    "KMS Alias",
+    "IAM Role",
+    "IAM Policy",
+    "CloudWatch Log Group",
+    "CloudWatch Alarm",
+    "SNS Topic"
+  ],
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
+}
