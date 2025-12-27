@@ -33,13 +33,16 @@
     "KMS Alias",
     "IAM Role",
     "IAM Policy",
-    "CodeCommit Repository",
-    "CodeBuild Project",
-    "CodePipeline",
-    "EventBridge Rule",
     "CloudWatch Log Group",
     "CloudWatch Alarm",
     "SNS Topic"
   ],
-  "wave": "P1"
+  "wave": "P1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendrasingh-turing",
+  "dockerS3Location": ""
 }
