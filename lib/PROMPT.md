@@ -11,10 +11,15 @@ Infrastructure task for CloudFormation. Need to set up educational content platf
 
 Problem
 
-Design and implement CloudFormation template for educational content delivery platform.
+Design and implement CloudFormation template for educational content delivery platform with ECS hosting web application, S3 for static assets served through CloudFront CDN, DynamoDB for user data, and CodePipeline for automated deployments.
 
 Requirements:
-- Secure infrastructure
+- ECS cluster running containerized web application behind Application Load Balancer
+- S3 bucket for static content connected to CloudFront distribution for global delivery
+- DynamoDB table storing user progress data accessible by ECS tasks
+- CodePipeline watching CodeCommit repository to trigger automated builds and deployments
+- EventBridge rules monitoring pipeline events to send notifications via SNS
+- Secure infrastructure with KMS encryption
 - Educational data handling compliance
 - Cloud security best practices
 
