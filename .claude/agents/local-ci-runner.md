@@ -1489,13 +1489,11 @@ fix_unit_tests() {
 # Stage 3.9: Deploy to LocalStack
 
 stage_deploy() {
-  # Skip if provider is not localstack (for local testing)
-  if [[ "$PROVIDER" != "localstack" ]]; then
-    echo "[LOCAL-CI] ⏭️ Skipping Deploy (provider: $PROVIDER - local testing only supports localstack)"
-    return 0
-  fi
+  # ⛔ DO NOT SKIP! Always run deploy with fresh LocalStack container
+  # Set provider to localstack for local testing
+  export PROVIDER="localstack"
   
-  echo "[LOCAL-CI] Running: Deploy to LocalStack..."
+  echo "[LOCAL-CI] Running: Deploy to LocalStack (starting fresh container)..."
   
   # ══════════════════════════════════════════════════════════════════
   # STEP 0: CREATE FRESH CONTAINER (using PR number in name)
@@ -1985,19 +1983,43 @@ fix_deploy() {
 # Stage 3.10: Integration Tests on LocalStack
 
 stage_integration_tests() {
-  # Skip if provider is not localstack
-  if [[ "$PROVIDER" != "localstack" ]]; then
-    echo "[LOCAL-CI] ⏭️ Skipping Integration Tests (provider: $PROVIDER - local testing only supports localstack)"
-    return 0
-  fi
+  # ⛔ DO NOT SKIP! Always run integration tests on LocalStack
+  export PROVIDER="localstack"
   
   echo "[LOCAL-CI] Running: Integration Tests on LocalStack..."
   
-  # Ensure LocalStack is running
+  # Check if LocalStack container is running (should be from deploy stage)
+  local CONTAINER_NAME="localstack-pr-${PR_NUMBER}"
+  
   if ! curl -s http://127.0.0.1:4566/_localstack/health | grep -q "running"; then
-    echo "[LOCAL-CI] ⚠️ LocalStack not healthy - restarting..."
-    ./scripts/localstack-start-ci.sh
-    sleep 10
+    echo "[LOCAL-CI] ⚠️ LocalStack not running - starting fresh container..."
+    
+    # Start fresh container
+    docker stop "$CONTAINER_NAME" 2>/dev/null || true
+    docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+    
+    docker run -d \
+      --name "$CONTAINER_NAME" \
+      -p 4566:4566 \
+      -p 4510-4559:4510-4559 \
+      -e SERVICES="${LOCALSTACK_SERVICES:-s3,lambda,dynamodb,sqs,sns,iam,cloudformation,sts,logs,events}" \
+      -e DEBUG=1 \
+      -e LOCALSTACK_AUTH_TOKEN="${LOCALSTACK_AUTH_TOKEN:-}" \
+      localstack/localstack:latest
+    
+    # Wait for healthy
+    echo "[LOCAL-CI] → Waiting for LocalStack to be healthy..."
+    local waited=0
+    while [ $waited -lt 60 ]; do
+      if curl -s http://127.0.0.1:4566/_localstack/health | grep -q "running"; then
+        echo "[LOCAL-CI] ✅ LocalStack is healthy!"
+        break
+      fi
+      sleep 2
+      waited=$((waited + 2))
+    done
+  else
+    echo "[LOCAL-CI] ✅ LocalStack is already running (container: $CONTAINER_NAME)"
   fi
   
   # Set environment variables
