@@ -2,7 +2,7 @@
   "platform": "cfn",
   "language": "json",
   "complexity": "medium",
-  "turn_type": "synthetic",
+  "turn_type": "single",
   "po_id": "LS-5476383561",
   "team": "synth-2",
   "startedAt": "2025-10-18T01:20:01+05:30",
